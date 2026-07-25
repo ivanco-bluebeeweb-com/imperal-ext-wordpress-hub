@@ -10,7 +10,7 @@ if _EXT_DIR not in sys.path:
 
 # Purge stale cached modules so a fresh load always registers decorators correctly
 # (the validator may run multiple extensions in the same process).
-_LOCAL = ("app", "handlers_connect", "handlers_read", "skeleton", "panels",
+_LOCAL = ("app", "handlers_connect", "handlers_read", "handlers_seo", "skeleton", "panels",
           "models", "storage", "wp_client")
 for _mod in _LOCAL:
     sys.modules.pop(_mod, None)
@@ -18,5 +18,6 @@ for _mod in _LOCAL:
 from app import ext, chat  # noqa: E402,F401
 import handlers_connect  # noqa: E402,F401
 import handlers_read  # noqa: E402,F401
+import handlers_seo  # noqa: E402,F401
 import skeleton  # noqa: E402,F401
 import panels  # noqa: E402,F401

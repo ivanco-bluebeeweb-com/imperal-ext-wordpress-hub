@@ -52,6 +52,25 @@ class ListCustomPostsParams(BaseModel):
     search: str | None = Field(default=None, description="Optional search term")
 
 
+class GetSeoMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int | None = Field(default=None, description="Numeric id of the post or page. Give this OR slug.")
+    slug: str | None = Field(default=None, description="Slug of the post or page, e.g. 'about-us'. Used when post_id is not given.")
+    post_type: str | None = Field(default=None, description="Optional post type ('post', 'page', or a custom type) to disambiguate a slug used by several items.")
+
+
+class UpdateSeoMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int | None = Field(default=None, description="Numeric id of the post or page. Give this OR slug.")
+    slug: str | None = Field(default=None, description="Slug of the post or page, e.g. 'about-us'. Used when post_id is not given.")
+    post_type: str | None = Field(default=None, description="Optional post type ('post', 'page', or a custom type) to disambiguate a slug used by several items.")
+    meta_title: str | None = Field(default=None, description="New Rank Math SEO title. Omit to leave unchanged; pass an empty string to clear it.")
+    meta_description: str | None = Field(default=None, description="New Rank Math meta description. Omit to leave unchanged; pass an empty string to clear it.")
+    canonical_url: str | None = Field(default=None, description="Optional canonical URL. Omit to leave unchanged; empty string clears it.")
+    robots: list[str] | None = Field(default=None, description="Optional robots directives, e.g. ['noindex','nofollow']. Allowed: index, noindex, nofollow, noarchive, noimageindex, nosnippet. Omit to leave unchanged.")
+    focus_keyword: str | None = Field(default=None, description="Optional Rank Math focus keyword. Omit to leave unchanged.")
+
+
 # SDL entities. sdl.Entity already provides: id, title, kind, subtitle, description, status, url.
 class Site(sdl.Entity):
     username: str = ""
@@ -113,3 +132,23 @@ class SiteHealth(sdl.Entity):
     content_counts: dict = Field(default_factory=dict)
     plugin_updates_available: str = VNEXT
     php_version: str = VNEXT
+
+
+class SeoMeta(sdl.Entity):
+    """Rank Math SEO fields for a single post or page.
+
+    Empty strings mean "no SEO value set" — Rank Math then falls back to its
+    own template for that post type, so an empty meta_title is normal, not a
+    failure. robots is a list because Rank Math stores it as an array.
+    """
+    post_id: int = 0
+    post_type: str = ""
+    slug: str = ""
+    meta_title: str = ""
+    meta_description: str = ""
+    focus_keyword: str = ""
+    canonical_url: str = ""
+    robots: list[str] = Field(default_factory=list)
+    seo_plugin: str = ""
+    source: str = ""
+    updated_fields: list[str] = Field(default_factory=list)

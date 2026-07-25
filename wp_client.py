@@ -10,6 +10,25 @@ _ERROR_MESSAGES = {
     429: "WordPress is rate-limiting requests — try again shortly.",
 }
 
+# Structural error codes. An error emitted without one is stamped
+# EXT_UNSTRUCTURED_ERROR by the kernel, which leaves the narrator no stable
+# facts to reason about — so every error path here carries a code.
+_ERROR_CODES = {
+    401: "WP_AUTH_REJECTED",
+    403: "WP_FORBIDDEN",
+    404: "WP_REST_NOT_FOUND",
+    429: "WP_RATE_LIMITED",
+}
+
+
+def wp_error_code(status_code: int) -> str:
+    """Stable machine-readable code for a WordPress HTTP status."""
+    if status_code in _ERROR_CODES:
+        return _ERROR_CODES[status_code]
+    if 500 <= status_code < 600:
+        return "WP_SERVER_ERROR"
+    return "WP_REQUEST_FAILED"
+
 
 def basic_auth_header(username: str, app_password: str) -> dict:
     token = base64.b64encode(f"{username}:{app_password}".encode()).decode()
@@ -40,6 +59,12 @@ def wp_error_message(status_code: int) -> str:
 async def wp_get(ctx, base_url, path, *, username, app_password, params=None):
     headers = basic_auth_header(username, app_password)
     return await ctx.http.get(f"{base_url}{path}", headers=headers, params=params)
+
+
+async def wp_post(ctx, base_url, path, *, username, app_password, json=None, params=None):
+    """POST to the WordPress REST API with Application Password auth."""
+    headers = basic_auth_header(username, app_password)
+    return await ctx.http.post(f"{base_url}{path}", headers=headers, json=json, params=params)
 
 
 def now_iso() -> str:
