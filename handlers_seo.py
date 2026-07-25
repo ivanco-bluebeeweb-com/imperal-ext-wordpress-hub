@@ -120,25 +120,50 @@ def _http_failure(status_code, body):
     return ActionResult.error(message, retryable=retry, code=code)
 
 
+def _bridge_plugin(payload) -> str:
+    """Which SEO plugin the bridge reports as active.
+
+    The bridge answers with a boolean `rank_math_active` flag, not a plugin
+    name. Defaulting to "rank-math" when the flag is absent would make the
+    "Rank Math is not active" guard unreachable, so the flag is honoured
+    whenever it is present and only a missing flag falls back.
+    """
+    if isinstance(payload, dict) and "rank_math_active" in payload:
+        return "rank-math" if payload.get("rank_math_active") else "none"
+    return str(payload.get("seo_plugin", "rank-math") or "none")
+
+
 def _entity_from_bridge(payload, site_url=""):
-    """Build a SeoMeta entity from a bridge response."""
+    """Build a SeoMeta entity from a bridge response.
+
+    The bridge names the object fields `id` and `type` (it speaks WordPress,
+    where a payload about a post does not prefix its own id). Accept the
+    `post_id`/`post_type` spellings too so a future bridge revision, or a
+    hand-rolled endpoint, cannot silently degrade to id 0 / empty type.
+    """
     robots = payload.get("robots") or []
     if not isinstance(robots, list):
         robots = [str(robots)] if robots else []
+    raw_id = payload.get("id", payload.get("post_id", 0))
+    raw_type = payload.get("type", payload.get("post_type", ""))
+    try:
+        post_id = int(raw_id or 0)
+    except (TypeError, ValueError):
+        post_id = 0
     return SeoMeta(
-        id=str(payload.get("post_id", "")),
+        id=str(post_id or ""),
         title=payload.get("post_title", "") or payload.get("slug", ""),
         kind="wp_seo_meta",
         url=payload.get("link", "") or site_url,
-        post_id=int(payload.get("post_id", 0) or 0),
-        post_type=payload.get("post_type", ""),
+        post_id=post_id,
+        post_type=str(raw_type or ""),
         slug=payload.get("slug", ""),
         meta_title=payload.get("meta_title", "") or "",
         meta_description=payload.get("meta_description", "") or "",
         focus_keyword=payload.get("focus_keyword", "") or "",
         canonical_url=payload.get("canonical_url", "") or "",
         robots=[str(r) for r in robots],
-        seo_plugin=payload.get("seo_plugin", "rank-math"),
+        seo_plugin=_bridge_plugin(payload),
         source="bridge",
     )
 
@@ -445,13 +470,16 @@ async def check_seo_support(ctx, params: SiteIdParams) -> ActionResult:
 
     body = r.body
     plugin = "rank-math" if body.get("rank_math_active") else "none"
-    types = body.get("post_types") or []
+    types = [str(t) for t in (body.get("post_types") or [])]
+    bridge_version = str(body.get("bridge_version", "") or "")
     entity = SeoMeta(
         id=params.site_id,
         title="SEO support",
         kind="wp_seo_support",
         url=base_url,
-        post_type=", ".join(str(t) for t in types),
+        post_types=types,
+        bridge_version=bridge_version,
+        rank_math_version=str(body.get("rank_math_version", "") or ""),
         seo_plugin=plugin,
         source="bridge",
     )
@@ -460,6 +488,8 @@ async def check_seo_support(ctx, params: SiteIdParams) -> ActionResult:
             entity,
             summary=("Bridge installed, but Rank Math is not active — no Rank Math SEO fields "
                      "to read or write yet."))
+    label = f"Bridge {bridge_version}".rstrip()
     return ActionResult.success(
         entity,
-        summary=f"Bridge {body.get('version', '')} active with Rank Math; covers {len(types)} post type(s).")
+        summary=f"{label} active with Rank Math {entity.rank_math_version}".rstrip()
+                + f"; covers {len(types)} post type(s): " + ", ".join(types) + ".")

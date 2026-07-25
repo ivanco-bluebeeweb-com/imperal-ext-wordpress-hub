@@ -31,9 +31,18 @@ async def _ctx():
 
 
 def _bridge_payload(**over):
+    """A bridge GET response, with the field names the bridge REALLY sends.
+
+    Captured verbatim from a live site (page 4286 on test3), because an
+    invented fixture is how a field-name mismatch hides: the first version of
+    these tests used post_id/post_type/seo_plugin, the bridge sends id/type/
+    rank_math_active, and every test still passed while the real tool returned
+    id 0 and an empty type.
+    """
     payload = {
-        "post_id": 42,
-        "post_type": "page",
+        "id": 42,
+        "type": "page",
+        "status": "publish",
         "slug": "about-us",
         "post_title": "About us",
         "link": "https://x.com/about-us",
@@ -42,10 +51,43 @@ def _bridge_payload(**over):
         "focus_keyword": "about",
         "canonical_url": "",
         "robots": ["index"],
-        "seo_plugin": "rank-math",
+        "rank_math_active": True,
     }
     payload.update(over)
     return payload
+
+
+# The exact payload the live bridge returned for page 4286 on test3, and the
+# exact /seo/status body from the same site. Kept literal on purpose: these are
+# the contract, and a future bridge change should break these tests loudly.
+LIVE_PAGE_PAYLOAD = {
+    "id": 4286,
+    "slug": "legal-disclaimer",
+    "type": "page",
+    "status": "publish",
+    "link": "https://test3.ksrenovationgroup.com/legal-disclaimer/",
+    "post_title": "Legal Disclaimer",
+    "meta_title": "Legal Disclaimer | KS Renovation Group",
+    "meta_description": (
+        "Read the KS Renovation Group legal disclaimer for website information, "
+        "third-party links, warranties, liability, and use of site content."
+    ),
+    "focus_keyword": "",
+    "canonical_url": "",
+    "robots": [],
+    "rank_math_active": True,
+}
+
+LIVE_STATUS_PAYLOAD = {
+    "bridge": True,
+    "bridge_version": "1.0.0",
+    "rank_math_active": True,
+    "rank_math_version": "1.0.272",
+    "post_types": ["post", "page", "wp_block", "blog-post", "feature",
+                   "inspiration", "partner", "project", "review", "test-607"],
+    "robots_choices": ["index", "noindex", "nofollow", "noarchive",
+                       "noimageindex", "nosnippet"],
+}
 
 
 # ── reading via the bridge ───────────────────────────────────────────────────
@@ -98,12 +140,49 @@ async def test_empty_meta_is_success_not_error():
 
 
 async def test_rank_math_absent_is_a_clear_error():
+    """Bridge installed but Rank Math switched off — say so, do not pretend.
+
+    The bridge signals this with rank_math_active=false, not with a plugin
+    name, so this guard only works if that flag is actually honoured.
+    """
     ctx = await _ctx()
-    ctx.http.mock_get(BRIDGE, _bridge_payload(seo_plugin="none"), 200)
+    ctx.http.mock_get(BRIDGE, _bridge_payload(rank_math_active=False), 200)
     r = await hs.get_seo_meta(ctx, GetSeoMetaParams(site_id="x-com", post_id=42))
     assert r.status == "error"
     assert r.error_code == "SEO_PLUGIN_MISSING"
     assert "Rank Math" in r.error
+
+
+# ── contract: the field names the bridge really sends ────────────────────────
+
+async def test_live_bridge_payload_maps_id_and_type():
+    """Regression guard for the bug this suite originally missed.
+
+    The bridge sends `id` and `type`; an earlier parser read `post_id` and
+    `post_type`, so every real call returned post_id 0 and an empty type while
+    the invented fixtures passed. This replays a captured live response.
+    """
+    ctx = await _ctx()
+    ctx.http.mock_get(BRIDGE, LIVE_PAGE_PAYLOAD, 200)
+    r = await hs.get_seo_meta(ctx, GetSeoMetaParams(site_id="x-com", post_id=4286))
+    assert r.status == "success"
+    assert r.data.post_id == 4286, "id must be read from the bridge's `id` field"
+    assert r.data.post_type == "page", "type must be read from the bridge's `type` field"
+    assert r.data.id == "4286"
+    assert r.data.meta_title == "Legal Disclaimer | KS Renovation Group"
+    # The summary must name the thing, not degrade to a generic "item #0".
+    assert r.summary.startswith("page #4286")
+
+
+async def test_bridge_payload_without_ids_does_not_silently_zero():
+    """A payload using the post_id/post_type spelling still resolves."""
+    ctx = await _ctx()
+    ctx.http.mock_get(BRIDGE, {"post_id": 7, "post_type": "post", "slug": "x",
+                               "meta_title": "T", "meta_description": "",
+                               "rank_math_active": True}, 200)
+    r = await hs.get_seo_meta(ctx, GetSeoMetaParams(site_id="x-com", post_id=7))
+    assert r.status == "success"
+    assert r.data.post_id == 7 and r.data.post_type == "post"
 
 
 # ── target resolution ────────────────────────────────────────────────────────
@@ -309,14 +388,16 @@ async def test_auth_rejection_maps_to_credential_message():
 # ── support check ────────────────────────────────────────────────────────────
 
 async def test_check_reports_bridge_and_rank_math_active():
+    """Status is reported from the real /seo/status body, field names included."""
     ctx = await _ctx()
-    ctx.http.mock_get(STATUS, {"bridge": True, "version": "1.0.0",
-                               "rank_math_active": True,
-                               "post_types": ["post", "page"]}, 200)
+    ctx.http.mock_get(STATUS, LIVE_STATUS_PAYLOAD, 200)
     r = await hs.check_seo_support(ctx, SiteIdParams(site_id="x-com"))
     assert r.status == "success"
     assert r.data.seo_plugin == "rank-math"
-    assert "post" in r.data.post_type
+    assert "page" in r.data.post_types  # pages covered — the original bug
+    assert r.data.bridge_version == "1.0.0"  # bridge_version, not 'version'
+    assert r.data.rank_math_version == "1.0.272"
+    assert "1.0.0" in r.summary and "page" in r.summary
 
 
 async def test_check_reports_missing_bridge():

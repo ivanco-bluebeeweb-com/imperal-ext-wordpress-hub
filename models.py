@@ -152,3 +152,7 @@ class SeoMeta(sdl.Entity):
     seo_plugin: str = ""
     source: str = ""
     updated_fields: list[str] = Field(default_factory=list)
+    # check_seo_support only: what the site as a whole supports.
+    bridge_version: str = ""
+    rank_math_version: str = ""
+    post_types: list[str] = Field(default_factory=list)
