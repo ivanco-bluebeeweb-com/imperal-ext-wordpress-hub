@@ -25,6 +25,8 @@ Every result reports `source` ("bridge" or "core-meta") so the caller always
 knows which fidelity it got, and never has to guess why robots came back empty.
 """
 
+import uuid
+
 from imperal_sdk import ActionResult, sdl
 
 from app import chat
@@ -83,6 +85,23 @@ def _target_query(params):
         q["slug"] = params.slug.strip()
     if params.post_type:
         q["type"] = params.post_type.strip()
+    return q
+
+
+def _cache_busted(query):
+    """Add a unique parameter so a page cache cannot answer a read for us.
+
+    Bridge >= 1.0.1 marks its own routes uncacheable, but we cannot assume the
+    site runs it: entries cached before that fix survive it, and a site may
+    still be on 1.0.0. Observed live on a LiteSpeed site — a read taken
+    straight after a successful write came back empty, served from cache.
+
+    This only protects OUR reads. It is not a substitute for the plugin fix,
+    which is what stops a cache from replaying a permission-gated response to
+    somebody else.
+    """
+    q = dict(query)
+    q["_imperal_cb"] = uuid.uuid4().hex[:12]
     return q
 
 
@@ -227,7 +246,8 @@ async def _core_lookup(ctx, base_url, username, pw, params):
     if params.post_id is not None:
         for base in bases:
             r = await wp_get(ctx, base_url, f"/wp-json/wp/v2/{base}/{params.post_id}",
-                             username=username, app_password=pw, params={"context": "edit"})
+                             username=username, app_password=pw,
+                             params=_cache_busted({"context": "edit"}))
             if r.status_code == 200 and isinstance(r.body, dict):
                 return r.body, None
         return None, ActionResult.error(
@@ -238,7 +258,7 @@ async def _core_lookup(ctx, base_url, username, pw, params):
     for base in bases:
         r = await wp_get(ctx, base_url, f"/wp-json/wp/v2/{base}",
                          username=username, app_password=pw,
-                         params={"slug": slug, "context": "edit", "per_page": 5})
+                         params=_cache_busted({"slug": slug, "context": "edit", "per_page": 5}))
         if r.status_code == 200 and isinstance(r.body, list):
             matches.extend(r.body)
 
@@ -291,7 +311,7 @@ async def get_seo_meta(ctx, params: GetSeoMetaParams) -> ActionResult:
     # Tier 1 — the bridge.
     try:
         r = await wp_get(ctx, base_url, BRIDGE_PATH, username=username,
-                         app_password=pw, params=query)
+                         app_password=pw, params=_cache_busted(query))
     except Exception as e:
         await ctx.log(f"get_seo_meta bridge request failed: {e}", level="error")
         return ActionResult.error("Could not reach the site — try again.",
@@ -455,7 +475,8 @@ async def check_seo_support(ctx, params: SiteIdParams) -> ActionResult:
     base_url, username, pw = auth
 
     try:
-        r = await wp_get(ctx, base_url, BRIDGE_STATUS_PATH, username=username, app_password=pw)
+        r = await wp_get(ctx, base_url, BRIDGE_STATUS_PATH, username=username, app_password=pw,
+                         params=_cache_busted({}))
     except Exception as e:
         await ctx.log(f"check_seo_support request failed: {e}", level="error")
         return ActionResult.error("Could not reach the site — try again.",

@@ -185,6 +185,59 @@ async def test_bridge_payload_without_ids_does_not_silently_zero():
     assert r.data.post_id == 7 and r.data.post_type == "post"
 
 
+# ── cache-busting on reads ───────────────────────────────────────────────────
+
+async def test_reads_carry_a_cache_buster():
+    """A page cache must not be able to answer our read.
+
+    Bridge >= 1.0.1 marks its routes uncacheable, but entries cached before
+    that fix survive it and a site may still run 1.0.0. Observed live: a read
+    straight after a successful write came back empty, served from cache.
+
+    The SDK's MockHTTP throws kwargs away, so it cannot show what we sent.
+    Wrap its .get with a spy and assert on the ACTUAL outbound request —
+    checking the helper in isolation would not prove it is wired in.
+    """
+    ctx = await _ctx()
+    ctx.http.mock_get(BRIDGE, LIVE_PAGE_PAYLOAD, 200)
+
+    seen = []
+    real_get = ctx.http.get
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs.get("params") or {}))
+        return await real_get(url, **kwargs)
+
+    ctx.http.get = spy
+
+    r = await hs.get_seo_meta(ctx, GetSeoMetaParams(site_id="x-com", post_id=4286))
+    assert r.status == "success"
+
+    bridge_calls = [(u, p) for u, p in seen if "imperal/v1/seo" in u]
+    assert bridge_calls, f"no bridge request was made; saw {[u for u, _ in seen]}"
+    url, sent = bridge_calls[0]
+    assert "_imperal_cb" in sent, f"read went out with no cache-buster: {sent}"
+    assert sent["id"] == 4286, "the real target must survive cache-busting"
+
+
+def test_cache_buster_is_unique_per_call():
+    a = hs._cache_busted({"id": 1})
+    b = hs._cache_busted({"id": 1})
+    assert a["_imperal_cb"] != b["_imperal_cb"], "a constant value would just be cached too"
+
+
+def test_cache_buster_preserves_the_real_query():
+    q = hs._cache_busted({"id": 7, "slug": "hello", "type": "page"})
+    assert q["id"] == 7 and q["slug"] == "hello" and q["type"] == "page"
+    assert len(q) == 4  # the three originals plus the buster
+
+
+def test_cache_buster_does_not_mutate_its_input():
+    original = {"id": 7}
+    hs._cache_busted(original)
+    assert original == {"id": 7}, "callers must not see their dict grow a param"
+
+
 # ── target resolution ────────────────────────────────────────────────────────
 
 async def test_no_id_and_no_slug_refuses_rather_than_guessing():
