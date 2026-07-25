@@ -67,9 +67,15 @@ class WP_REST_Server {
 
 class WP_REST_Request {
 	private $params;
+	private $route;
 
-	public function __construct( array $params = array() ) {
+	public function __construct( array $params = array(), $route = '/imperal/v1/seo' ) {
 		$this->params = $params;
+		$this->route  = $route;
+	}
+
+	public function get_route() {
+		return $this->route;
 	}
 
 	public function get_param( $key ) {
@@ -103,6 +109,15 @@ function add_filter( $hook, $cb, $priority = 10, $args = 1 ) {
 
 function apply_filters( $hook, $value ) {
 	return $value;
+}
+
+// Record fired actions and cache-header calls so the no-cache guard is testable.
+function do_action( $hook ) {
+	$GLOBALS['_fired'][] = $hook;
+}
+
+function nocache_headers() {
+	$GLOBALS['_nocache_headers'] = ( $GLOBALS['_nocache_headers'] ?? 0 ) + 1;
 }
 
 function register_rest_route( $ns, $route, $args ) {
@@ -394,6 +409,35 @@ echo "\nroutes\n";
 imperal_seo_bridge_register_routes();
 ok( isset( $GLOBALS['_routes']['imperal/v1/seo'] ), 'registers /imperal/v1/seo' );
 ok( isset( $GLOBALS['_routes']['imperal/v1/seo/status'] ), 'registers /imperal/v1/seo/status' );
+
+echo "\nno-cache guard\n";
+// Regression: LiteSpeed cached a permission-gated response on a live site and
+// replayed it to an anonymous caller (x-litespeed-cache: hit, HTTP 200 with
+// real SEO data; the same request with a cache-buster correctly gave 403).
+$GLOBALS['_fired']           = array();
+$GLOBALS['_nocache_headers'] = 0;
+
+// A route from another plugin must be left completely alone.
+$passthru = imperal_seo_bridge_no_cache( 'untouched', null, new WP_REST_Request( array(), '/wp/v2/posts' ) );
+eq( $passthru, 'untouched', 'foreign namespace: result passes through unchanged' );
+eq( $GLOBALS['_nocache_headers'], 0, 'foreign namespace: no cache headers sent' );
+ok( ! in_array( 'litespeed_control_set_nocache', $GLOBALS['_fired'], true ), 'foreign namespace: LiteSpeed switch not touched' );
+
+// Our own route must be marked uncacheable.
+$result = imperal_seo_bridge_no_cache( 'payload', null, new WP_REST_Request( array( 'id' => 1 ), '/imperal/v1/seo' ) );
+eq( $result, 'payload', 'own route: result passes through unchanged' );
+eq( $GLOBALS['_nocache_headers'], 1, 'own route: nocache_headers() called' );
+ok( in_array( 'litespeed_control_set_nocache', $GLOBALS['_fired'], true ), 'own route: LiteSpeed no-cache switch fired' );
+ok( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE, 'own route: DONOTCACHEPAGE defined for page caches' );
+
+// The status route is equally per-user and must be covered too.
+$GLOBALS['_fired'] = array();
+imperal_seo_bridge_no_cache( null, null, new WP_REST_Request( array(), '/imperal/v1/seo/status' ) );
+ok( in_array( 'litespeed_control_set_nocache', $GLOBALS['_fired'], true ), 'status route is also marked no-cache' );
+
+// A non-request argument must not blow up the whole REST stack.
+$safe = imperal_seo_bridge_no_cache( 'x', null, null );
+eq( $safe, 'x', 'non-request argument is ignored safely' );
 
 // ── Summary ──────────────────────────────────────────────────────────────────
 

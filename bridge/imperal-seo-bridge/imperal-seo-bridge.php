@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal SEO Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       Exposes Rank Math SEO fields (title, description, focus keyword, robots, canonical) to the WordPress REST API so Imperal / Webbee can read and edit them for posts, pages and custom post types.
- * Version:           1.0.0
+ * Version:           1.0.1
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -60,7 +60,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_SEO_BRIDGE_VERSION', '1.0.0' );
+define( 'IMPERAL_SEO_BRIDGE_VERSION', '1.0.1' );
 define( 'IMPERAL_SEO_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -488,6 +488,52 @@ function imperal_seo_bridge_status() {
 /**
  * Register the REST routes.
  */
+/**
+ * Forbid every cache layer from storing this namespace's responses.
+ *
+ * These routes are permission-gated and their bodies differ per user, so a
+ * page cache that stores one response and replays it is an access-control
+ * failure, not just staleness. Observed live: LiteSpeed returned
+ * `x-litespeed-cache: hit` and served an authenticated SEO payload to an
+ * anonymous caller, while the same request with a cache-buster correctly
+ * returned 403. It also made a read straight after a write look empty.
+ *
+ * Hooked on rest_pre_dispatch so it runs before the handler, and scoped to
+ * this namespace so caching elsewhere on the site is left alone.
+ *
+ * @param mixed           $result  Unused; returned untouched.
+ * @param WP_REST_Server  $server  Unused.
+ * @param WP_REST_Request $request Current request.
+ * @return mixed The untouched $result.
+ */
+function imperal_seo_bridge_no_cache( $result, $server, $request ) {
+	if ( ! $request instanceof WP_REST_Request ) {
+		return $result;
+	}
+
+	if ( 0 !== strpos( ltrim( $request->get_route(), '/' ), IMPERAL_SEO_BRIDGE_NAMESPACE ) ) {
+		return $result;
+	}
+
+	// Honoured by LiteSpeed, WP Super Cache, W3 Total Cache and others.
+	if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+		define( 'DONOTCACHEPAGE', true );
+	}
+
+	// LiteSpeed's own switch — the plugin that was caching us in practice.
+	do_action( 'litespeed_control_set_nocache', 'Imperal SEO Bridge: per-user data' );
+
+	nocache_headers();
+
+	if ( ! headers_sent() ) {
+		header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private', true );
+		header( 'X-LiteSpeed-Cache-Control: no-cache', true );
+	}
+
+	return $result;
+}
+add_filter( 'rest_pre_dispatch', 'imperal_seo_bridge_no_cache', 10, 3 );
+
 function imperal_seo_bridge_register_routes() {
 	$target_args = array(
 		'id'   => array(

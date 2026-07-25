@@ -33,6 +33,29 @@ is required or every write fails with `rest_cannot_update`.
 
 3. **Adds** `/wp-json/imperal/v1/seo/status` for capability discovery.
 
+### Page caches must not store these routes (v1.0.1)
+
+The `/imperal/v1/*` routes are permission-gated and their bodies differ per
+user, so a page cache that stores one response and replays it is an
+access-control failure, not merely staleness.
+
+This was observed live, not hypothetically: on a LiteSpeed site the bridge
+route answered an **anonymous** request with `x-litespeed-cache: hit`, HTTP 200
+and real SEO data, while the identical request with a cache-buster correctly
+returned 403. The same cache entry also made a read immediately after a write
+look empty.
+
+Since 1.0.1 the plugin marks its own namespace uncacheable on every request:
+`DONOTCACHEPAGE` (honoured by LiteSpeed, WP Super Cache, W3 Total Cache),
+LiteSpeed's `litespeed_control_set_nocache` action, `nocache_headers()` and
+explicit `no-store` headers. It is scoped to this namespace only — caching
+everywhere else on the site is untouched.
+
+**Upgrading from 1.0.0:** entries cached before the fix survive it. Purge the
+site cache once after updating (LiteSpeed → Toolbox → Purge All, or
+`wp litespeed-purge all`). Without that purge a stale response can still be
+served for a while.
+
 ### Why robots is endpoint-only
 
 Rank Math stores `rank_math_robots` as an **array**. Registering array meta on
