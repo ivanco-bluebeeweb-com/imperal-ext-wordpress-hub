@@ -23,6 +23,35 @@ class ListContentParams(BaseModel):
 class ListMediaParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     limit: int = Field(default=20, ge=1, le=100, description="Max items to return, 1-100")
+    missing_alt_only: bool = Field(
+        default=False,
+        description="Only return images whose alt text is empty — the accessibility/SEO gap")
+
+
+# NOTE: list_orders deliberately keeps its own params model. It used to share
+# ListMediaParams, so media-specific fields added there leaked into the orders
+# tool's public schema. Separate models keep each tool's contract independent.
+# Kept as a comment, not a docstring: pydantic publishes docstrings into the
+# generated JSON schema, which would change the tool's public description.
+class ListOrdersParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    limit: int = Field(default=20, ge=1, le=100, description="Max items to return, 1-100")
+
+
+class MediaAltItem(BaseModel):
+    """One alt-text assignment: which library item, and what its alt should say."""
+    media_id: int = Field(description="WordPress media library attachment id")
+    alt_text: str = Field(description="Alt text to store on that attachment")
+
+
+class UpdateMediaAltParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    items: list[MediaAltItem] = Field(
+        description="Alt text assignments to apply, up to 100 per call")
+    overwrite: bool = Field(
+        default=False,
+        description=("By default an attachment that already has alt text is left alone, so a "
+                     "human's wording is never clobbered. Set true to replace existing alt too."))
 
 
 class _NoParams(BaseModel):
@@ -108,6 +137,17 @@ class Page(sdl.Entity):
 
 class MediaItem(sdl.Entity):
     mime_type: str = ""
+    alt_text: str = ""
+
+
+class MediaAltResult(sdl.Entity):
+    """Outcome of one update_media_alt call: what changed, what was left alone."""
+    updated: int = 0
+    skipped_existing: int = 0
+    failed: int = 0
+    updated_ids: list[int] = Field(default_factory=list)
+    skipped_ids: list[int] = Field(default_factory=list)
+    failures: list[str] = Field(default_factory=list)
 
 
 class Comment(sdl.Entity):

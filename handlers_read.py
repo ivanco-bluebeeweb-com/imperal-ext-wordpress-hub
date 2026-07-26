@@ -2,12 +2,12 @@ import asyncio
 
 from imperal_sdk import ActionResult, sdl
 from app import chat
-from models import (_NoParams, Site, ListContentParams, ListMediaParams,
+from models import (_NoParams, Site, ListContentParams, ListMediaParams, ListOrdersParams,
                     Post, Page, MediaItem, SiteIdParams, SiteHealth, RefreshAllResult,
                     ListCommentsParams, ListCustomPostsParams, Comment, WPUser, Order,
-                    ServerInfo)
+                    ServerInfo, UpdateMediaAltParams, MediaAltResult)
 import wp_cli
-from wp_client import wp_get, wp_error_message, wp_title, now_iso
+from wp_client import wp_get, wp_post, wp_error_message, wp_error_code, wp_title, now_iso
 import storage
 
 
@@ -87,12 +87,120 @@ async def list_pages(ctx, params: ListContentParams) -> ActionResult:
                action_type="read", data_model=sdl.EntityList[MediaItem])
 async def list_media(ctx, params: ListMediaParams) -> ActionResult:
     """Return media items from the site's REST API as an entity list."""
-    data, err = await _fetch(ctx, params.site_id, "/wp-json/wp/v2/media", {"per_page": params.limit})
+    query = {"per_page": params.limit}
+    if params.missing_alt_only:
+        # No REST filter exists for "empty alt", so widen the page and filter here.
+        query["per_page"] = min(100, max(params.limit, 100))
+        query["media_type"] = "image"
+    data, err = await _fetch(ctx, params.site_id, "/wp-json/wp/v2/media", query)
     if err:
         return err
+    if params.missing_alt_only:
+        data = [m for m in data if not (m.get("alt_text") or "").strip()][:params.limit]
     items = [MediaItem(id=str(m["id"]), title=wp_title(m), kind="wp_media",
-                       url=m.get("source_url", ""), mime_type=m.get("mime_type", "")) for m in data]
-    return ActionResult.success(sdl.EntityList[MediaItem](items=items), summary=f"{len(items)} media item(s)")
+                       url=m.get("source_url", ""), mime_type=m.get("mime_type", ""),
+                       alt_text=(m.get("alt_text") or "")) for m in data]
+    gap = " missing alt text" if params.missing_alt_only else ""
+    return ActionResult.success(sdl.EntityList[MediaItem](items=items),
+                                summary=f"{len(items)} media item(s){gap}")
+
+
+@chat.function(
+    "update_media_alt",
+    description=("Set the alt text of media library images on a connected WordPress site. "
+                 "Alt text is what screen readers announce and what Google Images indexes. "
+                 "Pass a list of {media_id, alt_text}. By default an image that already has "
+                 "alt text is skipped so existing wording is never overwritten."),
+    action_type="write",
+    data_model=MediaAltResult,
+    effects=["wp.media_update"],
+    event="wp-site-connector.update_media_alt",
+)
+async def update_media_alt(ctx, params: UpdateMediaAltParams) -> ActionResult:
+    """Write alt_text onto media library attachments, one REST call per item.
+
+    alt_text is a first-class field of the core wp/v2/media endpoint, so this
+    needs no plugin — only the Application Password the site is already
+    connected with.
+    """
+    if not params.items:
+        return ActionResult.error("Nothing to update — pass at least one {media_id, alt_text}.",
+                                  retryable=False, code="MEDIA_NO_ITEMS")
+    if len(params.items) > 100:
+        return ActionResult.error(
+            f"Too many items ({len(params.items)}) — send at most 100 per call.",
+            retryable=False, code="MEDIA_TOO_MANY")
+
+    blank = [i.media_id for i in params.items if not i.alt_text.strip()]
+    if blank:
+        return ActionResult.error(
+            f"Empty alt_text for media id(s): {', '.join(str(b) for b in blank)}. "
+            "Decorative images should keep their empty alt rather than be written blank.",
+            retryable=False, code="MEDIA_EMPTY_ALT")
+
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return ActionResult.error(err, retryable=False)
+    base_url, username, pw = auth
+
+    updated, skipped, failures = [], [], []
+
+    for item in params.items:
+        path = f"/wp-json/wp/v2/media/{item.media_id}"
+
+        if not params.overwrite:
+            try:
+                cur = await wp_get(ctx, base_url, path, username=username, app_password=pw,
+                                   params={"_fields": "id,alt_text"})
+            except Exception as e:
+                await ctx.log(f"update_media_alt read #{item.media_id} failed: {e}", level="error")
+                failures.append(f"#{item.media_id}: could not read current alt")
+                continue
+            if cur.status_code != 200:
+                failures.append(f"#{item.media_id}: {wp_error_message(cur.status_code)}")
+                continue
+            existing = (cur.body or {}).get("alt_text") if isinstance(cur.body, dict) else ""
+            if (existing or "").strip():
+                skipped.append(item.media_id)
+                continue
+
+        try:
+            w = await wp_post(ctx, base_url, path, username=username, app_password=pw,
+                              json={"alt_text": item.alt_text})
+        except Exception as e:
+            await ctx.log(f"update_media_alt write #{item.media_id} failed: {e}", level="error")
+            failures.append(f"#{item.media_id}: could not reach the site")
+            continue
+
+        if w.status_code != 200:
+            failures.append(f"#{item.media_id}: {wp_error_message(w.status_code)}")
+            continue
+
+        # Trust the echo, not the request: confirm WordPress really stored it.
+        stored = (w.body or {}).get("alt_text") if isinstance(w.body, dict) else ""
+        if (stored or "").strip() != item.alt_text.strip():
+            failures.append(f"#{item.media_id}: server did not store the new alt text")
+            continue
+        updated.append(item.media_id)
+
+    result = MediaAltResult(
+        id=params.site_id, title="Media alt text", kind="wp_media_alt_result",
+        updated=len(updated), skipped_existing=len(skipped), failed=len(failures),
+        updated_ids=updated, skipped_ids=skipped, failures=failures[:20])
+
+    bits = [f"{len(updated)} image(s) updated"]
+    if skipped:
+        bits.append(f"{len(skipped)} left alone (already had alt)")
+    if failures:
+        bits.append(f"{len(failures)} failed")
+
+    # Every single item failing is an error, not a success with a sad summary.
+    if failures and not updated:
+        return ActionResult.error(
+            "No images were updated. " + "; ".join(failures[:3]),
+            retryable=True, code="MEDIA_ALL_FAILED")
+
+    return ActionResult.success(result, summary=", ".join(bits), refresh_panels=["center"])
 
 
 @chat.function("get_site_health", description="Report read-only health for a connected WordPress site.",
@@ -309,7 +417,7 @@ async def list_users(ctx, params: ListContentParams) -> ActionResult:
     action_type="read",
     data_model=sdl.EntityList[Order],
 )
-async def list_orders(ctx, params: ListMediaParams) -> ActionResult:
+async def list_orders(ctx, params: ListOrdersParams) -> ActionResult:
     """Return WooCommerce orders from the site's REST API."""
     auth, err = await _authed(ctx, params.site_id)
     if err:

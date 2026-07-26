@@ -1,6 +1,6 @@
 {
   "manifest_schema_version": 3,
-  "sdk_version": "5.4.2",
+  "sdk_version": "5.9.12",
   "app_id": "wp-site-connector",
   "version": "0.1.0",
   "name": "WP Site Connector",
@@ -8,7 +8,10 @@
   "icon": "icon.svg",
   "actions_explicit": true,
   "system": false,
-  "capabilities": [],
+  "capabilities": [
+    "wp:read",
+    "wp:write"
+  ],
   "tools": [
     {
       "name": "skeleton_refresh_sites_overview",
@@ -1131,6 +1134,12 @@
             "minimum": 1,
             "title": "Limit",
             "type": "integer"
+          },
+          "missing_alt_only": {
+            "default": false,
+            "description": "Only return images whose alt text is empty — the accessibility/SEO gap",
+            "title": "Missing Alt Only",
+            "type": "boolean"
           }
         },
         "required": [
@@ -1215,6 +1224,11 @@
                 "default": "",
                 "title": "Mime Type",
                 "type": "string"
+              },
+              "alt_text": {
+                "default": "",
+                "title": "Alt Text",
+                "type": "string"
               }
             },
             "required": [
@@ -1272,6 +1286,189 @@
         "x-sdl": "entity-list"
       },
       "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "update_media_alt",
+      "description": "Set the alt text of media library images on a connected WordPress site. Alt text is what screen readers announce and what Google Images indexes. Pass a list of {media_id, alt_text}. By default an image that already has alt text is skipped so existing wording is never overwritten.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.media_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "$defs": {
+          "MediaAltItem": {
+            "description": "One alt-text assignment: which library item, and what its alt should say.",
+            "properties": {
+              "media_id": {
+                "description": "WordPress media library attachment id",
+                "title": "Media Id",
+                "type": "integer"
+              },
+              "alt_text": {
+                "description": "Alt text to store on that attachment",
+                "title": "Alt Text",
+                "type": "string"
+              }
+            },
+            "required": [
+              "media_id",
+              "alt_text"
+            ],
+            "title": "MediaAltItem",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "items": {
+            "description": "Alt text assignments to apply, up to 100 per call",
+            "items": {
+              "$ref": "#/$defs/MediaAltItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "overwrite": {
+            "default": false,
+            "description": "By default an attachment that already has alt text is left alone, so a human's wording is never clobbered. Set true to replace existing alt too.",
+            "title": "Overwrite",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "site_id",
+          "items"
+        ],
+        "title": "UpdateMediaAltParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of one update_media_alt call: what changed, what was left alone.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "skipped_existing": {
+            "default": 0,
+            "title": "Skipped Existing",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "skipped_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Skipped Ids",
+            "type": "array"
+          },
+          "failures": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failures",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "MediaAltResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.update_media_alt",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -2233,7 +2430,7 @@
         "required": [
           "site_id"
         ],
-        "title": "ListMediaParams",
+        "title": "ListOrdersParams",
         "type": "object"
       },
       "return_schema": {
@@ -2734,6 +2931,1302 @@
       "long_running": false,
       "scopes": [],
       "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "get_seo_meta",
+      "description": "Read the Rank Math SEO fields (meta title, meta description, focus keyword, canonical, robots) of one post or page on a connected WordPress site. Identify the item by post_id or by slug.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Numeric id of the post or page. Give this OR slug.",
+            "title": "Post Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Slug of the post or page, e.g. 'about-us'. Used when post_id is not given.",
+            "title": "Slug"
+          },
+          "post_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional post type ('post', 'page', or a custom type) to disambiguate a slug used by several items.",
+            "title": "Post Type"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "GetSeoMetaParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" — Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "post_id": {
+            "default": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "slug": {
+            "default": "",
+            "title": "Slug",
+            "type": "string"
+          },
+          "meta_title": {
+            "default": "",
+            "title": "Meta Title",
+            "type": "string"
+          },
+          "meta_description": {
+            "default": "",
+            "title": "Meta Description",
+            "type": "string"
+          },
+          "focus_keyword": {
+            "default": "",
+            "title": "Focus Keyword",
+            "type": "string"
+          },
+          "canonical_url": {
+            "default": "",
+            "title": "Canonical Url",
+            "type": "string"
+          },
+          "robots": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Robots",
+            "type": "array"
+          },
+          "seo_plugin": {
+            "default": "",
+            "title": "Seo Plugin",
+            "type": "string"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Updated Fields",
+            "type": "array"
+          },
+          "object_type": {
+            "default": "post",
+            "title": "Object Type",
+            "type": "string"
+          },
+          "taxonomy": {
+            "default": "",
+            "title": "Taxonomy",
+            "type": "string"
+          },
+          "bridge_version": {
+            "default": "",
+            "title": "Bridge Version",
+            "type": "string"
+          },
+          "rank_math_version": {
+            "default": "",
+            "title": "Rank Math Version",
+            "type": "string"
+          },
+          "post_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Post Types",
+            "type": "array"
+          },
+          "taxonomies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Taxonomies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SeoMeta",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "update_seo_meta",
+      "description": "Update the Rank Math SEO fields of one post or page on a connected WordPress site: meta title, meta description, and optionally focus keyword, canonical URL and robots directives. Identify the item by post_id or by slug. Omitted fields are left unchanged.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.seo_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Numeric id of the post or page. Give this OR slug.",
+            "title": "Post Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Slug of the post or page, e.g. 'about-us'. Used when post_id is not given.",
+            "title": "Slug"
+          },
+          "post_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional post type ('post', 'page', or a custom type) to disambiguate a slug used by several items.",
+            "title": "Post Type"
+          },
+          "meta_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New Rank Math SEO title. Omit to leave unchanged; pass an empty string to clear it.",
+            "title": "Meta Title"
+          },
+          "meta_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New Rank Math meta description. Omit to leave unchanged; pass an empty string to clear it.",
+            "title": "Meta Description"
+          },
+          "canonical_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional canonical URL. Omit to leave unchanged; empty string clears it.",
+            "title": "Canonical Url"
+          },
+          "robots": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional robots directives, e.g. ['noindex','nofollow']. Allowed: index, noindex, nofollow, noarchive, noimageindex, nosnippet. Omit to leave unchanged.",
+            "title": "Robots"
+          },
+          "focus_keyword": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Rank Math focus keyword. Omit to leave unchanged.",
+            "title": "Focus Keyword"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "UpdateSeoMetaParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" — Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "post_id": {
+            "default": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "slug": {
+            "default": "",
+            "title": "Slug",
+            "type": "string"
+          },
+          "meta_title": {
+            "default": "",
+            "title": "Meta Title",
+            "type": "string"
+          },
+          "meta_description": {
+            "default": "",
+            "title": "Meta Description",
+            "type": "string"
+          },
+          "focus_keyword": {
+            "default": "",
+            "title": "Focus Keyword",
+            "type": "string"
+          },
+          "canonical_url": {
+            "default": "",
+            "title": "Canonical Url",
+            "type": "string"
+          },
+          "robots": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Robots",
+            "type": "array"
+          },
+          "seo_plugin": {
+            "default": "",
+            "title": "Seo Plugin",
+            "type": "string"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Updated Fields",
+            "type": "array"
+          },
+          "object_type": {
+            "default": "post",
+            "title": "Object Type",
+            "type": "string"
+          },
+          "taxonomy": {
+            "default": "",
+            "title": "Taxonomy",
+            "type": "string"
+          },
+          "bridge_version": {
+            "default": "",
+            "title": "Bridge Version",
+            "type": "string"
+          },
+          "rank_math_version": {
+            "default": "",
+            "title": "Rank Math Version",
+            "type": "string"
+          },
+          "post_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Post Types",
+            "type": "array"
+          },
+          "taxonomies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Taxonomies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SeoMeta",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.update_seo_meta",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "get_term_seo_meta",
+      "description": "Read the Rank Math SEO fields (meta title, meta description, focus keyword, canonical, robots) of one taxonomy term — a category or tag — on a connected WordPress site. Identify the term by term_id or by slug.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "term_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Numeric id of the category/tag term. Give this OR slug.",
+            "title": "Term Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Term slug, e.g. 'sisteme'. Used when term_id is not given.",
+            "title": "Slug"
+          },
+          "taxonomy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional taxonomy ('category', 'post_tag', or a custom taxonomy) to disambiguate a slug used by several taxonomies.",
+            "title": "Taxonomy"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "GetTermSeoMetaParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" — Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "post_id": {
+            "default": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "slug": {
+            "default": "",
+            "title": "Slug",
+            "type": "string"
+          },
+          "meta_title": {
+            "default": "",
+            "title": "Meta Title",
+            "type": "string"
+          },
+          "meta_description": {
+            "default": "",
+            "title": "Meta Description",
+            "type": "string"
+          },
+          "focus_keyword": {
+            "default": "",
+            "title": "Focus Keyword",
+            "type": "string"
+          },
+          "canonical_url": {
+            "default": "",
+            "title": "Canonical Url",
+            "type": "string"
+          },
+          "robots": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Robots",
+            "type": "array"
+          },
+          "seo_plugin": {
+            "default": "",
+            "title": "Seo Plugin",
+            "type": "string"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Updated Fields",
+            "type": "array"
+          },
+          "object_type": {
+            "default": "post",
+            "title": "Object Type",
+            "type": "string"
+          },
+          "taxonomy": {
+            "default": "",
+            "title": "Taxonomy",
+            "type": "string"
+          },
+          "bridge_version": {
+            "default": "",
+            "title": "Bridge Version",
+            "type": "string"
+          },
+          "rank_math_version": {
+            "default": "",
+            "title": "Rank Math Version",
+            "type": "string"
+          },
+          "post_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Post Types",
+            "type": "array"
+          },
+          "taxonomies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Taxonomies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SeoMeta",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "update_term_seo_meta",
+      "description": "Update the Rank Math SEO fields of one taxonomy term — a category or tag — on a connected WordPress site: meta title, meta description, and optionally focus keyword, canonical URL and robots directives. Identify the term by term_id or by slug. Omitted fields are left unchanged.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.seo_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "term_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Numeric id of the category/tag term. Give this OR slug.",
+            "title": "Term Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Term slug, e.g. 'sisteme'. Used when term_id is not given.",
+            "title": "Slug"
+          },
+          "taxonomy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional taxonomy ('category', 'post_tag', or a custom taxonomy) to disambiguate a slug used by several taxonomies.",
+            "title": "Taxonomy"
+          },
+          "meta_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New Rank Math SEO title for the term. Omit to leave unchanged; pass an empty string to clear it.",
+            "title": "Meta Title"
+          },
+          "meta_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New Rank Math meta description for the term. Omit to leave unchanged; pass an empty string to clear it.",
+            "title": "Meta Description"
+          },
+          "canonical_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional canonical URL. Omit to leave unchanged; empty string clears it.",
+            "title": "Canonical Url"
+          },
+          "robots": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional robots directives, e.g. ['noindex','nofollow']. Allowed: index, noindex, nofollow, noarchive, noimageindex, nosnippet. Omit to leave unchanged.",
+            "title": "Robots"
+          },
+          "focus_keyword": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Rank Math focus keyword. Omit to leave unchanged.",
+            "title": "Focus Keyword"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "UpdateTermSeoMetaParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" — Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "post_id": {
+            "default": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "slug": {
+            "default": "",
+            "title": "Slug",
+            "type": "string"
+          },
+          "meta_title": {
+            "default": "",
+            "title": "Meta Title",
+            "type": "string"
+          },
+          "meta_description": {
+            "default": "",
+            "title": "Meta Description",
+            "type": "string"
+          },
+          "focus_keyword": {
+            "default": "",
+            "title": "Focus Keyword",
+            "type": "string"
+          },
+          "canonical_url": {
+            "default": "",
+            "title": "Canonical Url",
+            "type": "string"
+          },
+          "robots": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Robots",
+            "type": "array"
+          },
+          "seo_plugin": {
+            "default": "",
+            "title": "Seo Plugin",
+            "type": "string"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Updated Fields",
+            "type": "array"
+          },
+          "object_type": {
+            "default": "post",
+            "title": "Object Type",
+            "type": "string"
+          },
+          "taxonomy": {
+            "default": "",
+            "title": "Taxonomy",
+            "type": "string"
+          },
+          "bridge_version": {
+            "default": "",
+            "title": "Bridge Version",
+            "type": "string"
+          },
+          "rank_math_version": {
+            "default": "",
+            "title": "Rank Math Version",
+            "type": "string"
+          },
+          "post_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Post Types",
+            "type": "array"
+          },
+          "taxonomies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Taxonomies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SeoMeta",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.update_term_seo_meta",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "check_seo_support",
+      "description": "Check whether a connected WordPress site can expose Rank Math SEO fields: is the Imperal SEO Bridge plugin installed, is Rank Math active, and which post types and taxonomies (categories/tags) are covered.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" — Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "post_id": {
+            "default": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "slug": {
+            "default": "",
+            "title": "Slug",
+            "type": "string"
+          },
+          "meta_title": {
+            "default": "",
+            "title": "Meta Title",
+            "type": "string"
+          },
+          "meta_description": {
+            "default": "",
+            "title": "Meta Description",
+            "type": "string"
+          },
+          "focus_keyword": {
+            "default": "",
+            "title": "Focus Keyword",
+            "type": "string"
+          },
+          "canonical_url": {
+            "default": "",
+            "title": "Canonical Url",
+            "type": "string"
+          },
+          "robots": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Robots",
+            "type": "array"
+          },
+          "seo_plugin": {
+            "default": "",
+            "title": "Seo Plugin",
+            "type": "string"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Updated Fields",
+            "type": "array"
+          },
+          "object_type": {
+            "default": "post",
+            "title": "Object Type",
+            "type": "string"
+          },
+          "taxonomy": {
+            "default": "",
+            "title": "Taxonomy",
+            "type": "string"
+          },
+          "bridge_version": {
+            "default": "",
+            "title": "Bridge Version",
+            "type": "string"
+          },
+          "rank_math_version": {
+            "default": "",
+            "title": "Rank Math Version",
+            "type": "string"
+          },
+          "post_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Post Types",
+            "type": "array"
+          },
+          "taxonomies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Taxonomies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SeoMeta",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
     }
   ],
   "signals": [],
@@ -2744,5 +4237,28 @@
     "health_check": {
       "interval_sec": 60
     }
-  }
+  },
+  "panels": [
+    {
+      "panel_id": "sidebar",
+      "slot": "left",
+      "title": "WP Sites",
+      "tree": {},
+      "icon": "",
+      "refresh": "on_event:wp-site-connector.connect_site,wp-site-connector.forget_site,wp-site-connector.refresh_site,wp-site-connector.refresh_all_sites,wp-site-connector.add_ssh,wp-site-connector.remove_ssh,wp-site-connector.get_server_info",
+      "center_overlay": false,
+      "default_width": 280,
+      "min_width": 200,
+      "max_width": 400
+    },
+    {
+      "panel_id": "center",
+      "slot": "center",
+      "title": "WP Site Connector",
+      "tree": {},
+      "icon": "",
+      "refresh": "manual",
+      "center_overlay": true
+    }
+  ]
 }
