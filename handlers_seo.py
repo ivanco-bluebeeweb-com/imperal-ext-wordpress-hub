@@ -30,11 +30,13 @@ import uuid
 from imperal_sdk import ActionResult, sdl
 
 from app import chat
-from models import GetSeoMetaParams, UpdateSeoMetaParams, SeoMeta, SiteIdParams
+from models import (GetSeoMetaParams, UpdateSeoMetaParams, GetTermSeoMetaParams,
+                    UpdateTermSeoMetaParams, SeoMeta, SiteIdParams)
 from wp_client import wp_get, wp_post, wp_error_message, wp_error_code
 import storage
 
 BRIDGE_PATH = "/wp-json/imperal/v1/seo"
+BRIDGE_TERM_PATH = "/wp-json/imperal/v1/seo/term"
 BRIDGE_STATUS_PATH = "/wp-json/imperal/v1/seo/status"
 
 # Rank Math's own accepted values — mirrors Choices::choices_robots().
@@ -406,9 +408,14 @@ async def update_seo_meta(ctx, params: UpdateSeoMetaParams) -> ActionResult:
         entity = _entity_from_bridge(r.body, base_url)
         changed = r.body.get("updated_fields") or list(fields.keys())
         entity.updated_fields = [str(c) for c in changed]
+        # The rows really were written, so this is not an error — but with Rank
+        # Math inactive nothing renders them, and a bare "Updated ..." would
+        # overstate the outcome.
+        inert = " — but Rank Math is not active, so nothing renders these yet" \
+            if (not entity.seo_plugin or entity.seo_plugin == "none") else ""
         return ActionResult.success(
             entity,
-            summary=f"Updated {', '.join(entity.updated_fields)} on {entity.post_type or 'item'} #{entity.post_id}",
+            summary=f"Updated {', '.join(entity.updated_fields)} on {entity.post_type or 'item'} #{entity.post_id}{inert}",
             refresh_panels=["center"])
 
     if r.status_code != 404:
@@ -459,11 +466,190 @@ async def update_seo_meta(ctx, params: UpdateSeoMetaParams) -> ActionResult:
         refresh_panels=["center"])
 
 
+def _term_entity(payload, site_url=""):
+    """Build a SeoMeta entity for a term, reusing the post payload reader.
+
+    The bridge deliberately answers terms with the same key names it uses for
+    posts (`id`, `type`, `slug`, `post_title`, `meta_*`, `robots`), so there is
+    one dialect to parse instead of two. Only the object markers differ.
+    """
+    entity = _entity_from_bridge(payload, site_url)
+    entity.object_type = "term"
+    entity.taxonomy = str(payload.get("taxonomy", "") or payload.get("type", "") or "")
+    return entity
+
+
+def _term_target_error(params):
+    """Neither term_id nor slug given — refuse rather than guess."""
+    if params.term_id is None and not (params.slug or "").strip():
+        return ActionResult.error(
+            "Tell me which term: pass term_id, or slug (optionally with taxonomy).",
+            retryable=False, code="SEO_TARGET_MISSING")
+    return None
+
+
+def _term_query(params):
+    q = {}
+    if params.term_id is not None:
+        q["id"] = params.term_id
+    if params.slug:
+        q["slug"] = params.slug.strip()
+    if params.taxonomy:
+        q["taxonomy"] = params.taxonomy.strip()
+    return q
+
+
+def _term_summary(entity: SeoMeta) -> str:
+    label = f"{entity.taxonomy or 'term'} #{entity.post_id}"
+    if entity.meta_title or entity.meta_description:
+        bits = []
+        bits.append(f'title "{entity.meta_title}" ({len(entity.meta_title)} chars)'
+                    if entity.meta_title else "no SEO title set")
+        bits.append(f"description {len(entity.meta_description)} chars"
+                    if entity.meta_description else "no meta description set")
+        return f"{label}: " + ", ".join(bits)
+    return (f"{label}: no Rank Math title or description set — Rank Math falls back "
+            "to its archive template for this taxonomy.")
+
+
+def _term_bridge_missing():
+    """A term route 404 means the bridge is absent or older than 1.1.0.
+
+    There is deliberately NO core-meta fallback here: the older WP Publisher
+    bridge registers post meta only, so pretending to degrade gracefully would
+    just produce empty reads and silently lost writes.
+    """
+    return ActionResult.error(
+        "This site's Imperal SEO Bridge does not expose category/tag SEO fields — "
+        "it is missing or older than 1.1.0. Install or update the plugin "
+        "(bridge/imperal-seo-bridge in the connector repo), then try again.",
+        retryable=False, code="SEO_BRIDGE_TERMS_UNSUPPORTED")
+
+
+@chat.function(
+    "get_term_seo_meta",
+    description=("Read the Rank Math SEO fields (meta title, meta description, focus keyword, "
+                 "canonical, robots) of one taxonomy term — a category or tag — on a connected "
+                 "WordPress site. Identify the term by term_id or by slug."),
+    action_type="read",
+    data_model=SeoMeta,
+)
+async def get_term_seo_meta(ctx, params: GetTermSeoMetaParams) -> ActionResult:
+    """Return Rank Math SEO meta for a single category/tag term."""
+    bad_target = _term_target_error(params)
+    if bad_target:
+        return bad_target
+
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+
+    try:
+        r = await wp_get(ctx, base_url, BRIDGE_TERM_PATH, username=username,
+                         app_password=pw, params=_cache_busted(_term_query(params)))
+    except Exception as e:
+        await ctx.log(f"get_term_seo_meta bridge request failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.",
+                                  retryable=True, code="WP_UNREACHABLE")
+
+    if r.status_code == 200 and isinstance(r.body, dict):
+        entity = _term_entity(r.body, base_url)
+        # Same guard as the post path: with Rank Math switched off these fields
+        # are inert, and reporting them as ordinary empty values would look like
+        # "this category has no SEO set" instead of "nothing here can work yet".
+        if not entity.seo_plugin or entity.seo_plugin == "none":
+            return ActionResult.error(
+                "Rank Math is not active on this site, so there are no Rank Math SEO fields to read.",
+                retryable=False, code="SEO_PLUGIN_MISSING")
+        return ActionResult.success(entity, summary=_term_summary(entity))
+
+    if r.status_code == 404 and isinstance(r.body, dict) and r.body.get("code") == "rest_no_route":
+        return _term_bridge_missing()
+
+    return _http_failure(r.status_code, r.body)
+
+
+@chat.function(
+    "update_term_seo_meta",
+    description=("Update the Rank Math SEO fields of one taxonomy term — a category or tag — on a "
+                 "connected WordPress site: meta title, meta description, and optionally focus "
+                 "keyword, canonical URL and robots directives. Identify the term by term_id or "
+                 "by slug. Omitted fields are left unchanged."),
+    action_type="write",
+    data_model=SeoMeta,
+    effects=["wp.seo_update"],
+    event="wp-site-connector.update_term_seo_meta",
+)
+async def update_term_seo_meta(ctx, params: UpdateTermSeoMetaParams) -> ActionResult:
+    """Write Rank Math SEO meta for a single category/tag term."""
+    bad_target = _term_target_error(params)
+    if bad_target:
+        return bad_target
+
+    fields = {}
+    if params.meta_title is not None:
+        fields["meta_title"] = params.meta_title
+    if params.meta_description is not None:
+        fields["meta_description"] = params.meta_description
+    if params.focus_keyword is not None:
+        fields["focus_keyword"] = params.focus_keyword
+    if params.canonical_url is not None:
+        fields["canonical_url"] = params.canonical_url
+    if params.robots is not None:
+        invalid = [r for r in params.robots if r not in ROBOTS_CHOICES]
+        if invalid:
+            return ActionResult.error(
+                f"Unsupported robots value(s): {', '.join(invalid)}. "
+                f"Allowed: {', '.join(ROBOTS_CHOICES)}.",
+                retryable=False, code="SEO_INVALID_ROBOTS")
+        fields["robots"] = params.robots
+
+    if not fields:
+        return ActionResult.error(
+            "Nothing to update — pass meta_title and/or meta_description "
+            "(or focus_keyword, canonical_url, robots).",
+            retryable=False, code="SEO_NO_FIELDS")
+
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+
+    payload = dict(fields)
+    payload.update(_term_query(params))
+
+    try:
+        r = await wp_post(ctx, base_url, BRIDGE_TERM_PATH, username=username,
+                          app_password=pw, json=payload)
+    except Exception as e:
+        await ctx.log(f"update_term_seo_meta bridge request failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.",
+                                  retryable=True, code="WP_UNREACHABLE")
+
+    if r.status_code == 200 and isinstance(r.body, dict):
+        entity = _term_entity(r.body, base_url)
+        changed = r.body.get("updated_fields") or list(fields.keys())
+        entity.updated_fields = [str(c) for c in changed]
+        inert = " — but Rank Math is not active, so nothing renders these yet" \
+            if (not entity.seo_plugin or entity.seo_plugin == "none") else ""
+        return ActionResult.success(
+            entity,
+            summary=(f"Updated {', '.join(entity.updated_fields)} on "
+                     f"{entity.taxonomy or 'term'} #{entity.post_id}{inert}"),
+            refresh_panels=["center"])
+
+    if r.status_code == 404 and isinstance(r.body, dict) and r.body.get("code") == "rest_no_route":
+        return _term_bridge_missing()
+
+    return _http_failure(r.status_code, r.body)
+
+
 @chat.function(
     "check_seo_support",
     description=("Check whether a connected WordPress site can expose Rank Math SEO fields: "
                  "is the Imperal SEO Bridge plugin installed, is Rank Math active, and which "
-                 "post types are covered."),
+                 "post types and taxonomies (categories/tags) are covered."),
     action_type="read",
     data_model=SeoMeta,
 )
@@ -492,6 +678,9 @@ async def check_seo_support(ctx, params: SiteIdParams) -> ActionResult:
     body = r.body
     plugin = "rank-math" if body.get("rank_math_active") else "none"
     types = [str(t) for t in (body.get("post_types") or [])]
+    # Absent on bridge < 1.1.0, which had no term support at all. An empty list
+    # therefore means "this site cannot do categories yet", not "no taxonomies".
+    taxes = [str(t) for t in (body.get("taxonomies") or [])]
     bridge_version = str(body.get("bridge_version", "") or "")
     entity = SeoMeta(
         id=params.site_id,
@@ -499,6 +688,7 @@ async def check_seo_support(ctx, params: SiteIdParams) -> ActionResult:
         kind="wp_seo_support",
         url=base_url,
         post_types=types,
+        taxonomies=taxes,
         bridge_version=bridge_version,
         rank_math_version=str(body.get("rank_math_version", "") or ""),
         seo_plugin=plugin,
@@ -510,7 +700,11 @@ async def check_seo_support(ctx, params: SiteIdParams) -> ActionResult:
             summary=("Bridge installed, but Rank Math is not active — no Rank Math SEO fields "
                      "to read or write yet."))
     label = f"Bridge {bridge_version}".rstrip()
+    tax_bit = (f" and {len(taxes)} taxonomy/ies: " + ", ".join(taxes)
+               if taxes else
+               " — this bridge is too old for categories/tags (update to 1.1.0+)")
     return ActionResult.success(
         entity,
         summary=f"{label} active with Rank Math {entity.rank_math_version}".rstrip()
-                + f"; covers {len(types)} post type(s): " + ", ".join(types) + ".")
+                + f"; covers {len(types)} post type(s): " + ", ".join(types)
+                + tax_bit + ".")

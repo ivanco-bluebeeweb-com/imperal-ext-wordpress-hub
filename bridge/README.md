@@ -31,7 +31,60 @@ is required or every write fails with `rest_cannot_update`.
    additionally handles `rank_math_robots`, resolves items by `id` or `slug`,
    and reports which SEO plugin is active.
 
-3. **Adds** `/wp-json/imperal/v1/seo/status` for capability discovery.
+3. **Adds** `/wp-json/imperal/v1/seo/status` for capability discovery — including
+   the `taxonomies` list, which is how a client can tell whether a site's bridge
+   is new enough to handle categories.
+
+4. **Registers the same fields for taxonomy terms** and adds
+   `/wp-json/imperal/v1/seo/term` (GET + POST) — categories, tags and custom
+   taxonomies. *(v1.1.0)*
+
+### Terms: categories and tags (v1.1.0)
+
+Rank Math stores term SEO under the **same** `rank_math_*` keys it uses for
+posts — only the storage call differs. That is confirmed in Rank Math's own
+code, not inferred: `includes/rest/class-post.php` switches
+`update_term_meta` / `update_post_meta` by object type while keeping the key
+names, its content-AI bulk editor does the same, and the Yoast importer maps
+`wpseo_title` → `rank_math_title` via `update_term_meta`.
+
+Two consequences worth knowing:
+
+- **Term meta lives in a different table** (`termmeta`), so the post endpoint
+  cannot reach it. Hence the separate `/seo/term` route.
+- **There is no fallback tier for terms.** The older `wp-publisher-bridge`
+  registers post meta only, so on a site without this bridge (or one older than
+  1.1.0) category SEO is unreachable, and the connector says so explicitly
+  rather than reporting empty fields as if the category had none set.
+
+Editing is gated with `current_user_can( 'edit_term', $term_id )` — a
+**per-term meta capability**, which WordPress maps through each taxonomy's own
+capability set. A flat `manage_categories` check would be the wrong gate for
+custom taxonomies that define their own capabilities, the term-side equivalent
+of `post` and `page` having different `capability_type` values.
+
+Menu and pattern plumbing (`nav_menu`, `link_category`, `wp_pattern_category`,
+`post_format`) is deliberately skipped — those terms carry no SEO meaning. The
+covered list is filterable via `imperal_seo_bridge_taxonomies`.
+
+### Supporting Yoast later (extension path)
+
+Nothing here is Rank-Math-specific except the key names and the sanitisers.
+To add Yoast without disturbing this plugin:
+
+1. Keep the routes and the payload shape exactly as they are — the client
+   already reads `meta_title` / `meta_description` and reports which plugin
+   answered via `seo_plugin`.
+2. Swap the key map (`rank_math_title` → `_yoast_wpseo_title`,
+   `rank_math_description` → `_yoast_wpseo_metadesc`, focus keyword →
+   `_yoast_wpseo_focuskw`, canonical → `_yoast_wpseo_canonical`) behind a
+   detector that checks which plugin is active, in one place: the `$map` array
+   used by the update handlers plus the matching payload readers.
+3. Yoast expresses robots as separate `noindex` / `nofollow` values rather than
+   one array, so that field needs a translation layer, not a rename.
+
+Because the field map is already the single source of truth for both posts and
+terms, this stays a contained change rather than a second plugin.
 
 ### Page caches must not store these routes (v1.0.1)
 
@@ -67,7 +120,8 @@ existing `list_posts` tool. The dedicated endpoint normalises such rows safely
 
 ## Security
 
-- Every request is checked with `current_user_can( 'edit_post', $post_id )` —
+- Every post request is checked with `current_user_can( 'edit_post', $post_id )`
+  and every term request with `current_user_can( 'edit_term', $term_id )` —
   a **per-object** check. This matters because `post` and `page` have different
   `capability_type` values, so a blanket `edit_posts` check is the wrong gate
   for pages.

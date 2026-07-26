@@ -71,6 +71,25 @@ class UpdateSeoMetaParams(BaseModel):
     focus_keyword: str | None = Field(default=None, description="Optional Rank Math focus keyword. Omit to leave unchanged.")
 
 
+class GetTermSeoMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    term_id: int | None = Field(default=None, description="Numeric id of the category/tag term. Give this OR slug.")
+    slug: str | None = Field(default=None, description="Term slug, e.g. 'sisteme'. Used when term_id is not given.")
+    taxonomy: str | None = Field(default=None, description="Optional taxonomy ('category', 'post_tag', or a custom taxonomy) to disambiguate a slug used by several taxonomies.")
+
+
+class UpdateTermSeoMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    term_id: int | None = Field(default=None, description="Numeric id of the category/tag term. Give this OR slug.")
+    slug: str | None = Field(default=None, description="Term slug, e.g. 'sisteme'. Used when term_id is not given.")
+    taxonomy: str | None = Field(default=None, description="Optional taxonomy ('category', 'post_tag', or a custom taxonomy) to disambiguate a slug used by several taxonomies.")
+    meta_title: str | None = Field(default=None, description="New Rank Math SEO title for the term. Omit to leave unchanged; pass an empty string to clear it.")
+    meta_description: str | None = Field(default=None, description="New Rank Math meta description for the term. Omit to leave unchanged; pass an empty string to clear it.")
+    canonical_url: str | None = Field(default=None, description="Optional canonical URL. Omit to leave unchanged; empty string clears it.")
+    robots: list[str] | None = Field(default=None, description="Optional robots directives, e.g. ['noindex','nofollow']. Allowed: index, noindex, nofollow, noarchive, noimageindex, nosnippet. Omit to leave unchanged.")
+    focus_keyword: str | None = Field(default=None, description="Optional Rank Math focus keyword. Omit to leave unchanged.")
+
+
 # SDL entities. sdl.Entity already provides: id, title, kind, subtitle, description, status, url.
 class Site(sdl.Entity):
     username: str = ""
@@ -152,7 +171,14 @@ class SeoMeta(sdl.Entity):
     seo_plugin: str = ""
     source: str = ""
     updated_fields: list[str] = Field(default_factory=list)
+    # Terms (categories/tags) reuse this entity: object_type says which kind of
+    # object the row describes, taxonomy carries the term's taxonomy. Declared
+    # explicitly because pydantic silently DROPS values assigned to undeclared
+    # fields — that is how start dates once vanished from Asana task rows.
+    object_type: str = "post"
+    taxonomy: str = ""
     # check_seo_support only: what the site as a whole supports.
     bridge_version: str = ""
     rank_math_version: str = ""
     post_types: list[str] = Field(default_factory=list)
+    taxonomies: list[str] = Field(default_factory=list)

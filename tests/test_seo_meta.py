@@ -256,6 +256,19 @@ async def test_ambiguous_slug_from_bridge_is_surfaced_faithfully():
     assert r.error_code == "SEO_SLUG_AMBIGUOUS"
 
 
+async def test_write_with_rank_math_off_does_not_claim_a_rendered_change():
+    """Pre-existing gap, found while adding term support: the bridge stores the
+    rows, so the write is a genuine success -- but with Rank Math inactive
+    nothing renders them, and a bare "Updated ..." overstates the outcome."""
+    ctx = await _ctx()
+    ctx.http.mock_post(BRIDGE, _bridge_payload(meta_title="New", rank_math_active=False,
+                                               updated_fields=["meta_title"]), 200)
+    r = await hs.update_seo_meta(ctx, UpdateSeoMetaParams(
+        site_id="x-com", post_id=42, meta_title="New"))
+    assert r.status == "success"
+    assert "not active" in r.summary, r.summary
+
+
 async def test_item_not_found_is_its_own_code():
     ctx = await _ctx()
     ctx.http.mock_get(BRIDGE, {"code": "imperal_seo_not_found",

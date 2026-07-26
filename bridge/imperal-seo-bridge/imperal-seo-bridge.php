@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Imperal SEO Bridge
  * Plugin URI:        https://panel.imperal.io
- * Description:       Exposes Rank Math SEO fields (title, description, focus keyword, robots, canonical) to the WordPress REST API so Imperal / Webbee can read and edit them for posts, pages and custom post types.
- * Version:           1.0.1
+ * Description:       Exposes Rank Math SEO fields (title, description, focus keyword, robots, canonical) to the WordPress REST API so Imperal / Webbee can read and edit them for posts, pages, custom post types and taxonomy terms (categories, tags).
+ * Version:           1.1.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -60,7 +60,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_SEO_BRIDGE_VERSION', '1.0.1' );
+define( 'IMPERAL_SEO_BRIDGE_VERSION', '1.1.0' );
 define( 'IMPERAL_SEO_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -117,6 +117,58 @@ function imperal_seo_bridge_post_types() {
 	 * @param string[] $out Post type names.
 	 */
 	return apply_filters( 'imperal_seo_bridge_post_types', $out );
+}
+
+/**
+ * Taxonomies the bridge covers: every public taxonomy exposed to REST.
+ *
+ * Terms carry the same rank_math_* keys as posts — confirmed in Rank Math
+ * itself, which switches only the storage call and keeps the key names
+ * (includes/rest/class-post.php: `$method = $object_type === 'term' ?
+ * 'update_term_meta' : 'update_post_meta'`, same `rank_math_` prefix), and in
+ * its Yoast importer, which maps wpseo_title => rank_math_title /
+ * wpseo_desc => rank_math_description for term meta.
+ *
+ * @return string[]
+ */
+function imperal_seo_bridge_taxonomies() {
+	$taxes = get_taxonomies( array( 'show_in_rest' => true ), 'names' );
+	$out   = array();
+
+	foreach ( $taxes as $tax ) {
+		// Menu/pattern plumbing carries no SEO meaning.
+		if ( in_array( $tax, array( 'nav_menu', 'link_category', 'wp_pattern_category', 'post_format' ), true ) ) {
+			continue;
+		}
+		$out[] = $tax;
+	}
+
+	/**
+	 * Filter the taxonomies the Imperal SEO Bridge registers meta for.
+	 *
+	 * @param string[] $out Taxonomy names.
+	 */
+	return apply_filters( 'imperal_seo_bridge_taxonomies', $out );
+}
+
+/**
+ * Can the current user edit this specific term's SEO meta?
+ *
+ * Uses the `edit_term` meta capability rather than a flat `manage_categories`,
+ * because WordPress maps it through each taxonomy's own capability set — the
+ * term-side equivalent of post vs page having different capability_type.
+ *
+ * @param int $term_id Term ID.
+ * @return bool
+ */
+function imperal_seo_bridge_can_edit_term( $term_id ) {
+	$term_id = (int) $term_id;
+
+	if ( $term_id <= 0 ) {
+		return false;
+	}
+
+	return current_user_can( 'edit_term', $term_id );
 }
 
 /**
@@ -186,14 +238,63 @@ function imperal_seo_bridge_register_meta() {
 add_action( 'init', 'imperal_seo_bridge_register_meta', 20 );
 
 /**
+ * Register the string meta fields on every covered taxonomy.
+ *
+ * Same keys and sanitisers as posts; only the registration call and the
+ * capability check differ.
+ */
+function imperal_seo_bridge_register_term_meta() {
+	$fields = imperal_seo_bridge_string_fields();
+
+	foreach ( imperal_seo_bridge_taxonomies() as $taxonomy ) {
+		foreach ( $fields as $key => $kind ) {
+			register_term_meta(
+				$taxonomy,
+				$key,
+				array(
+					'show_in_rest'      => true,
+					'single'            => true,
+					'type'              => 'string',
+					'default'           => '',
+					'sanitize_callback' => function ( $value ) use ( $kind ) {
+						return imperal_seo_bridge_sanitize( $kind, $value );
+					},
+					'auth_callback'     => function ( $allowed, $meta_key, $term_id ) {
+						return imperal_seo_bridge_can_edit_term( $term_id );
+					},
+				)
+			);
+		}
+	}
+}
+add_action( 'init', 'imperal_seo_bridge_register_term_meta', 20 );
+
+/**
+ * Read the stored robots list for a term, normalised to a flat string array.
+ *
+ * @param int $term_id Term ID.
+ * @return string[]
+ */
+function imperal_seo_bridge_get_term_robots( $term_id ) {
+	return imperal_seo_bridge_normalise_robots( get_term_meta( $term_id, 'rank_math_robots', true ) );
+}
+
+/**
  * Read the stored robots list for a post, normalised to a flat string array.
  *
  * @param int $post_id Post ID.
  * @return string[]
  */
-function imperal_seo_bridge_get_robots( $post_id ) {
-	$stored = get_post_meta( $post_id, 'rank_math_robots', true );
-
+/**
+ * Normalise a stored robots value to a flat, whitelisted string array.
+ *
+ * Shared by the post and term readers so the legacy-scalar and whitelist
+ * handling cannot drift between them.
+ *
+ * @param mixed $stored Raw meta value.
+ * @return string[]
+ */
+function imperal_seo_bridge_normalise_robots( $stored ) {
 	if ( empty( $stored ) ) {
 		return array();
 	}
@@ -221,6 +322,10 @@ function imperal_seo_bridge_get_robots( $post_id ) {
 	}
 
 	return array_values( array_unique( $clean ) );
+}
+
+function imperal_seo_bridge_get_robots( $post_id ) {
+	return imperal_seo_bridge_normalise_robots( get_post_meta( $post_id, 'rank_math_robots', true ) );
 }
 
 /**
@@ -307,6 +412,254 @@ function imperal_seo_bridge_resolve_post( $request ) {
 	}
 
 	return $found[0];
+}
+
+/**
+ * Build the SEO payload for one term.
+ *
+ * Deliberately uses the SAME key names as the post payload (`id`, `type`,
+ * `slug`, `link`, `post_title`, `meta_*`, `robots`) so the client needs no
+ * second dialect; `type` carries the taxonomy name and `taxonomy` is added
+ * for callers that want it explicitly.
+ *
+ * @param WP_Term $term Term object.
+ * @return array
+ */
+function imperal_seo_bridge_term_payload( $term ) {
+	$link = get_term_link( $term );
+
+	return array(
+		'id'               => (int) $term->term_id,
+		'slug'             => (string) $term->slug,
+		'type'             => (string) $term->taxonomy,
+		'taxonomy'         => (string) $term->taxonomy,
+		'object'           => 'term',
+		'status'           => 'publish',
+		'link'             => is_wp_error( $link ) ? '' : (string) $link,
+		'post_title'       => (string) $term->name,
+		'meta_title'       => (string) get_term_meta( $term->term_id, 'rank_math_title', true ),
+		'meta_description' => (string) get_term_meta( $term->term_id, 'rank_math_description', true ),
+		'focus_keyword'    => (string) get_term_meta( $term->term_id, 'rank_math_focus_keyword', true ),
+		'canonical_url'    => (string) get_term_meta( $term->term_id, 'rank_math_canonical_url', true ),
+		'robots'           => imperal_seo_bridge_get_term_robots( $term->term_id ),
+	);
+}
+
+/**
+ * Resolve a term by numeric id or by slug.
+ *
+ * Mirrors the post resolver, including refusing to guess when a slug matches
+ * more than one term.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_Term|WP_Error
+ */
+function imperal_seo_bridge_resolve_term( $request ) {
+	$id       = (int) $request->get_param( 'id' );
+	$slug     = (string) $request->get_param( 'slug' );
+	$taxonomy = (string) $request->get_param( 'taxonomy' );
+
+	if ( '' === $taxonomy ) {
+		$taxonomy = (string) $request->get_param( 'type' );
+	}
+
+	if ( $id > 0 ) {
+		$term = '' !== $taxonomy ? get_term( $id, $taxonomy ) : get_term( $id );
+
+		if ( is_wp_error( $term ) || ! $term instanceof WP_Term ) {
+			return new WP_Error(
+				'imperal_seo_not_found',
+				__( 'No term with that id.', 'imperal-seo-bridge' ),
+				array( 'status' => 404 )
+			);
+		}
+
+		return $term;
+	}
+
+	if ( '' === $slug ) {
+		return new WP_Error(
+			'imperal_seo_missing_target',
+			__( 'Provide either id or slug.', 'imperal-seo-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$taxonomies = '' !== $taxonomy ? array( $taxonomy ) : imperal_seo_bridge_taxonomies();
+
+	$found = get_terms(
+		array(
+			'slug'       => $slug,
+			'taxonomy'   => $taxonomies,
+			'hide_empty' => false,
+			'number'     => 2,
+		)
+	);
+
+	if ( is_wp_error( $found ) || empty( $found ) ) {
+		return new WP_Error(
+			'imperal_seo_not_found',
+			__( 'No term with that slug.', 'imperal-seo-bridge' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	if ( count( $found ) > 1 ) {
+		return new WP_Error(
+			'imperal_seo_ambiguous_slug',
+			__( 'That slug matches more than one term — pass the numeric id, or the taxonomy.', 'imperal-seo-bridge' ),
+			array( 'status' => 409 )
+		);
+	}
+
+	return $found[0];
+}
+
+/**
+ * Permission callback for the term routes.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return true|WP_Error
+ */
+function imperal_seo_bridge_term_permission( $request ) {
+	$term = imperal_seo_bridge_resolve_term( $request );
+
+	if ( is_wp_error( $term ) ) {
+		return $term;
+	}
+
+	if ( ! imperal_seo_bridge_can_edit_term( $term->term_id ) ) {
+		return new WP_Error(
+			'imperal_seo_forbidden',
+			__( 'That WordPress user cannot edit this term.', 'imperal-seo-bridge' ),
+			array( 'status' => 403 )
+		);
+	}
+
+	return true;
+}
+
+/**
+ * GET handler — return SEO meta for one term.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_seo_bridge_get_term_meta_route( $request ) {
+	$term = imperal_seo_bridge_resolve_term( $request );
+
+	if ( is_wp_error( $term ) ) {
+		return $term;
+	}
+
+	$payload                     = imperal_seo_bridge_term_payload( $term );
+	$payload['rank_math_active'] = imperal_seo_bridge_rank_math_active();
+
+	return rest_ensure_response( $payload );
+}
+
+/**
+ * POST handler — update SEO meta for one term.
+ *
+ * Only the keys present in the request body are touched, and an explicitly
+ * empty value deletes the row rather than storing an empty string — same
+ * semantics as the post route.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_seo_bridge_update_term_meta_route( $request ) {
+	$term = imperal_seo_bridge_resolve_term( $request );
+
+	if ( is_wp_error( $term ) ) {
+		return $term;
+	}
+
+	$map = array(
+		'meta_title'       => array( 'rank_math_title', 'text' ),
+		'meta_description' => array( 'rank_math_description', 'text' ),
+		'focus_keyword'    => array( 'rank_math_focus_keyword', 'text' ),
+		'canonical_url'    => array( 'rank_math_canonical_url', 'url' ),
+	);
+
+	$changed = array();
+
+	foreach ( $map as $param => $spec ) {
+		if ( ! $request->has_param( $param ) ) {
+			continue;
+		}
+
+		list( $meta_key, $kind ) = $spec;
+
+		$value = imperal_seo_bridge_sanitize( $kind, $request->get_param( $param ) );
+
+		if ( '' === $value ) {
+			delete_term_meta( $term->term_id, $meta_key );
+		} else {
+			update_term_meta( $term->term_id, $meta_key, $value );
+		}
+
+		$changed[] = $param;
+	}
+
+	if ( $request->has_param( 'robots' ) ) {
+		$raw = $request->get_param( 'robots' );
+
+		if ( ! is_array( $raw ) ) {
+			return new WP_Error(
+				'imperal_seo_invalid_robots',
+				__( 'robots must be an array of strings.', 'imperal-seo-bridge' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		$allowed = imperal_seo_bridge_robots_choices();
+		$clean   = array();
+
+		foreach ( $raw as $value ) {
+			if ( ! is_scalar( $value ) ) {
+				continue;
+			}
+			$value = strtolower( trim( (string) $value ) );
+			if ( ! in_array( $value, $allowed, true ) ) {
+				return new WP_Error(
+					'imperal_seo_invalid_robots',
+					sprintf(
+						/* translators: 1: rejected value, 2: allowed values */
+						__( 'Unknown robots value "%1$s". Allowed: %2$s.', 'imperal-seo-bridge' ),
+						$value,
+						implode( ', ', $allowed )
+					),
+					array( 'status' => 400 )
+				);
+			}
+			$clean[] = $value;
+		}
+
+		$clean = array_values( array_unique( $clean ) );
+
+		if ( empty( $clean ) ) {
+			delete_term_meta( $term->term_id, 'rank_math_robots' );
+		} else {
+			update_term_meta( $term->term_id, 'rank_math_robots', $clean );
+		}
+
+		$changed[] = 'robots';
+	}
+
+	if ( empty( $changed ) ) {
+		return new WP_Error(
+			'imperal_seo_nothing_to_update',
+			__( 'No SEO fields were supplied.', 'imperal-seo-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$payload                     = imperal_seo_bridge_term_payload( $term );
+	$payload['rank_math_active'] = imperal_seo_bridge_rank_math_active();
+	$payload['updated_fields']   = $changed;
+
+	return rest_ensure_response( $payload );
 }
 
 /**
@@ -480,6 +833,7 @@ function imperal_seo_bridge_status() {
 			'rank_math_active'  => imperal_seo_bridge_rank_math_active(),
 			'rank_math_version' => defined( 'RANK_MATH_VERSION' ) ? RANK_MATH_VERSION : '',
 			'post_types'        => imperal_seo_bridge_post_types(),
+			'taxonomies'        => imperal_seo_bridge_taxonomies(),
 			'robots_choices'    => imperal_seo_bridge_robots_choices(),
 		)
 	);
@@ -568,6 +922,48 @@ function imperal_seo_bridge_register_routes() {
 				'callback'            => 'imperal_seo_bridge_update_meta',
 				'permission_callback' => 'imperal_seo_bridge_read_permission',
 				'args'                => $target_args,
+			),
+		)
+	);
+
+	$term_args = array(
+		'id'       => array(
+			'type'        => 'integer',
+			'required'    => false,
+			'description' => 'Numeric term id.',
+		),
+		'slug'     => array(
+			'type'        => 'string',
+			'required'    => false,
+			'description' => 'Term slug, used when no id is given.',
+		),
+		'taxonomy' => array(
+			'type'        => 'string',
+			'required'    => false,
+			'description' => 'Optional taxonomy to disambiguate a slug.',
+		),
+		'type'     => array(
+			'type'        => 'string',
+			'required'    => false,
+			'description' => 'Alias of taxonomy, for callers reusing the post arg name.',
+		),
+	);
+
+	register_rest_route(
+		IMPERAL_SEO_BRIDGE_NAMESPACE,
+		'/seo/term',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_seo_bridge_get_term_meta_route',
+				'permission_callback' => 'imperal_seo_bridge_term_permission',
+				'args'                => $term_args,
+			),
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_seo_bridge_update_term_meta_route',
+				'permission_callback' => 'imperal_seo_bridge_term_permission',
+				'args'                => $term_args,
 			),
 		)
 	);
