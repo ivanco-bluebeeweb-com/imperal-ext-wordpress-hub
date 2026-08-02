@@ -314,6 +314,15 @@ class ApplyBulkProductChangeParams(BulkProductChangeParams):
     expected_state_token: str = Field(min_length=64, max_length=64, description="Exact state token returned by preview; execution stops before all writes if any product changed")
 
 
+class CsvCatalogImportParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    csv_text: str = Field(min_length=1, max_length=50000, description="CSV text with header SKU and optional regular_price, sale_price, stock_quantity, stock_status columns; maximum 100 data rows")
+
+
+class ApplyCsvCatalogImportParams(CsvCatalogImportParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token returned by preview; execution stops before all writes if any matched SKU changed")
+
+
 class MediaAltItem(BaseModel):
     """One alt-text assignment: which library item, and what its alt should say."""
     media_id: int = Field(description="WordPress media library attachment id")

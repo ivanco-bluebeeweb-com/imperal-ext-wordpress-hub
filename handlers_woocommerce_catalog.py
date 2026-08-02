@@ -6,7 +6,9 @@ shows the byte-identical arguments before execution. Bulk operations accept
 explicit ids only; they never infer a whole catalogue from a vague filter.
 """
 
+import csv
 import hashlib
+import io
 import json
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import urlparse
@@ -18,9 +20,11 @@ from handlers_woocommerce import WC_BASE, _authed, _failure, _product_entity, _r
 from models import (
     ApplyBulkProductChangeParams,
     ApplyBulkVariationChangeParams,
+    ApplyCsvCatalogImportParams,
     ArchiveProductParams,
     BulkProductChangeParams,
     BulkVariationChangeParams,
+    CsvCatalogImportParams,
     CreateProductCategoryParams,
     CreateProductParams,
     ListProductCategoriesParams,
@@ -231,7 +235,11 @@ def _bulk_state_token(products):
         state.append({
             "id": int(product["id"]),
             "status": str(product.get("status", "")),
+            "sku": str(product.get("sku", "") or ""),
             "regular_price": str(product.get("regular_price", "") or ""),
+            "sale_price": str(product.get("sale_price", "") or ""),
+            "manage_stock": bool(product.get("manage_stock", False)),
+            "stock_quantity": product.get("stock_quantity"),
             "stock_status": str(product.get("stock_status", "")),
             "categories": sorted(
                 int(item["id"]) for item in (product.get("categories") or []) if item.get("id")),
@@ -258,6 +266,82 @@ def _bulk_payload(product, params, percent):
             ids.append(params.category_id_to_add)
         payload["categories"] = [{"id": item} for item in ids]
     return payload
+
+
+def _parse_csv_catalog(csv_text):
+    try:
+        rows = list(csv.DictReader(io.StringIO(csv_text.lstrip("\ufeff"))))
+    except csv.Error:
+        return None, _validation_error("CSV could not be parsed. Use a comma-separated file with a header row.", code="WOOCOMMERCE_INVALID_CSV")
+    if not rows or not rows[0].keys():
+        return None, _validation_error("CSV must contain a header row and at least one data row.", code="WOOCOMMERCE_INVALID_CSV")
+    headers = {str(key or "").strip().lower() for key in rows[0].keys()}
+    allowed = {"sku", "regular_price", "sale_price", "stock_quantity", "stock_status"}
+    if "sku" not in headers:
+        return None, _validation_error("CSV must include a SKU column.", code="WOOCOMMERCE_INVALID_CSV")
+    if not headers <= allowed:
+        return None, _validation_error(
+            "CSV supports only SKU, regular_price, sale_price, stock_quantity, and stock_status columns.",
+            code="WOOCOMMERCE_INVALID_CSV")
+    if len(rows) > 100:
+        return None, _validation_error("CSV may contain at most 100 data rows per run.", code="WOOCOMMERCE_CSV_LIMIT")
+
+    parsed, seen_skus = [], set()
+    for row_number, row in enumerate(rows, start=2):
+        normalized = {(key or "").strip().lower(): (value or "").strip() for key, value in row.items()}
+        sku = normalized.get("sku", "")
+        key = sku.casefold()
+        if not sku:
+            return None, _validation_error(f"CSV row {row_number} has an empty SKU.", code="WOOCOMMERCE_INVALID_CSV")
+        if key in seen_skus:
+            return None, _validation_error(f"CSV contains duplicate SKU: {sku}.", code="WOOCOMMERCE_DUPLICATE_CSV_SKU")
+        seen_skus.add(key)
+        payload = {}
+        for field in ("regular_price", "sale_price"):
+            if normalized.get(field, ""):
+                value, err = _decimal_string(normalized[field], field)
+                if err:
+                    return None, _validation_error(f"CSV row {row_number}: {field} must be a non-negative decimal.", code="WOOCOMMERCE_INVALID_CSV")
+                payload[field] = value
+        if normalized.get("stock_quantity", ""):
+            try:
+                quantity = int(normalized["stock_quantity"])
+            except ValueError:
+                return None, _validation_error(f"CSV row {row_number}: stock_quantity must be a non-negative integer.", code="WOOCOMMERCE_INVALID_CSV")
+            if quantity < 0:
+                return None, _validation_error(f"CSV row {row_number}: stock_quantity must be a non-negative integer.", code="WOOCOMMERCE_INVALID_CSV")
+            payload["stock_quantity"] = quantity
+            payload["manage_stock"] = True
+        if normalized.get("stock_status", ""):
+            if normalized["stock_status"] not in _STOCK_STATUSES:
+                return None, _validation_error(f"CSV row {row_number}: invalid stock_status.", code="WOOCOMMERCE_INVALID_CSV")
+            payload["stock_status"] = normalized["stock_status"]
+        if not payload:
+            return None, _validation_error(f"CSV row {row_number} has no fields to update.", code="WOOCOMMERCE_INVALID_CSV")
+        parsed.append({"sku": sku, "payload": payload})
+    return parsed, None
+
+
+async def _csv_catalog_targets(ctx, params):
+    rows, err = _parse_csv_catalog(params.csv_text)
+    if err:
+        return None, err
+    matched, missing = [], []
+    for row in rows:
+        data, read_err = await _request(
+            ctx, params.site_id, "/products", {"sku": row["sku"], "per_page": 2})
+        if read_err:
+            return None, read_err
+        exact = [item for item in data if str(item.get("sku", "")).casefold() == row["sku"].casefold()]
+        if len(exact) != 1 or exact[0].get("type") != "simple":
+            missing.append(row["sku"])
+            continue
+        matched.append({"product": exact[0], "payload": row["payload"]})
+    return (rows, matched, missing), None
+
+
+def _csv_state_token(matched):
+    return _bulk_state_token([item["product"] for item in matched])
 
 
 def _variation_state_token(variation):
@@ -550,6 +634,74 @@ async def apply_bulk_variation_change(ctx, params: ApplyBulkVariationChangeParam
             code="WOOCOMMERCE_VARIATION_BULK_ALL_FAILED")
     return ActionResult.success(
         entity, summary=f"Updated {len(updated_ids)} variation(s); {len(failures)} failed",
+        refresh_panels=["center"])
+
+
+@chat.function(
+    "preview_csv_catalog_import",
+    description="Preview a CSV import for simple WooCommerce products matched strictly by SKU. CSV columns: SKU plus regular_price, sale_price, stock_quantity, or stock_status. Returns unmatched SKUs and a state token; makes no writes.",
+    action_type="read", data_model=ProductBulkResult)
+async def preview_csv_catalog_import(ctx, params: CsvCatalogImportParams) -> ActionResult:
+    """Parse a small CSV and show exact-SKU product changes without writing."""
+    target_data, err = await _csv_catalog_targets(ctx, params)
+    if err:
+        return err
+    rows, matched, missing = target_data
+    details = [
+        f"#{item['product']['id']} {item['product'].get('sku')}: "
+        + ", ".join(f"{key} → {value}" for key, value in item["payload"].items())
+        for item in matched
+    ]
+    if missing:
+        details.append("Unmatched SKU(s): " + ", ".join(missing))
+    entity = ProductBulkResult(
+        id=params.site_id, title="CSV catalog import preview", kind="wc_catalog_csv",
+        preview=True, state_token=_csv_state_token(matched), requested=len(rows),
+        matched=len(matched), failed=len(missing), changes=details, failures=missing)
+    return ActionResult.success(
+        entity,
+        summary=f"Preview: {len(matched)} matched; {len(missing)} SKU(s) not found")
+
+
+@chat.function(
+    "apply_csv_catalog_import",
+    description="Apply a previously previewed CSV import to strictly SKU-matched WooCommerce products. Requires the exact state token and stops before all writes if any matched product changed.",
+    action_type="destructive", data_model=ProductBulkResult,
+    effects=["wc.product_csv_import"], event="wp-site-connector.apply_csv_catalog_import")
+async def apply_csv_catalog_import(ctx, params: ApplyCsvCatalogImportParams) -> ActionResult:
+    """Apply a reviewed simple-product CSV import after a fresh all-target check."""
+    target_data, err = await _csv_catalog_targets(ctx, params)
+    if err:
+        return err
+    rows, matched, missing = target_data
+    if not matched:
+        return _validation_error(
+            "No CSV SKU matched a simple WooCommerce product; nothing was changed.",
+            code="WOOCOMMERCE_CSV_NO_MATCHES")
+    if _csv_state_token(matched) != params.expected_state_token:
+        return _validation_error(
+            "One or more matched products changed since preview. Run preview_csv_catalog_import again.",
+            code="WOOCOMMERCE_CSV_STATE_CHANGED")
+
+    updated_ids, failures = [], list(missing)
+    for item in matched:
+        product, payload = item["product"], item["payload"]
+        product_id = int(product["id"])
+        _, write_err = await _write(ctx, params.site_id, f"/products/{product_id}", payload)
+        if write_err:
+            failures.append(f"#{product_id}: {write_err.error or 'update failed'}")
+        else:
+            updated_ids.append(product_id)
+    entity = ProductBulkResult(
+        id=params.site_id, title="CSV catalog import result", kind="wc_catalog_csv",
+        preview=False, requested=len(rows), matched=len(matched), updated=len(updated_ids),
+        failed=len(failures), updated_ids=updated_ids, failures=failures)
+    if not updated_ids:
+        return ActionResult.error(
+            "WooCommerce did not update any CSV-matched products.", retryable=False,
+            code="WOOCOMMERCE_CSV_ALL_FAILED")
+    return ActionResult.success(
+        entity, summary=f"Updated {len(updated_ids)} product(s); {len(failures)} skipped or failed",
         refresh_panels=["center"])
 
 
