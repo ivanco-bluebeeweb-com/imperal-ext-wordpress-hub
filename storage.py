@@ -2,6 +2,33 @@ import json
 
 SITES_COLLECTION = "sites"
 CREDS_COLLECTION = "creds"
+CSV_IMPORTS_COLLECTION = "csv_imports"
+
+
+# ── CSV import audit trail ───────────────────────────────────────────────────
+
+async def save_csv_import_record(ctx, record):
+    """Persist metadata and failed rows only; never store the full CSV text."""
+    existing = await _find_doc(ctx, CSV_IMPORTS_COLLECTION, record["id"])
+    if existing:
+        await ctx.store.update(CSV_IMPORTS_COLLECTION, existing.id, record)
+    else:
+        await ctx.store.create(CSV_IMPORTS_COLLECTION, record)
+
+
+async def get_csv_import_record(ctx, import_id):
+    doc = await _find_doc(ctx, CSV_IMPORTS_COLLECTION, import_id)
+    return doc.data if doc else None
+
+
+async def list_csv_import_records(ctx, site_id, limit=20):
+    page = await ctx.store.query(CSV_IMPORTS_COLLECTION, limit=100)
+    records = [doc.data for doc in page.data if doc.data.get("site_id") == site_id]
+    return sorted(records, key=lambda item: item.get("created_at", ""), reverse=True)[:limit]
+
+
+# ── Site records ──────────────────────────────────────────────────────────────
+
 
 
 # ── Site records ──────────────────────────────────────────────────────────────

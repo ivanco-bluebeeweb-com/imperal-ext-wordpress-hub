@@ -321,6 +321,7 @@ class CsvCatalogImportParams(BaseModel):
 
 class ApplyCsvCatalogImportParams(CsvCatalogImportParams):
     expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token returned by preview; execution stops before all writes if any matched SKU changed")
+    import_id: str | None = Field(default=None, description="Optional import id returned by preview, used to record the apply result")
 
 
 class CsvVariationImportParams(BaseModel):
@@ -330,6 +331,21 @@ class CsvVariationImportParams(BaseModel):
 
 class ApplyCsvVariationImportParams(CsvVariationImportParams):
     expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token returned by preview; execution stops before all writes if any matched variation changed")
+    import_id: str | None = Field(default=None, description="Optional import id returned by preview, used to record the apply result")
+
+
+class ListCsvImportsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    limit: int = Field(default=20, ge=1, le=100, description="Maximum import history rows to return")
+
+
+class GetCsvImportParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    import_id: str = Field(min_length=1, description="Import id returned by preview_csv_catalog_import or preview_csv_variation_import")
+
+
+class RetryCsvImportFailuresParams(GetCsvImportParams):
+    pass
 
 
 class MediaAltItem(BaseModel):
@@ -511,6 +527,7 @@ class ProductVariation(sdl.Entity):
 
 
 class ProductBulkResult(sdl.Entity):
+    import_id: str = ""
     preview: bool = True
     state_token: str = ""
     requested: int = 0
@@ -524,6 +541,19 @@ class ProductBulkResult(sdl.Entity):
 
 class VariationBulkResult(ProductBulkResult):
     product_id: int = 0
+
+
+class CsvImportRun(sdl.Entity):
+    import_kind: str = ""
+    status: str = "previewed"
+    csv_sha256: str = ""
+    created_at: str = ""
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    failures: list[str] = Field(default_factory=list)
 
 
 class Customer(sdl.Entity):

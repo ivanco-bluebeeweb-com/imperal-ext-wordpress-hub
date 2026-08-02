@@ -10,6 +10,7 @@ import csv
 import hashlib
 import io
 import json
+import uuid
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import urlparse
 
@@ -17,6 +18,7 @@ from imperal_sdk import ActionResult, sdl
 
 from app import chat
 from handlers_woocommerce import WC_BASE, _authed, _failure, _product_entity, _request
+import storage
 from models import (
     ApplyBulkProductChangeParams,
     ApplyBulkVariationChangeParams,
@@ -26,7 +28,11 @@ from models import (
     BulkProductChangeParams,
     BulkVariationChangeParams,
     CsvCatalogImportParams,
+    CsvImportRun,
     CsvVariationImportParams,
+    GetCsvImportParams,
+    ListCsvImportsParams,
+    RetryCsvImportFailuresParams,
     CreateProductCategoryParams,
     CreateProductParams,
     ListProductCategoriesParams,
@@ -40,7 +46,7 @@ from models import (
     UpdateProductVariationParams,
     UpdateProductParams,
 )
-from wp_client import wp_request
+from wp_client import now_iso, wp_request
 
 _PRODUCT_STATUSES = {"draft", "publish", "pending", "private"}
 _STOCK_STATUSES = {"instock", "outofstock", "onbackorder"}
@@ -49,6 +55,39 @@ _PRODUCT_TYPES = {"simple", "virtual", "downloadable"}
 
 def _validation_error(message, code="WOOCOMMERCE_INVALID_PRODUCT"):
     return ActionResult.error(message, retryable=False, code=code)
+
+
+def _csv_hash(csv_text):
+    return hashlib.sha256(csv_text.encode()).hexdigest()
+
+
+def _csv_run_entity(record):
+    return CsvImportRun(
+        id=record["id"], title=f"CSV {record['import_kind']} import", kind="wc_csv_import",
+        import_kind=record["import_kind"], status=record.get("status", "previewed"),
+        csv_sha256=record["csv_sha256"], created_at=record["created_at"],
+        requested=record.get("requested", 0), matched=record.get("matched", 0),
+        updated=record.get("updated", 0), failed=record.get("failed", 0),
+        state_token=record.get("state_token", ""),
+        failures=record.get("failures", []))
+
+
+async def _save_csv_run(ctx, *, import_id, site_id, import_kind, csv_text, state_token,
+                        requested, matched, updated=0, failures=None, failed_rows=None,
+                        status="previewed"):
+    existing = await storage.get_csv_import_record(ctx, import_id)
+    timestamp = now_iso()
+    record = {
+        "id": import_id, "site_id": site_id, "import_kind": import_kind,
+        "status": status, "csv_sha256": _csv_hash(csv_text),
+        "created_at": (existing or {}).get("created_at", timestamp), "updated_at": timestamp,
+        "state_token": state_token, "requested": requested, "matched": matched,
+        "updated": updated, "failed": len(failures or []), "failures": failures or [],
+        # Failed rows are deliberately retained for a safe retry; the original CSV never is.
+        "failed_rows": (existing or {}).get("failed_rows", []) if failed_rows is None else failed_rows,
+    }
+    await storage.save_csv_import_record(ctx, record)
+    return record
 
 
 def _decimal_string(value, field, *, allow_empty=False):
@@ -745,9 +784,16 @@ async def preview_csv_catalog_import(ctx, params: CsvCatalogImportParams) -> Act
     ]
     if missing:
         details.append("Unmatched SKU(s): " + ", ".join(missing))
+    state_token = _csv_state_token(matched)
+    import_id = uuid.uuid4().hex
+    failed_rows = [row for row in rows if row["sku"] in missing]
+    await _save_csv_run(
+        ctx, import_id=import_id, site_id=params.site_id, import_kind="catalog",
+        csv_text=params.csv_text, state_token=state_token, requested=len(rows),
+        matched=len(matched), failures=missing, failed_rows=failed_rows)
     entity = ProductBulkResult(
         id=params.site_id, title="CSV catalog import preview", kind="wc_catalog_csv",
-        preview=True, state_token=_csv_state_token(matched), requested=len(rows),
+        import_id=import_id, preview=True, state_token=state_token, requested=len(rows),
         matched=len(matched), failed=len(missing), changes=details, failures=missing)
     return ActionResult.success(
         entity,
@@ -775,17 +821,25 @@ async def apply_csv_catalog_import(ctx, params: ApplyCsvCatalogImportParams) -> 
             code="WOOCOMMERCE_CSV_STATE_CHANGED")
 
     updated_ids, failures = [], list(missing)
+    failed_rows = [row for row in rows if row["sku"] in missing]
     for item in matched:
         product, payload = item["product"], item["payload"]
         product_id = int(product["id"])
         _, write_err = await _write(ctx, params.site_id, f"/products/{product_id}", payload)
         if write_err:
             failures.append(f"#{product_id}: {write_err.error or 'update failed'}")
+            failed_rows.append({"sku": product.get("sku", ""), "payload": payload})
         else:
             updated_ids.append(product_id)
+    import_id = params.import_id or uuid.uuid4().hex
+    await _save_csv_run(
+        ctx, import_id=import_id, site_id=params.site_id, import_kind="catalog",
+        csv_text=params.csv_text, state_token=params.expected_state_token, requested=len(rows),
+        matched=len(matched), updated=len(updated_ids), failures=failures, failed_rows=failed_rows,
+        status="applied" if updated_ids else "failed")
     entity = ProductBulkResult(
         id=params.site_id, title="CSV catalog import result", kind="wc_catalog_csv",
-        preview=False, requested=len(rows), matched=len(matched), updated=len(updated_ids),
+        import_id=import_id, preview=False, requested=len(rows), matched=len(matched), updated=len(updated_ids),
         failed=len(failures), updated_ids=updated_ids, failures=failures)
     if not updated_ids:
         return ActionResult.error(
@@ -814,9 +868,19 @@ async def preview_csv_variation_import(ctx, params: CsvVariationImportParams) ->
     ]
     if missing:
         details.append("Unmatched pair(s): " + ", ".join(missing))
+    state_token = _csv_variation_state_token(matched)
+    import_id = uuid.uuid4().hex
+    failed_rows = [
+        row for row in rows
+        if f"{row['parent_sku']} / {row['variation_sku']}" in missing
+    ]
+    await _save_csv_run(
+        ctx, import_id=import_id, site_id=params.site_id, import_kind="variation",
+        csv_text=params.csv_text, state_token=state_token, requested=len(rows),
+        matched=len(matched), failures=missing, failed_rows=failed_rows)
     entity = VariationBulkResult(
         id=params.site_id, title="CSV variation import preview", kind="wc_variation_csv",
-        preview=True, state_token=_csv_variation_state_token(matched), requested=len(rows),
+        import_id=import_id, preview=True, state_token=state_token, requested=len(rows),
         matched=len(matched), failed=len(missing), changes=details, failures=missing)
     return ActionResult.success(
         entity, summary=f"Preview: {len(matched)} matched; {len(missing)} pair(s) not found")
@@ -843,6 +907,10 @@ async def apply_csv_variation_import(ctx, params: ApplyCsvVariationImportParams)
             code="WOOCOMMERCE_CSV_VARIATION_STATE_CHANGED")
 
     updated_ids, failures = [], list(missing)
+    failed_rows = [
+        row for row in rows
+        if f"{row['parent_sku']} / {row['variation_sku']}" in missing
+    ]
     for item in matched:
         parent_id, variation = int(item["parent"]["id"]), item["variation"]
         variation_id = int(variation["id"])
@@ -850,11 +918,21 @@ async def apply_csv_variation_import(ctx, params: ApplyCsvVariationImportParams)
             ctx, params.site_id, f"/products/{parent_id}/variations/{variation_id}", item["payload"])
         if write_err:
             failures.append(f"#{parent_id}/#{variation_id}: {write_err.error or 'update failed'}")
+            failed_rows.append({
+                "parent_sku": item["parent"].get("sku", ""),
+                "variation_sku": variation.get("sku", ""), "payload": item["payload"],
+            })
         else:
             updated_ids.append(variation_id)
+    import_id = params.import_id or uuid.uuid4().hex
+    await _save_csv_run(
+        ctx, import_id=import_id, site_id=params.site_id, import_kind="variation",
+        csv_text=params.csv_text, state_token=params.expected_state_token, requested=len(rows),
+        matched=len(matched), updated=len(updated_ids), failures=failures, failed_rows=failed_rows,
+        status="applied" if updated_ids else "failed")
     entity = VariationBulkResult(
         id=params.site_id, title="CSV variation import result", kind="wc_variation_csv",
-        preview=False, requested=len(rows), matched=len(matched), updated=len(updated_ids),
+        import_id=import_id, preview=False, requested=len(rows), matched=len(matched), updated=len(updated_ids),
         failed=len(failures), updated_ids=updated_ids, failures=failures)
     if not updated_ids:
         return ActionResult.error(
@@ -863,6 +941,79 @@ async def apply_csv_variation_import(ctx, params: ApplyCsvVariationImportParams)
     return ActionResult.success(
         entity, summary=f"Updated {len(updated_ids)} variation(s); {len(failures)} skipped or failed",
         refresh_panels=["center"])
+
+
+@chat.function(
+    "list_csv_imports",
+    description="List recorded CSV catalog and variation import previews and outcomes for one connected WooCommerce site. The original CSV content is never stored.",
+    action_type="read", data_model=sdl.EntityList[CsvImportRun])
+async def list_csv_imports(ctx, params: ListCsvImportsParams) -> ActionResult:
+    """List audit metadata for recent CSV imports on a site."""
+    records = await storage.list_csv_import_records(ctx, params.site_id, params.limit)
+    return ActionResult.success(
+        sdl.EntityList[CsvImportRun](items=[_csv_run_entity(record) for record in records]),
+        summary=f"{len(records)} CSV import run(s)")
+
+
+@chat.function(
+    "get_csv_import",
+    description="Read one CSV import audit record: hash, timing, match/update counts, state token, and failed rows summary. Original CSV content is never stored.",
+    action_type="read", data_model=CsvImportRun)
+async def get_csv_import(ctx, params: GetCsvImportParams) -> ActionResult:
+    """Read an import audit record only when it belongs to the requested site."""
+    record = await storage.get_csv_import_record(ctx, params.import_id)
+    if not record or record.get("site_id") != params.site_id:
+        return ActionResult.error("CSV import record was not found for this site.", retryable=False,
+                                  code="WOOCOMMERCE_CSV_IMPORT_NOT_FOUND")
+    return ActionResult.success(_csv_run_entity(record), summary=f"CSV {record['import_kind']} import {record['status']}")
+
+
+def _retry_csv_text(record):
+    rows = record.get("failed_rows") or []
+    if not rows:
+        return None
+    if record.get("import_kind") == "catalog":
+        normalized = []
+        for row in rows:
+            payload = row.get("payload", row)
+            sku = row.get("sku", "")
+            normalized.append({"sku": sku, **payload})
+        fields = ["sku", "regular_price", "sale_price", "stock_quantity", "stock_status"]
+    else:
+        normalized = []
+        for row in rows:
+            payload = row.get("payload", row)
+            normalized.append({
+                "parent_sku": row.get("parent_sku", ""),
+                "variation_sku": row.get("variation_sku", ""), **payload,
+            })
+        fields = ["parent_sku", "variation_sku", "regular_price", "sale_price", "stock_quantity", "stock_status"]
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=fields, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows([{field: row.get(field, "") for field in fields} for row in normalized])
+    return output.getvalue()
+
+
+@chat.function(
+    "retry_csv_import_failures",
+    description="Create a fresh safe preview containing only the rows that failed or were unmatched in a prior CSV import. It never applies changes and requires a new state token before any apply.",
+    action_type="read", data_model=ProductBulkResult)
+async def retry_csv_import_failures(ctx, params: RetryCsvImportFailuresParams) -> ActionResult:
+    """Re-preview persisted failed rows; never replay a stale import automatically."""
+    record = await storage.get_csv_import_record(ctx, params.import_id)
+    if not record or record.get("site_id") != params.site_id:
+        return ActionResult.error("CSV import record was not found for this site.", retryable=False,
+                                  code="WOOCOMMERCE_CSV_IMPORT_NOT_FOUND")
+    csv_text = _retry_csv_text(record)
+    if not csv_text:
+        return ActionResult.error("This CSV import has no failed rows to retry.", retryable=False,
+                                  code="WOOCOMMERCE_CSV_NO_FAILURES_TO_RETRY")
+    if record.get("import_kind") == "catalog":
+        return await preview_csv_catalog_import(ctx, CsvCatalogImportParams(
+            site_id=params.site_id, csv_text=csv_text))
+    return await preview_csv_variation_import(ctx, CsvVariationImportParams(
+        site_id=params.site_id, csv_text=csv_text))
 
 
 @chat.function(

@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.12",
   "app_id": "wp-site-connector",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "name": "WP Site Connector",
   "description": "Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
   "icon": "icon.svg",
@@ -5660,6 +5660,11 @@
             "default": null,
             "title": "Url"
           },
+          "import_id": {
+            "default": "",
+            "title": "Import Id",
+            "type": "string"
+          },
           "preview": {
             "default": true,
             "title": "Preview",
@@ -5889,6 +5894,11 @@
             "default": null,
             "title": "Url"
           },
+          "import_id": {
+            "default": "",
+            "title": "Import Id",
+            "type": "string"
+          },
           "preview": {
             "default": true,
             "title": "Preview",
@@ -6059,6 +6069,11 @@
             "default": null,
             "title": "Url"
           },
+          "import_id": {
+            "default": "",
+            "title": "Import Id",
+            "type": "string"
+          },
           "preview": {
             "default": true,
             "title": "Preview",
@@ -6154,6 +6169,19 @@
             "minLength": 64,
             "title": "Expected State Token",
             "type": "string"
+          },
+          "import_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional import id returned by preview, used to record the apply result",
+            "title": "Import Id"
           }
         },
         "required": [
@@ -6233,6 +6261,11 @@
             ],
             "default": null,
             "title": "Url"
+          },
+          "import_id": {
+            "default": "",
+            "title": "Import Id",
+            "type": "string"
           },
           "preview": {
             "default": true,
@@ -6399,6 +6432,11 @@
             "default": null,
             "title": "Url"
           },
+          "import_id": {
+            "default": "",
+            "title": "Import Id",
+            "type": "string"
+          },
           "preview": {
             "default": true,
             "title": "Preview",
@@ -6499,6 +6537,19 @@
             "minLength": 64,
             "title": "Expected State Token",
             "type": "string"
+          },
+          "import_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional import id returned by preview, used to record the apply result",
+            "title": "Import Id"
           }
         },
         "required": [
@@ -6579,6 +6630,11 @@
             "default": null,
             "title": "Url"
           },
+          "import_id": {
+            "default": "",
+            "title": "Import Id",
+            "type": "string"
+          },
           "preview": {
             "default": true,
             "title": "Preview",
@@ -6645,6 +6701,530 @@
         "x-sdl": "entity"
       },
       "event": "wp-site-connector.apply_csv_variation_import",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "list_csv_imports",
+      "description": "List recorded CSV catalog and variation import previews and outcomes for one connected WooCommerce site. The original CSV content is never stored.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "description": "Maximum import history rows to return",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "ListCsvImportsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "CsvImportRun": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "default": "previewed",
+                "title": "Status",
+                "type": "string"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "import_kind": {
+                "default": "",
+                "title": "Import Kind",
+                "type": "string"
+              },
+              "csv_sha256": {
+                "default": "",
+                "title": "Csv Sha256",
+                "type": "string"
+              },
+              "created_at": {
+                "default": "",
+                "title": "Created At",
+                "type": "string"
+              },
+              "requested": {
+                "default": 0,
+                "title": "Requested",
+                "type": "integer"
+              },
+              "matched": {
+                "default": 0,
+                "title": "Matched",
+                "type": "integer"
+              },
+              "updated": {
+                "default": 0,
+                "title": "Updated",
+                "type": "integer"
+              },
+              "failed": {
+                "default": 0,
+                "title": "Failed",
+                "type": "integer"
+              },
+              "state_token": {
+                "default": "",
+                "title": "State Token",
+                "type": "string"
+              },
+              "failures": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Failures",
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "CsvImportRun",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/CsvImportRun"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[CsvImportRun]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "get_csv_import",
+      "description": "Read one CSV import audit record: hash, timing, match/update counts, state token, and failed rows summary. Original CSV content is never stored.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "import_id": {
+            "description": "Import id returned by preview_csv_catalog_import or preview_csv_variation_import",
+            "minLength": 1,
+            "title": "Import Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "import_id"
+        ],
+        "title": "GetCsvImportParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "default": "previewed",
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "import_kind": {
+            "default": "",
+            "title": "Import Kind",
+            "type": "string"
+          },
+          "csv_sha256": {
+            "default": "",
+            "title": "Csv Sha256",
+            "type": "string"
+          },
+          "created_at": {
+            "default": "",
+            "title": "Created At",
+            "type": "string"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "failures": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failures",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "CsvImportRun",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "retry_csv_import_failures",
+      "description": "Create a fresh safe preview containing only the rows that failed or were unmatched in a prior CSV import. It never applies changes and requires a new state token before any apply.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "import_id": {
+            "description": "Import id returned by preview_csv_catalog_import or preview_csv_variation_import",
+            "minLength": 1,
+            "title": "Import Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "import_id"
+        ],
+        "title": "RetryCsvImportFailuresParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "import_id": {
+            "default": "",
+            "title": "Import Id",
+            "type": "string"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "failures": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failures",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ProductBulkResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -8003,6 +8583,11 @@
             "default": null,
             "title": "Url"
           },
+          "import_id": {
+            "default": "",
+            "title": "Import Id",
+            "type": "string"
+          },
           "preview": {
             "default": true,
             "title": "Preview",
@@ -8233,6 +8818,11 @@
             ],
             "default": null,
             "title": "Url"
+          },
+          "import_id": {
+            "default": "",
+            "title": "Import Id",
+            "type": "string"
           },
           "preview": {
             "default": true,
