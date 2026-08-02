@@ -4,7 +4,7 @@ from imperal_sdk import ActionResult, sdl
 from app import chat
 from models import (_NoParams, Site, ListContentParams, ListMediaParams,
                     Post, Page, MediaItem, SiteIdParams, SiteHealth, RefreshAllResult,
-                    ListCommentsParams, ListCustomPostsParams, Comment, WPUser,
+                    ListCommentsParams, ListCustomPostsParams, Comment, WPUser, Plugin,
                     ServerInfo, UpdateMediaAltParams, MediaAltResult)
 import wp_cli
 from wp_client import wp_get, wp_post, wp_error_message, wp_error_code, wp_title, now_iso
@@ -409,6 +409,50 @@ async def list_users(ctx, params: ListContentParams) -> ActionResult:
     ]
     return ActionResult.success(sdl.EntityList[WPUser](items=items),
                                 summary=f"{len(items)} user(s)")
+
+
+@chat.function(
+    "list_plugins",
+    description=("List plugins installed on a WordPress site: active/inactive status, "
+                 "installed version, and an available update version. Requires SSH access "
+                 "configured with add_ssh; this function is read-only."),
+    action_type="read",
+    data_model=sdl.EntityList[Plugin],
+)
+async def list_plugins(ctx, params: SiteIdParams) -> ActionResult:
+    """Return the WP-CLI plugin inventory without making any changes."""
+    cred = await storage.get_ssh_cred(ctx, params.site_id)
+    if not cred:
+        return ActionResult.error(
+            "SSH is not configured for this site. Add SSH access first.", retryable=False
+        )
+
+    try:
+        rows, cli_error = await wp_cli.list_plugins(cred)
+    except Exception as error:
+        await ctx.log(f"list_plugins: {error}", level="error")
+        return ActionResult.error("Could not read the plugin list over SSH.", retryable=True)
+    if cli_error:
+        return ActionResult.error(f"Could not read the plugin list: {cli_error}", retryable=True)
+
+    items = [
+        Plugin(
+            id=str(row.get("name", "")),
+            title=str(row.get("name", "")),
+            kind="wp_plugin",
+            status=str(row.get("status", "")),
+            version=str(row.get("version", "")),
+            update_available=(str(row.get("update_version", ""))
+                              if row.get("update") == "available" else ""),
+        )
+        for row in rows
+        if row.get("name")
+    ]
+    updates = sum(1 for item in items if item.update_available)
+    summary = f"{len(items)} plugin(s)"
+    if updates:
+        summary += f" — {updates} update(s) available"
+    return ActionResult.success(sdl.EntityList[Plugin](items=items), summary=summary)
 
 
 @chat.function(

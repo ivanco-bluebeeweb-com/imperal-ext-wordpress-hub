@@ -13,7 +13,7 @@ if _EXT_DIR not in sys.path:
 _LOCAL = ("app", "handlers_connect", "handlers_read", "handlers_woocommerce",
           "handlers_woocommerce_catalog", "handlers_woocommerce_operations",
           "handlers_woocommerce_finance", "handlers_woocommerce_order_edit",
-          "handlers_seo", "skeleton", "panels", "models", "storage", "wp_client")
+          "handlers_seo", "skeleton", "panels", "models", "storage", "wp_client", "wp_cli")
 for _mod in _LOCAL:
     sys.modules.pop(_mod, None)
 

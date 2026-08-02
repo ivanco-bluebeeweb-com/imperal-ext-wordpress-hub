@@ -89,6 +89,38 @@ async def test_connection(cred: dict) -> tuple[bool, str]:
     return True, f"WordPress {out}"
 
 
+async def list_plugins(cred: dict) -> tuple[list | None, str | None]:
+    """List installed plugins through WP-CLI without changing the site.
+
+    WordPress core intentionally has no plugin inventory endpoint in its REST
+    API. SSH is therefore required, and the command is fixed here rather than
+    accepting user-supplied fragments.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = (
+        "wp plugin list --format=json "
+        "--fields=name,status,version,update,update_version "
+        f"--path={wp_path} --allow-root"
+    )
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command)
+    if output is None:
+        return None, error or "SSH connection failed"
+    try:
+        plugins = json.loads(output) if output else []
+    except json.JSONDecodeError:
+        return None, "WP-CLI returned an invalid plugin list"
+    if not isinstance(plugins, list):
+        return None, "WP-CLI returned an unexpected plugin list"
+    return plugins, None
+
+
 async def get_server_info(cred: dict) -> dict:
     """Run WP-CLI diagnostic commands and return results."""
     if not cred.get("key"):

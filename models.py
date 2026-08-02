@@ -471,6 +471,12 @@ class WPUser(sdl.Entity):
     registered: str = ""
 
 
+class Plugin(sdl.Entity):
+    """One WordPress plugin returned by the read-only WP-CLI inventory."""
+    version: str = ""
+    update_available: str = ""
+
+
 class Order(sdl.Entity):
     total: str = ""
     currency: str = ""
