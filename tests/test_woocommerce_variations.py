@@ -6,6 +6,8 @@ import app  # noqa: F401
 import handlers_woocommerce_catalog as hc
 import storage
 from models import (
+    ApplyBulkVariationChangeParams,
+    BulkVariationChangeParams,
     CreateProductVariationParams,
     ListProductVariationsParams,
     UpdateProductVariationParams,
@@ -135,3 +137,60 @@ async def test_update_blocks_stale_state_before_write():
     assert result.status == "error"
     assert result.error_code == "WOOCOMMERCE_VARIATION_STATE_CHANGED"
     assert seen == []
+
+
+async def test_bulk_preview_returns_token_and_never_writes():
+    ctx = await _ctx()
+    first, second = _variation(), _variation(id=82, sku="MUG-BLUE-S", regular_price="20.00")
+    ctx.http.mock_get(f"{BASE}/products/12/variations/81", first, 200)
+    ctx.http.mock_get(f"{BASE}/products/12/variations/82", second, 200)
+    seen = _spy(ctx, "post")
+    result = await hc.preview_bulk_variation_change(ctx, BulkVariationChangeParams(
+        site_id="shop-test", product_id=12, variation_ids=[81, 82], regular_price_percent="10"))
+    assert result.status == "success" and result.data.preview is True
+    assert result.data.matched == 2 and len(result.data.state_token) == 64
+    assert any("13.20" in item for item in result.data.changes)
+    assert any("22.00" in item for item in result.data.changes)
+    assert seen == []
+
+
+async def test_bulk_apply_rechecks_all_targets_before_any_write():
+    ctx = await _ctx()
+    preview = [_variation(), _variation(id=82, sku="MUG-BLUE-S")]
+    changed = [_variation(), _variation(id=82, sku="MUG-BLUE-S", stock_quantity=1)]
+    for item in changed:
+        ctx.http.mock_get(f"{BASE}/products/12/variations/{item['id']}", item, 200)
+    seen = _spy(ctx, "post")
+    result = await hc.apply_bulk_variation_change(ctx, ApplyBulkVariationChangeParams(
+        site_id="shop-test", product_id=12, variation_ids=[81, 82], stock_status="outofstock",
+        expected_state_token=hc._bulk_variation_state_token(preview)))
+    assert result.status == "error"
+    assert result.error_code == "WOOCOMMERCE_VARIATION_BULK_STATE_CHANGED"
+    assert seen == []
+
+
+async def test_bulk_apply_reports_partial_failure():
+    ctx = await _ctx()
+    first, second = _variation(), _variation(id=82, sku="MUG-BLUE-S")
+    for item in (first, second):
+        ctx.http.mock_get(f"{BASE}/products/12/variations/{item['id']}", item, 200)
+    ctx.http.mock_post(f"{BASE}/products/12/variations/81", first, 200)
+    ctx.http.mock_post(f"{BASE}/products/12/variations/82", {"code": "woocommerce_rest_cannot_edit"}, 403)
+    result = await hc.apply_bulk_variation_change(ctx, ApplyBulkVariationChangeParams(
+        site_id="shop-test", product_id=12, variation_ids=[81, 82], stock_status="outofstock",
+        expected_state_token=hc._bulk_variation_state_token([first, second])))
+    assert result.status == "success"
+    assert result.data.updated_ids == [81]
+    assert result.data.failed == 1 and "#82" in result.data.failures[0]
+
+
+async def test_bulk_apply_returns_error_when_every_variation_fails():
+    ctx = await _ctx()
+    variation = _variation()
+    ctx.http.mock_get(f"{BASE}/products/12/variations/81", variation, 200)
+    ctx.http.mock_post(f"{BASE}/products/12/variations/81", {"code": "woocommerce_rest_cannot_edit"}, 403)
+    result = await hc.apply_bulk_variation_change(ctx, ApplyBulkVariationChangeParams(
+        site_id="shop-test", product_id=12, variation_ids=[81], stock_status="outofstock",
+        expected_state_token=hc._bulk_variation_state_token([variation])))
+    assert result.status == "error"
+    assert result.error_code == "WOOCOMMERCE_VARIATION_BULK_ALL_FAILED"

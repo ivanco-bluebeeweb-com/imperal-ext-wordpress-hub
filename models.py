@@ -274,6 +274,19 @@ class UpdateProductVariationParams(BaseModel):
     status: str | None = Field(default=None, description="New status: draft, publish, pending, or private")
 
 
+class BulkVariationChangeParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    product_id: int = Field(gt=0, description="Parent variable WooCommerce product id")
+    variation_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit variation ids; 1-100, never inferred")
+    regular_price_percent: str | None = Field(default=None, description="Percentage change to regular price, e.g. 10 or -15")
+    stock_status: str | None = Field(default=None, description="Set stock state on every explicit variation")
+    status: str | None = Field(default=None, description="Set status on every explicit variation")
+
+
+class ApplyBulkVariationChangeParams(BulkVariationChangeParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token returned by preview; execution stops before all writes if any variation changed")
+
+
 class ListProductCategoriesParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     limit: int = Field(default=50, ge=1, le=100, description="Maximum categories to return")
@@ -489,6 +502,10 @@ class ProductBulkResult(sdl.Entity):
     changes: list[str] = Field(default_factory=list)
     updated_ids: list[int] = Field(default_factory=list)
     failures: list[str] = Field(default_factory=list)
+
+
+class VariationBulkResult(ProductBulkResult):
+    product_id: int = 0
 
 
 class Customer(sdl.Entity):

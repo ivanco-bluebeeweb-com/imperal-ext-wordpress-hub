@@ -17,8 +17,10 @@ from app import chat
 from handlers_woocommerce import WC_BASE, _authed, _failure, _product_entity, _request
 from models import (
     ApplyBulkProductChangeParams,
+    ApplyBulkVariationChangeParams,
     ArchiveProductParams,
     BulkProductChangeParams,
+    BulkVariationChangeParams,
     CreateProductCategoryParams,
     CreateProductParams,
     ListProductCategoriesParams,
@@ -26,6 +28,7 @@ from models import (
     ProductBulkResult,
     ProductCategory,
     ProductVariation,
+    VariationBulkResult,
     CreateProductVariationParams,
     ListProductVariationsParams,
     UpdateProductVariationParams,
@@ -275,6 +278,80 @@ def _variation_state_token(variation):
         json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def _bulk_variation_state_token(variations):
+    return hashlib.sha256(json.dumps(
+        sorted(_variation_state_token(item) for item in variations),
+        separators=(",", ":")).encode()).hexdigest()
+
+
+def _validate_bulk_variations(params):
+    ids = list(dict.fromkeys(params.variation_ids))
+    if len(ids) != len(params.variation_ids):
+        return None, _validation_error(
+            "Each variation id may be provided only once.",
+            code="WOOCOMMERCE_DUPLICATE_VARIATION_ID")
+    percent = None
+    if params.regular_price_percent is not None:
+        try:
+            percent = Decimal(params.regular_price_percent.strip())
+        except (InvalidOperation, AttributeError, ValueError):
+            return None, _validation_error(
+                "regular_price_percent must be a decimal number between -100 and 100.",
+                code="WOOCOMMERCE_INVALID_PERCENT")
+        if percent < -100 or percent > 100:
+            return None, _validation_error(
+                "regular_price_percent must be between -100 and 100.",
+                code="WOOCOMMERCE_INVALID_PERCENT")
+    if params.stock_status is not None and params.stock_status not in _STOCK_STATUSES:
+        return None, _validation_error("stock_status must be instock, outofstock, or onbackorder.")
+    if params.status is not None and params.status not in _PRODUCT_STATUSES:
+        return None, _validation_error("status must be draft, publish, pending, or private.")
+    changes = []
+    if percent is not None:
+        changes.append(f"regular price {percent:+g}%")
+    if params.stock_status is not None:
+        changes.append(f"stock status → {params.stock_status}")
+    if params.status is not None:
+        changes.append(f"status → {params.status}")
+    if not changes:
+        return None, _validation_error(
+            "Nothing to change — provide regular_price_percent, stock_status, or status.",
+            code="WOOCOMMERCE_NO_CHANGES")
+    return (ids, percent, changes), None
+
+
+async def _bulk_variation_targets(ctx, params):
+    validated, err = _validate_bulk_variations(params)
+    if err:
+        return None, err
+    ids, percent, changes = validated
+    variations = []
+    for variation_id in ids:
+        item, read_err = await _request(
+            ctx, params.site_id,
+            f"/products/{params.product_id}/variations/{variation_id}", expected_type=dict)
+        if read_err:
+            return None, read_err
+        variations.append(item)
+    return (variations, percent, changes), None
+
+
+def _bulk_variation_payload(variation, params, percent):
+    payload = {"id": int(variation["id"])}
+    if percent is not None:
+        current, err = _decimal_string(variation.get("regular_price"), "existing regular_price")
+        if err:
+            return None, err
+        changed = Decimal(current or "0") * (Decimal("1") + percent / Decimal("100"))
+        payload["regular_price"] = format(
+            max(changed, Decimal("0")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP), "f")
+    if params.stock_status is not None:
+        payload["stock_status"] = params.stock_status
+    if params.status is not None:
+        payload["status"] = params.status
+    return payload, None
+
+
 def _variation_entity(product_id, variation):
     attributes = [f"{item.get('name', '')}: {item.get('option', '')}".strip(": ")
                   for item in (variation.get("attributes") or [])]
@@ -402,6 +479,78 @@ async def update_product_variation(ctx, params: UpdateProductVariationParams) ->
         return err
     entity = _variation_entity(params.product_id, data)
     return ActionResult.success(entity, summary=f"Updated variation #{entity.id}: {', '.join(payload.keys())}", refresh_panels=["center"])
+
+
+@chat.function(
+    "preview_bulk_variation_change",
+    description="Preview a bulk change for 1-100 explicit WooCommerce variation ids. Reads current variations and returns a state token; makes no writes.",
+    action_type="read", data_model=VariationBulkResult)
+async def preview_bulk_variation_change(ctx, params: BulkVariationChangeParams) -> ActionResult:
+    """Preview an explicit bulk variation update without mutating WooCommerce."""
+    target_data, err = await _bulk_variation_targets(ctx, params)
+    if err:
+        return err
+    variations, percent, changes = target_data
+    details = []
+    for variation in variations:
+        payload, payload_err = _bulk_variation_payload(variation, params, percent)
+        if payload_err:
+            return payload_err
+        details.append(f"#{variation['id']} {variation.get('sku') or 'no SKU'}" + (
+            f" → {payload['regular_price']}" if "regular_price" in payload else ""))
+    entity = VariationBulkResult(
+        id=str(params.product_id), title="Bulk variation change preview", kind="wc_variation_bulk",
+        product_id=params.product_id, preview=True,
+        state_token=_bulk_variation_state_token(variations), requested=len(params.variation_ids),
+        matched=len(variations), changes=changes + details)
+    return ActionResult.success(
+        entity, summary=f"Preview: {len(variations)} variation(s); {', '.join(changes)}")
+
+
+@chat.function(
+    "apply_bulk_variation_change",
+    description="Apply a reviewed bulk change to 1-100 explicit WooCommerce variation ids. Requires the exact preview state token and stops before all writes if any variation changed.",
+    action_type="destructive", data_model=VariationBulkResult,
+    effects=["wc.product_variation_bulk_update"], event="wp-site-connector.apply_bulk_variation_change")
+async def apply_bulk_variation_change(ctx, params: ApplyBulkVariationChangeParams) -> ActionResult:
+    """Apply an explicit bulk variation update after fresh all-target state verification."""
+    target_data, err = await _bulk_variation_targets(ctx, params)
+    if err:
+        return err
+    variations, percent, changes = target_data
+    if _bulk_variation_state_token(variations) != params.expected_state_token:
+        return _validation_error(
+            "One or more variations changed since preview. Run preview_bulk_variation_change again.",
+            code="WOOCOMMERCE_VARIATION_BULK_STATE_CHANGED")
+
+    updated_ids, failures = [], []
+    for variation in variations:
+        variation_id = int(variation["id"])
+        payload, payload_err = _bulk_variation_payload(variation, params, percent)
+        if payload_err:
+            failures.append(f"#{variation_id}: {payload_err.error or 'invalid update'}")
+            continue
+        payload.pop("id", None)
+        _, write_err = await _write(
+            ctx, params.site_id,
+            f"/products/{params.product_id}/variations/{variation_id}", payload)
+        if write_err:
+            failures.append(f"#{variation_id}: {write_err.error or 'update failed'}")
+        else:
+            updated_ids.append(variation_id)
+
+    entity = VariationBulkResult(
+        id=str(params.product_id), title="Bulk variation change result", kind="wc_variation_bulk",
+        product_id=params.product_id, preview=False, requested=len(params.variation_ids),
+        matched=len(variations), updated=len(updated_ids), failed=len(failures),
+        changes=changes, updated_ids=updated_ids, failures=failures)
+    if not updated_ids:
+        return ActionResult.error(
+            "WooCommerce did not update any requested variations.", retryable=any("try again" in item.lower() for item in failures),
+            code="WOOCOMMERCE_VARIATION_BULK_ALL_FAILED")
+    return ActionResult.success(
+        entity, summary=f"Updated {len(updated_ids)} variation(s); {len(failures)} failed",
+        refresh_panels=["center"])
 
 
 @chat.function(
