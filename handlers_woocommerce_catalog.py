@@ -6,6 +6,8 @@ shows the byte-identical arguments before execution. Bulk operations accept
 explicit ids only; they never infer a whole catalogue from a vague filter.
 """
 
+import hashlib
+import json
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import urlparse
 
@@ -14,6 +16,7 @@ from imperal_sdk import ActionResult, sdl
 from app import chat
 from handlers_woocommerce import WC_BASE, _authed, _failure, _product_entity, _request
 from models import (
+    ApplyBulkProductChangeParams,
     ArchiveProductParams,
     BulkProductChangeParams,
     CreateProductCategoryParams,
@@ -215,6 +218,21 @@ async def _bulk_targets(ctx, params):
     return (products, percent, changes), None
 
 
+def _bulk_state_token(products):
+    state = []
+    for product in sorted(products, key=lambda item: int(item["id"])):
+        state.append({
+            "id": int(product["id"]),
+            "status": str(product.get("status", "")),
+            "regular_price": str(product.get("regular_price", "") or ""),
+            "stock_status": str(product.get("stock_status", "")),
+            "categories": sorted(
+                int(item["id"]) for item in (product.get("categories") or []) if item.get("id")),
+        })
+    return hashlib.sha256(
+        json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def _bulk_payload(product, params, percent):
     payload = {"id": int(product["id"])}
     if params.status is not None:
@@ -355,7 +373,8 @@ async def preview_bulk_product_change(ctx, params: BulkProductChangeParams) -> A
         details.append(f"#{product['id']} {product.get('name', '')}{suffix}")
     entity = ProductBulkResult(
         id=params.site_id, title="Bulk product change preview", kind="wc_product_bulk",
-        preview=True, requested=len(params.product_ids), matched=len(products),
+        preview=True, state_token=_bulk_state_token(products),
+        requested=len(params.product_ids), matched=len(products),
         changes=changes + details)
     return ActionResult.success(
         entity, summary=f"Preview: {len(products)} product(s); {', '.join(changes)}")
@@ -363,15 +382,20 @@ async def preview_bulk_product_change(ctx, params: BulkProductChangeParams) -> A
 
 @chat.function(
     "apply_bulk_product_change",
-    description="Apply a previously reviewed bulk change to 1-100 explicit WooCommerce product ids. This is always confirmation-gated; use preview_bulk_product_change first with identical arguments.",
+    description="Apply a previously reviewed bulk change to 1-100 explicit WooCommerce product ids. Requires the exact state token returned by preview and stops before all writes if any product changed.",
     action_type="destructive", data_model=ProductBulkResult,
     effects=["wc.product_bulk_update"], event="wp-site-connector.apply_bulk_product_change")
-async def apply_bulk_product_change(ctx, params: BulkProductChangeParams) -> ActionResult:
-    """Apply a confirmation-gated bulk product change with per-product results."""
+async def apply_bulk_product_change(ctx, params: ApplyBulkProductChangeParams) -> ActionResult:
+    """Apply a confirmation-gated bulk change only against the reviewed product state."""
     target_data, err = await _bulk_targets(ctx, params)
     if err:
         return err
     products, percent, changes = target_data
+    state_token = _bulk_state_token(products)
+    if state_token != params.expected_state_token:
+        return ActionResult.error(
+            "One or more products changed since preview. Run preview_bulk_product_change again.",
+            retryable=False, code="WOOCOMMERCE_BULK_STATE_CHANGED")
     updated_ids = []
     failures = []
     for product in products:
@@ -379,12 +403,13 @@ async def apply_bulk_product_change(ctx, params: BulkProductChangeParams) -> Act
         payload = _bulk_payload(product, params, percent)
         _, write_err = await _write(ctx, params.site_id, f"/products/{product_id}", payload)
         if write_err:
-            failures.append(f"#{product_id}: {write_err.message or 'update failed'}")
+            failures.append(f"#{product_id}: {write_err.error or 'update failed'}")
         else:
             updated_ids.append(product_id)
     entity = ProductBulkResult(
         id=params.site_id, title="Bulk product change result", kind="wc_product_bulk",
-        preview=False, requested=len(params.product_ids), matched=len(products),
+        preview=False, state_token=state_token,
+        requested=len(params.product_ids), matched=len(products),
         updated=len(updated_ids), failed=len(failures), changes=changes,
         updated_ids=updated_ids, failures=failures)
     if not updated_ids:

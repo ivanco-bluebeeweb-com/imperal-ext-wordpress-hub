@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.12",
   "app_id": "wp-site-connector",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "name": "WP Site Connector",
   "description": "Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
   "icon": "icon.svg",
@@ -6071,6 +6071,11 @@
             "title": "Preview",
             "type": "boolean"
           },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
           "requested": {
             "default": 0,
             "title": "Requested",
@@ -6129,7 +6134,7 @@
     },
     {
       "name": "apply_bulk_product_change",
-      "description": "Apply a previously reviewed bulk change to 1-100 explicit WooCommerce product ids. This is always confirmation-gated; use preview_bulk_product_change first with identical arguments.",
+      "description": "Apply a previously reviewed bulk change to 1-100 explicit WooCommerce product ids. Requires the exact state token returned by preview and stops before all writes if any product changed.",
       "action_type": "destructive",
       "chain_callable": true,
       "effects": [
@@ -6205,13 +6210,21 @@
             "default": null,
             "description": "Add one existing category without removing current categories",
             "title": "Category Id To Add"
+          },
+          "expected_state_token": {
+            "description": "Exact state token returned by preview; execution stops before all writes if any product changed",
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Expected State Token",
+            "type": "string"
           }
         },
         "required": [
           "site_id",
-          "product_ids"
+          "product_ids",
+          "expected_state_token"
         ],
-        "title": "BulkProductChangeParams",
+        "title": "ApplyBulkProductChangeParams",
         "type": "object"
       },
       "return_schema": {
@@ -6288,6 +6301,11 @@
             "default": true,
             "title": "Preview",
             "type": "boolean"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
           },
           "requested": {
             "default": 0,

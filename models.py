@@ -258,6 +258,10 @@ class BulkProductChangeParams(BaseModel):
     category_id_to_add: int | None = Field(default=None, gt=0, description="Add one existing category without removing current categories")
 
 
+class ApplyBulkProductChangeParams(BulkProductChangeParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact state token returned by preview; execution stops before all writes if any product changed")
+
+
 class MediaAltItem(BaseModel):
     """One alt-text assignment: which library item, and what its alt should say."""
     media_id: int = Field(description="WordPress media library attachment id")
@@ -426,6 +430,7 @@ class ProductCategory(sdl.Entity):
 
 class ProductBulkResult(sdl.Entity):
     preview: bool = True
+    state_token: str = ""
     requested: int = 0
     matched: int = 0
     updated: int = 0

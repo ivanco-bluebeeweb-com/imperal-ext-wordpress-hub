@@ -6,6 +6,7 @@ import app  # noqa: F401
 import handlers_woocommerce_catalog as hc
 import storage
 from models import (
+    ApplyBulkProductChangeParams,
     ArchiveProductParams,
     BulkProductChangeParams,
     CreateProductCategoryParams,
@@ -136,7 +137,7 @@ async def test_bulk_preview_reads_explicit_ids_and_does_not_write():
     result = await hc.preview_bulk_product_change(ctx, BulkProductChangeParams(
         site_id="shop-test", product_ids=[12, 13], regular_price_percent="10"))
     assert result.status == "success" and result.data.preview is True
-    assert result.data.matched == 2
+    assert result.data.matched == 2 and len(result.data.state_token) == 64
     assert any("11.00" in item for item in result.data.changes)
     assert any("22.00" in item for item in result.data.changes)
 
@@ -150,15 +151,59 @@ async def test_bulk_refuses_no_change():
 
 async def test_bulk_apply_preserves_existing_categories_and_reports_success():
     ctx = await _ctx()
-    ctx.http.mock_get(f"{BASE}/products/12", _product(12), 200)
-    ctx.http.mock_post(f"{BASE}/products/12", _product(12), 200)
+    product = _product(12)
+    ctx.http.mock_get(f"{BASE}/products/12", product, 200)
+    ctx.http.mock_post(f"{BASE}/products/12", product, 200)
     seen = _spy(ctx, "post")
-    result = await hc.apply_bulk_product_change(ctx, BulkProductChangeParams(
-        site_id="shop-test", product_ids=[12], status="publish", category_id_to_add=7))
+    result = await hc.apply_bulk_product_change(ctx, ApplyBulkProductChangeParams(
+        site_id="shop-test", product_ids=[12], status="publish", category_id_to_add=7,
+        expected_state_token=hc._bulk_state_token([product])))
     assert result.status == "success" and result.data.updated_ids == [12]
     assert seen[-1][1]["json"] == {
         "id": 12, "status": "publish", "categories": [{"id": 3}, {"id": 7}],
     }
+
+
+async def test_bulk_apply_blocks_stale_state_before_any_write():
+    ctx = await _ctx()
+    preview_products = [_product(12), _product(13, regular_price="20.00")]
+    ctx.http.mock_get(f"{BASE}/products/12", _product(12), 200)
+    ctx.http.mock_get(f"{BASE}/products/13", _product(13, regular_price="21.00"), 200)
+    seen = _spy(ctx, "post")
+    result = await hc.apply_bulk_product_change(ctx, ApplyBulkProductChangeParams(
+        site_id="shop-test", product_ids=[12, 13], regular_price_percent="10",
+        expected_state_token=hc._bulk_state_token(preview_products)))
+    assert result.status == "error"
+    assert result.error_code == "WOOCOMMERCE_BULK_STATE_CHANGED"
+    assert seen == []
+
+
+async def test_bulk_apply_reports_partial_failure_without_hiding_success():
+    ctx = await _ctx()
+    products = [_product(12), _product(13, regular_price="20.00")]
+    for product in products:
+        ctx.http.mock_get(f"{BASE}/products/{product['id']}", product, 200)
+    ctx.http.mock_post(f"{BASE}/products/12", products[0], 200)
+    ctx.http.mock_post(f"{BASE}/products/13", {"code": "woocommerce_rest_cannot_edit"}, 403)
+    result = await hc.apply_bulk_product_change(ctx, ApplyBulkProductChangeParams(
+        site_id="shop-test", product_ids=[12, 13], stock_status="outofstock",
+        expected_state_token=hc._bulk_state_token(products)))
+    assert result.status == "success"
+    assert result.data.updated_ids == [12]
+    assert result.data.updated == 1 and result.data.failed == 1
+    assert result.data.failures and "#13" in result.data.failures[0]
+
+
+async def test_bulk_apply_returns_error_when_every_write_fails():
+    ctx = await _ctx()
+    product = _product(12)
+    ctx.http.mock_get(f"{BASE}/products/12", product, 200)
+    ctx.http.mock_post(f"{BASE}/products/12", {"code": "woocommerce_rest_cannot_edit"}, 403)
+    result = await hc.apply_bulk_product_change(ctx, ApplyBulkProductChangeParams(
+        site_id="shop-test", product_ids=[12], status="publish",
+        expected_state_token=hc._bulk_state_token([product])))
+    assert result.status == "error"
+    assert result.error_code == "WOOCOMMERCE_BULK_ALL_FAILED"
 
 
 async def test_archive_sets_trash_status_and_verifies_read_back():
