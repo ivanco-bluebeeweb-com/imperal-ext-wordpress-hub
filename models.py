@@ -80,6 +80,74 @@ class StoreSummaryParams(BaseModel):
     before: str | None = Field(default=None, description="End of the reporting period as ISO-8601 date/time")
 
 
+class UpdateOrderStatusParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    order_id: int = Field(gt=0, description="Numeric WooCommerce order id")
+    status: str = Field(description="Target status: pending, on-hold, processing, completed, cancelled, failed, or refunded")
+
+
+class AddOrderNoteParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    order_id: int = Field(gt=0, description="Numeric WooCommerce order id")
+    note: str = Field(min_length=1, max_length=5000, description="Note text")
+    customer_visible: bool = Field(default=False, description="True makes the note visible to the customer and may trigger a WooCommerce email")
+
+
+class CustomerOrdersParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    customer_id: int = Field(gt=0, description="Numeric WooCommerce customer id")
+    limit: int = Field(default=20, ge=1, le=100, description="Maximum customer orders to return")
+    page: int = Field(default=1, ge=1, description="Results page, starting at 1")
+
+
+class CreateCouponParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    code: str = Field(min_length=1, max_length=100, description="Unique coupon code")
+    discount_type: str = Field(default="percent", description="Discount type: percent, fixed_cart, or fixed_product")
+    amount: str = Field(description="Non-negative discount amount as a decimal string")
+    description: str = Field(default="", max_length=1000, description="Internal coupon description")
+    date_expires: str | None = Field(default=None, description="Optional expiry date as YYYY-MM-DD")
+    usage_limit: int | None = Field(default=None, ge=1, description="Optional total usage limit")
+    usage_limit_per_user: int | None = Field(default=None, ge=1, description="Optional usage limit per customer")
+    minimum_amount: str | None = Field(default=None, description="Optional minimum basket amount")
+    maximum_amount: str | None = Field(default=None, description="Optional maximum basket amount")
+    individual_use: bool = Field(default=False, description="Prevent combining this coupon with other coupons")
+    free_shipping: bool = Field(default=False, description="Grant free shipping when a compatible method exists")
+    exclude_sale_items: bool = Field(default=False, description="Exclude products already on sale")
+    product_ids: list[int] = Field(default_factory=list, max_length=100, description="Optional included product ids")
+    excluded_product_ids: list[int] = Field(default_factory=list, max_length=100, description="Optional excluded product ids")
+    category_ids: list[int] = Field(default_factory=list, max_length=100, description="Optional included product category ids")
+    excluded_category_ids: list[int] = Field(default_factory=list, max_length=100, description="Optional excluded product category ids")
+    email_restrictions: list[str] = Field(default_factory=list, max_length=100, description="Optional customer email restrictions")
+
+
+class UpdateCouponParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    coupon_id: int = Field(gt=0, description="Numeric WooCommerce coupon id")
+    code: str | None = Field(default=None, min_length=1, max_length=100, description="New unique coupon code")
+    discount_type: str | None = Field(default=None, description="Discount type: percent, fixed_cart, or fixed_product")
+    amount: str | None = Field(default=None, description="Non-negative discount amount as a decimal string")
+    description: str | None = Field(default=None, max_length=1000, description="Internal coupon description")
+    date_expires: str | None = Field(default=None, description="Expiry date as YYYY-MM-DD; empty string clears it")
+    usage_limit: int | None = Field(default=None, ge=1, description="New total usage limit")
+    usage_limit_per_user: int | None = Field(default=None, ge=1, description="New usage limit per customer")
+    minimum_amount: str | None = Field(default=None, description="Optional minimum basket amount")
+    maximum_amount: str | None = Field(default=None, description="Optional maximum basket amount")
+    individual_use: bool | None = Field(default=None, description="Prevent combining with other coupons")
+    free_shipping: bool | None = Field(default=None, description="Grant free shipping")
+    exclude_sale_items: bool | None = Field(default=None, description="Exclude products already on sale")
+    product_ids: list[int] | None = Field(default=None, max_length=100, description="Replace included product ids")
+    excluded_product_ids: list[int] | None = Field(default=None, max_length=100, description="Replace excluded product ids")
+    category_ids: list[int] | None = Field(default=None, max_length=100, description="Replace included category ids")
+    excluded_category_ids: list[int] | None = Field(default=None, max_length=100, description="Replace excluded category ids")
+    email_restrictions: list[str] | None = Field(default=None, max_length=100, description="Replace customer email restrictions")
+
+
+class ArchiveCouponParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    coupon_id: int = Field(gt=0, description="Numeric WooCommerce coupon id to move to Trash")
+
+
 class CreateProductParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     name: str = Field(min_length=1, max_length=200, description="Product name")
@@ -320,6 +388,9 @@ class ProductBulkResult(sdl.Entity):
 
 
 class Customer(sdl.Entity):
+    username: str = ""
+    first_name: str = ""
+    last_name: str = ""
     email: str = ""
     orders_count: int = 0
     total_spent: str = ""
@@ -333,6 +404,25 @@ class Coupon(sdl.Entity):
     date_expires: str = ""
     usage_count: int = 0
     usage_limit: int | None = None
+    usage_limit_per_user: int | None = None
+    minimum_amount: str = ""
+    maximum_amount: str = ""
+    individual_use: bool = False
+    free_shipping: bool = False
+    exclude_sale_items: bool = False
+    product_ids: list[int] = Field(default_factory=list)
+    excluded_product_ids: list[int] = Field(default_factory=list)
+    category_ids: list[int] = Field(default_factory=list)
+    excluded_category_ids: list[int] = Field(default_factory=list)
+    email_restrictions: list[str] = Field(default_factory=list)
+
+
+class OrderNote(sdl.Entity):
+    order_id: int = 0
+    note: str = ""
+    customer_visible: bool = False
+    date_created: str = ""
+    author: str = ""
 
 
 class Refund(sdl.Entity):

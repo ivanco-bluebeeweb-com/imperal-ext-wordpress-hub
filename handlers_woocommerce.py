@@ -223,7 +223,10 @@ def _customer_entity(customer):
     name = " ".join(p for p in (customer.get("first_name", ""), customer.get("last_name", "")) if p).strip()
     return Customer(
         id=str(customer.get("id", "")), title=name or customer.get("username", "Customer"),
-        kind="wc_customer", email=str(customer.get("email", "") or ""),
+        kind="wc_customer", username=str(customer.get("username", "") or ""),
+        first_name=str(customer.get("first_name", "") or ""),
+        last_name=str(customer.get("last_name", "") or ""),
+        email=str(customer.get("email", "") or ""),
         orders_count=int(customer.get("orders_count", 0) or 0),
         total_spent=_money(customer.get("total_spent")),
         date_created=str(customer.get("date_created", "") or ""),
@@ -233,13 +236,25 @@ def _customer_entity(customer):
 def _coupon_entity(coupon):
     return Coupon(
         id=str(coupon.get("id", "")), title=str(coupon.get("code", "")),
-        kind="wc_coupon", code=str(coupon.get("code", "")),
+        kind="wc_coupon", status=str(coupon.get("status", "") or ""),
+        code=str(coupon.get("code", "") or ""),
         description=str(coupon.get("description", "") or ""),
         discount_type=str(coupon.get("discount_type", "") or ""),
         amount=_money(coupon.get("amount")),
         date_expires=str(coupon.get("date_expires", "") or ""),
         usage_count=int(coupon.get("usage_count", 0) or 0),
         usage_limit=coupon.get("usage_limit"),
+        usage_limit_per_user=coupon.get("usage_limit_per_user"),
+        minimum_amount=_money(coupon.get("minimum_amount")),
+        maximum_amount=_money(coupon.get("maximum_amount")),
+        individual_use=bool(coupon.get("individual_use", False)),
+        free_shipping=bool(coupon.get("free_shipping", False)),
+        exclude_sale_items=bool(coupon.get("exclude_sale_items", False)),
+        product_ids=[int(item) for item in (coupon.get("product_ids") or [])],
+        excluded_product_ids=[int(item) for item in (coupon.get("excluded_product_ids") or [])],
+        category_ids=[int(item) for item in (coupon.get("product_categories") or [])],
+        excluded_category_ids=[int(item) for item in (coupon.get("excluded_product_categories") or [])],
+        email_restrictions=[str(item) for item in (coupon.get("email_restrictions") or [])],
     )
 
 

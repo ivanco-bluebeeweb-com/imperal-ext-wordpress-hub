@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.12",
   "app_id": "wp-site-connector",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "name": "WP Site Connector",
   "description": "Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
   "icon": "icon.svg",
@@ -3950,6 +3950,21 @@
                 "default": null,
                 "title": "Url"
               },
+              "username": {
+                "default": "",
+                "title": "Username",
+                "type": "string"
+              },
+              "first_name": {
+                "default": "",
+                "title": "First Name",
+                "type": "string"
+              },
+              "last_name": {
+                "default": "",
+                "title": "Last Name",
+                "type": "string"
+              },
               "email": {
                 "default": "",
                 "title": "Email",
@@ -4188,6 +4203,78 @@
                 ],
                 "default": null,
                 "title": "Usage Limit"
+              },
+              "usage_limit_per_user": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Usage Limit Per User"
+              },
+              "minimum_amount": {
+                "default": "",
+                "title": "Minimum Amount",
+                "type": "string"
+              },
+              "maximum_amount": {
+                "default": "",
+                "title": "Maximum Amount",
+                "type": "string"
+              },
+              "individual_use": {
+                "default": false,
+                "title": "Individual Use",
+                "type": "boolean"
+              },
+              "free_shipping": {
+                "default": false,
+                "title": "Free Shipping",
+                "type": "boolean"
+              },
+              "exclude_sale_items": {
+                "default": false,
+                "title": "Exclude Sale Items",
+                "type": "boolean"
+              },
+              "product_ids": {
+                "items": {
+                  "type": "integer"
+                },
+                "title": "Product Ids",
+                "type": "array"
+              },
+              "excluded_product_ids": {
+                "items": {
+                  "type": "integer"
+                },
+                "title": "Excluded Product Ids",
+                "type": "array"
+              },
+              "category_ids": {
+                "items": {
+                  "type": "integer"
+                },
+                "title": "Category Ids",
+                "type": "array"
+              },
+              "excluded_category_ids": {
+                "items": {
+                  "type": "integer"
+                },
+                "title": "Excluded Category Ids",
+                "type": "array"
+              },
+              "email_restrictions": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Email Restrictions",
+                "type": "array"
               }
             },
             "required": [
@@ -6253,6 +6340,2149 @@
         "x-sdl": "entity"
       },
       "event": "wp-site-connector.apply_bulk_product_change",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "update_order_status",
+      "description": "Change one WooCommerce order status. Financial refunds are not created by this tool.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wc.order_status_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "order_id": {
+            "description": "Numeric WooCommerce order id",
+            "exclusiveMinimum": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "status": {
+            "description": "Target status: pending, on-hold, processing, completed, cancelled, failed, or refunded",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "order_id",
+          "status"
+        ],
+        "title": "UpdateOrderStatusParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "total": {
+            "default": "",
+            "title": "Total",
+            "type": "string"
+          },
+          "currency": {
+            "default": "",
+            "title": "Currency",
+            "type": "string"
+          },
+          "date_created": {
+            "default": "",
+            "title": "Date Created",
+            "type": "string"
+          },
+          "customer_name": {
+            "default": "",
+            "title": "Customer Name",
+            "type": "string"
+          },
+          "customer_email": {
+            "default": "",
+            "title": "Customer Email",
+            "type": "string"
+          },
+          "item_count": {
+            "default": 0,
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "subtotal": {
+            "default": "",
+            "title": "Subtotal",
+            "type": "string"
+          },
+          "tax_total": {
+            "default": "",
+            "title": "Tax Total",
+            "type": "string"
+          },
+          "shipping_total": {
+            "default": "",
+            "title": "Shipping Total",
+            "type": "string"
+          },
+          "discount_total": {
+            "default": "",
+            "title": "Discount Total",
+            "type": "string"
+          },
+          "payment_method": {
+            "default": "",
+            "title": "Payment Method",
+            "type": "string"
+          },
+          "customer_note": {
+            "default": "",
+            "title": "Customer Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Order",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.update_order_status",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "update_order_status_risky",
+      "description": "Change one order to cancelled, failed, or refunded after explicit confirmation. This changes WooCommerce status only and never sends money through a payment gateway.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wc.order_status_risky"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "order_id": {
+            "description": "Numeric WooCommerce order id",
+            "exclusiveMinimum": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "status": {
+            "description": "Target status: pending, on-hold, processing, completed, cancelled, failed, or refunded",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "order_id",
+          "status"
+        ],
+        "title": "UpdateOrderStatusParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "total": {
+            "default": "",
+            "title": "Total",
+            "type": "string"
+          },
+          "currency": {
+            "default": "",
+            "title": "Currency",
+            "type": "string"
+          },
+          "date_created": {
+            "default": "",
+            "title": "Date Created",
+            "type": "string"
+          },
+          "customer_name": {
+            "default": "",
+            "title": "Customer Name",
+            "type": "string"
+          },
+          "customer_email": {
+            "default": "",
+            "title": "Customer Email",
+            "type": "string"
+          },
+          "item_count": {
+            "default": 0,
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "subtotal": {
+            "default": "",
+            "title": "Subtotal",
+            "type": "string"
+          },
+          "tax_total": {
+            "default": "",
+            "title": "Tax Total",
+            "type": "string"
+          },
+          "shipping_total": {
+            "default": "",
+            "title": "Shipping Total",
+            "type": "string"
+          },
+          "discount_total": {
+            "default": "",
+            "title": "Discount Total",
+            "type": "string"
+          },
+          "payment_method": {
+            "default": "",
+            "title": "Payment Method",
+            "type": "string"
+          },
+          "customer_note": {
+            "default": "",
+            "title": "Customer Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Order",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.update_order_status_risky",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "add_private_order_note",
+      "description": "Add a private internal note to one WooCommerce order.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wc.order_note_private"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "order_id": {
+            "description": "Numeric WooCommerce order id",
+            "exclusiveMinimum": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "note": {
+            "description": "Note text",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          },
+          "customer_visible": {
+            "default": false,
+            "description": "True makes the note visible to the customer and may trigger a WooCommerce email",
+            "title": "Customer Visible",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "site_id",
+          "order_id",
+          "note"
+        ],
+        "title": "AddOrderNoteParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "order_id": {
+            "default": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "customer_visible": {
+            "default": false,
+            "title": "Customer Visible",
+            "type": "boolean"
+          },
+          "date_created": {
+            "default": "",
+            "title": "Date Created",
+            "type": "string"
+          },
+          "author": {
+            "default": "",
+            "title": "Author",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "OrderNote",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.add_private_order_note",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "add_customer_order_note",
+      "description": "Add a customer-visible order note after explicit confirmation; WooCommerce may email the customer.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wc.order_note_customer"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "order_id": {
+            "description": "Numeric WooCommerce order id",
+            "exclusiveMinimum": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "note": {
+            "description": "Note text",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          },
+          "customer_visible": {
+            "default": false,
+            "description": "True makes the note visible to the customer and may trigger a WooCommerce email",
+            "title": "Customer Visible",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "site_id",
+          "order_id",
+          "note"
+        ],
+        "title": "AddOrderNoteParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "order_id": {
+            "default": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "customer_visible": {
+            "default": false,
+            "title": "Customer Visible",
+            "type": "boolean"
+          },
+          "date_created": {
+            "default": "",
+            "title": "Date Created",
+            "type": "string"
+          },
+          "author": {
+            "default": "",
+            "title": "Author",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "OrderNote",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.add_customer_order_note",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "get_customer",
+      "description": "Read one WooCommerce customer profile without postal addresses or phone numbers.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "object_id": {
+            "description": "Numeric WooCommerce object id",
+            "exclusiveMinimum": 0,
+            "title": "Object Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "object_id"
+        ],
+        "title": "WooObjectParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "username": {
+            "default": "",
+            "title": "Username",
+            "type": "string"
+          },
+          "first_name": {
+            "default": "",
+            "title": "First Name",
+            "type": "string"
+          },
+          "last_name": {
+            "default": "",
+            "title": "Last Name",
+            "type": "string"
+          },
+          "email": {
+            "default": "",
+            "title": "Email",
+            "type": "string"
+          },
+          "orders_count": {
+            "default": 0,
+            "title": "Orders Count",
+            "type": "integer"
+          },
+          "total_spent": {
+            "default": "",
+            "title": "Total Spent",
+            "type": "string"
+          },
+          "date_created": {
+            "default": "",
+            "title": "Date Created",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Customer",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "list_customer_orders",
+      "description": "List orders belonging to one registered WooCommerce customer.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "customer_id": {
+            "description": "Numeric WooCommerce customer id",
+            "exclusiveMinimum": 0,
+            "title": "Customer Id",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 20,
+            "description": "Maximum customer orders to return",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "page": {
+            "default": 1,
+            "description": "Results page, starting at 1",
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "customer_id"
+        ],
+        "title": "CustomerOrdersParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "Order": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "total": {
+                "default": "",
+                "title": "Total",
+                "type": "string"
+              },
+              "currency": {
+                "default": "",
+                "title": "Currency",
+                "type": "string"
+              },
+              "date_created": {
+                "default": "",
+                "title": "Date Created",
+                "type": "string"
+              },
+              "customer_name": {
+                "default": "",
+                "title": "Customer Name",
+                "type": "string"
+              },
+              "customer_email": {
+                "default": "",
+                "title": "Customer Email",
+                "type": "string"
+              },
+              "item_count": {
+                "default": 0,
+                "title": "Item Count",
+                "type": "integer"
+              },
+              "items": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Items",
+                "type": "array"
+              },
+              "subtotal": {
+                "default": "",
+                "title": "Subtotal",
+                "type": "string"
+              },
+              "tax_total": {
+                "default": "",
+                "title": "Tax Total",
+                "type": "string"
+              },
+              "shipping_total": {
+                "default": "",
+                "title": "Shipping Total",
+                "type": "string"
+              },
+              "discount_total": {
+                "default": "",
+                "title": "Discount Total",
+                "type": "string"
+              },
+              "payment_method": {
+                "default": "",
+                "title": "Payment Method",
+                "type": "string"
+              },
+              "customer_note": {
+                "default": "",
+                "title": "Customer Note",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "Order",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/Order"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[Order]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "create_coupon",
+      "description": "Create a WooCommerce coupon with amount, limits, expiry, product/category rules, and email restrictions.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wc.coupon_create"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "code": {
+            "description": "Unique coupon code",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "discount_type": {
+            "default": "percent",
+            "description": "Discount type: percent, fixed_cart, or fixed_product",
+            "title": "Discount Type",
+            "type": "string"
+          },
+          "amount": {
+            "description": "Non-negative discount amount as a decimal string",
+            "title": "Amount",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "description": "Internal coupon description",
+            "maxLength": 1000,
+            "title": "Description",
+            "type": "string"
+          },
+          "date_expires": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional expiry date as YYYY-MM-DD",
+            "title": "Date Expires"
+          },
+          "usage_limit": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional total usage limit",
+            "title": "Usage Limit"
+          },
+          "usage_limit_per_user": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional usage limit per customer",
+            "title": "Usage Limit Per User"
+          },
+          "minimum_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional minimum basket amount",
+            "title": "Minimum Amount"
+          },
+          "maximum_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional maximum basket amount",
+            "title": "Maximum Amount"
+          },
+          "individual_use": {
+            "default": false,
+            "description": "Prevent combining this coupon with other coupons",
+            "title": "Individual Use",
+            "type": "boolean"
+          },
+          "free_shipping": {
+            "default": false,
+            "description": "Grant free shipping when a compatible method exists",
+            "title": "Free Shipping",
+            "type": "boolean"
+          },
+          "exclude_sale_items": {
+            "default": false,
+            "description": "Exclude products already on sale",
+            "title": "Exclude Sale Items",
+            "type": "boolean"
+          },
+          "product_ids": {
+            "description": "Optional included product ids",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "title": "Product Ids",
+            "type": "array"
+          },
+          "excluded_product_ids": {
+            "description": "Optional excluded product ids",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "title": "Excluded Product Ids",
+            "type": "array"
+          },
+          "category_ids": {
+            "description": "Optional included product category ids",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "title": "Category Ids",
+            "type": "array"
+          },
+          "excluded_category_ids": {
+            "description": "Optional excluded product category ids",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "title": "Excluded Category Ids",
+            "type": "array"
+          },
+          "email_restrictions": {
+            "description": "Optional customer email restrictions",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Email Restrictions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "site_id",
+          "code",
+          "amount"
+        ],
+        "title": "CreateCouponParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "code": {
+            "default": "",
+            "title": "Code",
+            "type": "string"
+          },
+          "discount_type": {
+            "default": "",
+            "title": "Discount Type",
+            "type": "string"
+          },
+          "amount": {
+            "default": "",
+            "title": "Amount",
+            "type": "string"
+          },
+          "date_expires": {
+            "default": "",
+            "title": "Date Expires",
+            "type": "string"
+          },
+          "usage_count": {
+            "default": 0,
+            "title": "Usage Count",
+            "type": "integer"
+          },
+          "usage_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Usage Limit"
+          },
+          "usage_limit_per_user": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Usage Limit Per User"
+          },
+          "minimum_amount": {
+            "default": "",
+            "title": "Minimum Amount",
+            "type": "string"
+          },
+          "maximum_amount": {
+            "default": "",
+            "title": "Maximum Amount",
+            "type": "string"
+          },
+          "individual_use": {
+            "default": false,
+            "title": "Individual Use",
+            "type": "boolean"
+          },
+          "free_shipping": {
+            "default": false,
+            "title": "Free Shipping",
+            "type": "boolean"
+          },
+          "exclude_sale_items": {
+            "default": false,
+            "title": "Exclude Sale Items",
+            "type": "boolean"
+          },
+          "product_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Product Ids",
+            "type": "array"
+          },
+          "excluded_product_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Excluded Product Ids",
+            "type": "array"
+          },
+          "category_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Category Ids",
+            "type": "array"
+          },
+          "excluded_category_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Excluded Category Ids",
+            "type": "array"
+          },
+          "email_restrictions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Email Restrictions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Coupon",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.create_coupon",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "update_coupon",
+      "description": "Update selected fields of one WooCommerce coupon without changing omitted fields.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wc.coupon_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "coupon_id": {
+            "description": "Numeric WooCommerce coupon id",
+            "exclusiveMinimum": 0,
+            "title": "Coupon Id",
+            "type": "integer"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New unique coupon code",
+            "title": "Code"
+          },
+          "discount_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Discount type: percent, fixed_cart, or fixed_product",
+            "title": "Discount Type"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Non-negative discount amount as a decimal string",
+            "title": "Amount"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Internal coupon description",
+            "title": "Description"
+          },
+          "date_expires": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Expiry date as YYYY-MM-DD; empty string clears it",
+            "title": "Date Expires"
+          },
+          "usage_limit": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New total usage limit",
+            "title": "Usage Limit"
+          },
+          "usage_limit_per_user": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New usage limit per customer",
+            "title": "Usage Limit Per User"
+          },
+          "minimum_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional minimum basket amount",
+            "title": "Minimum Amount"
+          },
+          "maximum_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional maximum basket amount",
+            "title": "Maximum Amount"
+          },
+          "individual_use": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Prevent combining with other coupons",
+            "title": "Individual Use"
+          },
+          "free_shipping": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Grant free shipping",
+            "title": "Free Shipping"
+          },
+          "exclude_sale_items": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Exclude products already on sale",
+            "title": "Exclude Sale Items"
+          },
+          "product_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Replace included product ids",
+            "title": "Product Ids"
+          },
+          "excluded_product_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Replace excluded product ids",
+            "title": "Excluded Product Ids"
+          },
+          "category_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Replace included category ids",
+            "title": "Category Ids"
+          },
+          "excluded_category_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Replace excluded category ids",
+            "title": "Excluded Category Ids"
+          },
+          "email_restrictions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Replace customer email restrictions",
+            "title": "Email Restrictions"
+          }
+        },
+        "required": [
+          "site_id",
+          "coupon_id"
+        ],
+        "title": "UpdateCouponParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "code": {
+            "default": "",
+            "title": "Code",
+            "type": "string"
+          },
+          "discount_type": {
+            "default": "",
+            "title": "Discount Type",
+            "type": "string"
+          },
+          "amount": {
+            "default": "",
+            "title": "Amount",
+            "type": "string"
+          },
+          "date_expires": {
+            "default": "",
+            "title": "Date Expires",
+            "type": "string"
+          },
+          "usage_count": {
+            "default": 0,
+            "title": "Usage Count",
+            "type": "integer"
+          },
+          "usage_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Usage Limit"
+          },
+          "usage_limit_per_user": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Usage Limit Per User"
+          },
+          "minimum_amount": {
+            "default": "",
+            "title": "Minimum Amount",
+            "type": "string"
+          },
+          "maximum_amount": {
+            "default": "",
+            "title": "Maximum Amount",
+            "type": "string"
+          },
+          "individual_use": {
+            "default": false,
+            "title": "Individual Use",
+            "type": "boolean"
+          },
+          "free_shipping": {
+            "default": false,
+            "title": "Free Shipping",
+            "type": "boolean"
+          },
+          "exclude_sale_items": {
+            "default": false,
+            "title": "Exclude Sale Items",
+            "type": "boolean"
+          },
+          "product_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Product Ids",
+            "type": "array"
+          },
+          "excluded_product_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Excluded Product Ids",
+            "type": "array"
+          },
+          "category_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Category Ids",
+            "type": "array"
+          },
+          "excluded_category_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Excluded Category Ids",
+            "type": "array"
+          },
+          "email_restrictions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Email Restrictions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Coupon",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.update_coupon",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "archive_coupon",
+      "description": "Move one WooCommerce coupon to Trash without permanently deleting it.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wc.coupon_trash"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "coupon_id": {
+            "description": "Numeric WooCommerce coupon id to move to Trash",
+            "exclusiveMinimum": 0,
+            "title": "Coupon Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "coupon_id"
+        ],
+        "title": "ArchiveCouponParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "code": {
+            "default": "",
+            "title": "Code",
+            "type": "string"
+          },
+          "discount_type": {
+            "default": "",
+            "title": "Discount Type",
+            "type": "string"
+          },
+          "amount": {
+            "default": "",
+            "title": "Amount",
+            "type": "string"
+          },
+          "date_expires": {
+            "default": "",
+            "title": "Date Expires",
+            "type": "string"
+          },
+          "usage_count": {
+            "default": 0,
+            "title": "Usage Count",
+            "type": "integer"
+          },
+          "usage_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Usage Limit"
+          },
+          "usage_limit_per_user": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Usage Limit Per User"
+          },
+          "minimum_amount": {
+            "default": "",
+            "title": "Minimum Amount",
+            "type": "string"
+          },
+          "maximum_amount": {
+            "default": "",
+            "title": "Maximum Amount",
+            "type": "string"
+          },
+          "individual_use": {
+            "default": false,
+            "title": "Individual Use",
+            "type": "boolean"
+          },
+          "free_shipping": {
+            "default": false,
+            "title": "Free Shipping",
+            "type": "boolean"
+          },
+          "exclude_sale_items": {
+            "default": false,
+            "title": "Exclude Sale Items",
+            "type": "boolean"
+          },
+          "product_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Product Ids",
+            "type": "array"
+          },
+          "excluded_product_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Excluded Product Ids",
+            "type": "array"
+          },
+          "category_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Category Ids",
+            "type": "array"
+          },
+          "excluded_category_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Excluded Category Ids",
+            "type": "array"
+          },
+          "email_restrictions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Email Restrictions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Coupon",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.archive_coupon",
       "background": false,
       "long_running": false,
       "scopes": [],
