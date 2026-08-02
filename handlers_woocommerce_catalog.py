@@ -25,6 +25,10 @@ from models import (
     Product,
     ProductBulkResult,
     ProductCategory,
+    ProductVariation,
+    CreateProductVariationParams,
+    ListProductVariationsParams,
+    UpdateProductVariationParams,
     UpdateProductParams,
 )
 from wp_client import wp_request
@@ -251,6 +255,153 @@ def _bulk_payload(product, params, percent):
             ids.append(params.category_id_to_add)
         payload["categories"] = [{"id": item} for item in ids]
     return payload
+
+
+def _variation_state_token(variation):
+    state = {
+        "id": int(variation.get("id", 0)),
+        "status": str(variation.get("status", "")),
+        "sku": str(variation.get("sku", "") or ""),
+        "regular_price": str(variation.get("regular_price", "") or ""),
+        "sale_price": str(variation.get("sale_price", "") or ""),
+        "manage_stock": bool(variation.get("manage_stock", False)),
+        "stock_quantity": variation.get("stock_quantity"),
+        "stock_status": str(variation.get("stock_status", "")),
+        "attributes": sorted(
+            (str(item.get("name", "")), str(item.get("option", "")))
+            for item in (variation.get("attributes") or [])),
+    }
+    return hashlib.sha256(
+        json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _variation_entity(product_id, variation):
+    attributes = [f"{item.get('name', '')}: {item.get('option', '')}".strip(": ")
+                  for item in (variation.get("attributes") or [])]
+    variation_id = int(variation.get("id", 0))
+    title = " / ".join(attributes) or f"Variation #{variation_id}"
+    return ProductVariation(
+        id=str(variation_id), title=title, kind="wc_product_variation",
+        status=str(variation.get("status", "")), product_id=product_id,
+        sku=str(variation.get("sku", "") or ""),
+        regular_price=str(variation.get("regular_price", "") or ""),
+        sale_price=str(variation.get("sale_price", "") or ""),
+        stock_status=str(variation.get("stock_status", "")),
+        stock_quantity=variation.get("stock_quantity"),
+        manage_stock=bool(variation.get("manage_stock", False)),
+        attributes=attributes, state_token=_variation_state_token(variation))
+
+
+def _variation_payload(params, *, creating=False):
+    payload = {}
+    for field in ("sku", "regular_price", "sale_price"):
+        value = getattr(params, field, None)
+        if value is not None:
+            normalized, err = _decimal_string(value, field, allow_empty=True) if field != "sku" else (value.strip(), None)
+            if err:
+                return None, err
+            payload[field] = normalized
+    for field in ("manage_stock", "stock_quantity", "stock_status", "status"):
+        value = getattr(params, field, None)
+        if value is not None:
+            payload[field] = value
+    if payload.get("stock_status") is not None and payload["stock_status"] not in _STOCK_STATUSES:
+        return None, _validation_error("stock_status must be instock, outofstock, or onbackorder.")
+    if payload.get("status") is not None and payload["status"] not in _PRODUCT_STATUSES:
+        return None, _validation_error("status must be draft, publish, pending, or private.")
+    if params.stock_quantity is not None:
+        payload["manage_stock"] = True
+    if creating:
+        attrs = []
+        seen = set()
+        for item in params.attributes:
+            key = item.name.strip().casefold()
+            if key in seen:
+                return None, _validation_error("Each variation attribute may be provided only once.", code="WOOCOMMERCE_DUPLICATE_VARIATION_ATTRIBUTE")
+            seen.add(key)
+            attrs.append({"name": item.name.strip(), "option": item.option.strip()})
+        payload["attributes"] = attrs
+    return payload, None
+
+
+@chat.function(
+    "list_product_variations",
+    description="List variants of one WooCommerce variable product, including attributes, SKU, prices, stock, and a state token for guarded updates.",
+    action_type="read", data_model=sdl.EntityList[ProductVariation])
+async def list_product_variations(ctx, params: ListProductVariationsParams) -> ActionResult:
+    """Read paginated product variations; each item includes its update state token."""
+    data, err = await _request(
+        ctx, params.site_id, f"/products/{params.product_id}/variations",
+        {"per_page": params.limit, "page": params.page, "orderby": "id", "order": "asc"})
+    if err:
+        return err
+    items = [_variation_entity(params.product_id, item) for item in data]
+    return ActionResult.success(
+        sdl.EntityList[ProductVariation](items=items), summary=f"{len(items)} variation(s)")
+
+
+@chat.function(
+    "create_product_variation",
+    description="Create a variation for an existing variable product using its existing attributes. Defaults to draft for safe review.",
+    action_type="write", data_model=ProductVariation,
+    effects=["wc.product_variation_create"], event="wp-site-connector.create_product_variation")
+async def create_product_variation(ctx, params: CreateProductVariationParams) -> ActionResult:
+    """Create a draft-first variation from explicit parent attribute options."""
+    payload, err = _variation_payload(params, creating=True)
+    if err:
+        return err
+    parent, err = await _request(ctx, params.site_id, f"/products/{params.product_id}", expected_type=dict)
+    if err:
+        return err
+    if parent.get("type") != "variable":
+        return _validation_error(
+            "Variations can only be created under a variable product.",
+            code="WOOCOMMERCE_PARENT_NOT_VARIABLE")
+    allowed = {
+        str(item.get("name", "")).strip().casefold(): {
+            str(option).strip().casefold() for option in (item.get("options") or [])
+        }
+        for item in (parent.get("attributes") or []) if item.get("variation")
+    }
+    for item in payload["attributes"]:
+        name, option = item["name"].casefold(), item["option"].casefold()
+        if name not in allowed or option not in allowed[name]:
+            return _validation_error(
+                f"{item['name']}: {item['option']} is not an existing variation attribute of the parent product.",
+                code="WOOCOMMERCE_INVALID_VARIATION_ATTRIBUTE")
+    data, err = await _write(ctx, params.site_id, f"/products/{params.product_id}/variations", payload)
+    if err:
+        return err
+    entity = _variation_entity(params.product_id, data)
+    return ActionResult.success(entity, summary=f"Created draft variation #{entity.id}", refresh_panels=["center"])
+
+
+@chat.function(
+    "update_product_variation",
+    description="Update selected price, SKU, stock, or status fields of one product variation only after its state token is rechecked.",
+    action_type="write", data_model=ProductVariation,
+    effects=["wc.product_variation_update"], event="wp-site-connector.update_product_variation")
+async def update_product_variation(ctx, params: UpdateProductVariationParams) -> ActionResult:
+    """Update one variation only if it still matches the reviewed variation state."""
+    payload, err = _variation_payload(params)
+    if err:
+        return err
+    if not payload:
+        return _validation_error("Nothing to update — provide at least one variation field.", code="WOOCOMMERCE_NO_CHANGES")
+    current, err = await _request(
+        ctx, params.site_id, f"/products/{params.product_id}/variations/{params.variation_id}", expected_type=dict)
+    if err:
+        return err
+    if _variation_state_token(current) != params.expected_state_token:
+        return _validation_error(
+            "This variation changed since it was listed. Run list_product_variations again.",
+            code="WOOCOMMERCE_VARIATION_STATE_CHANGED")
+    data, err = await _write(
+        ctx, params.site_id, f"/products/{params.product_id}/variations/{params.variation_id}", payload)
+    if err:
+        return err
+    entity = _variation_entity(params.product_id, data)
+    return ActionResult.success(entity, summary=f"Updated variation #{entity.id}: {', '.join(payload.keys())}", refresh_panels=["center"])
 
 
 @chat.function(

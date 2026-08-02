@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.12",
   "app_id": "wp-site-connector",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "name": "WP Site Connector",
   "description": "Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
   "icon": "icon.svg",
@@ -4708,6 +4708,805 @@
         "x-sdl": "entity"
       },
       "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "list_product_variations",
+      "description": "List variants of one WooCommerce variable product, including attributes, SKU, prices, stock, and a state token for guarded updates.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "product_id": {
+            "description": "Parent variable WooCommerce product id",
+            "exclusiveMinimum": 0,
+            "title": "Product Id",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "description": "Maximum variations to return",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "page": {
+            "default": 1,
+            "description": "Result page, starting at 1",
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "product_id"
+        ],
+        "title": "ListProductVariationsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "ProductVariation": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "product_id": {
+                "default": 0,
+                "title": "Product Id",
+                "type": "integer"
+              },
+              "sku": {
+                "default": "",
+                "title": "Sku",
+                "type": "string"
+              },
+              "regular_price": {
+                "default": "",
+                "title": "Regular Price",
+                "type": "string"
+              },
+              "sale_price": {
+                "default": "",
+                "title": "Sale Price",
+                "type": "string"
+              },
+              "stock_status": {
+                "default": "",
+                "title": "Stock Status",
+                "type": "string"
+              },
+              "stock_quantity": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Stock Quantity"
+              },
+              "manage_stock": {
+                "default": false,
+                "title": "Manage Stock",
+                "type": "boolean"
+              },
+              "attributes": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Attributes",
+                "type": "array"
+              },
+              "state_token": {
+                "default": "",
+                "title": "State Token",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "ProductVariation",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/ProductVariation"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[ProductVariation]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "create_product_variation",
+      "description": "Create a variation for an existing variable product using its existing attributes. Defaults to draft for safe review.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wc.product_variation_create"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "$defs": {
+          "VariationAttributeInput": {
+            "properties": {
+              "name": {
+                "description": "Existing parent product attribute name",
+                "maxLength": 100,
+                "minLength": 1,
+                "title": "Name",
+                "type": "string"
+              },
+              "option": {
+                "description": "Existing option of that parent attribute",
+                "maxLength": 100,
+                "minLength": 1,
+                "title": "Option",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "option"
+            ],
+            "title": "VariationAttributeInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "product_id": {
+            "description": "Parent variable WooCommerce product id",
+            "exclusiveMinimum": 0,
+            "title": "Product Id",
+            "type": "integer"
+          },
+          "attributes": {
+            "description": "Explicit existing parent attribute options that identify this variation",
+            "items": {
+              "$ref": "#/$defs/VariationAttributeInput"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Attributes",
+            "type": "array"
+          },
+          "sku": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional unique SKU",
+            "title": "Sku"
+          },
+          "regular_price": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional non-negative regular price",
+            "title": "Regular Price"
+          },
+          "sale_price": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional non-negative sale price",
+            "title": "Sale Price"
+          },
+          "manage_stock": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Enable or disable exact stock tracking",
+            "title": "Manage Stock"
+          },
+          "stock_quantity": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New stock quantity; also enables stock tracking",
+            "title": "Stock Quantity"
+          },
+          "stock_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New stock state: instock, outofstock, or onbackorder",
+            "title": "Stock Status"
+          },
+          "status": {
+            "default": "draft",
+            "description": "Variation status; defaults to draft for safe review",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "product_id",
+          "attributes"
+        ],
+        "title": "CreateProductVariationParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "product_id": {
+            "default": 0,
+            "title": "Product Id",
+            "type": "integer"
+          },
+          "sku": {
+            "default": "",
+            "title": "Sku",
+            "type": "string"
+          },
+          "regular_price": {
+            "default": "",
+            "title": "Regular Price",
+            "type": "string"
+          },
+          "sale_price": {
+            "default": "",
+            "title": "Sale Price",
+            "type": "string"
+          },
+          "stock_status": {
+            "default": "",
+            "title": "Stock Status",
+            "type": "string"
+          },
+          "stock_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Stock Quantity"
+          },
+          "manage_stock": {
+            "default": false,
+            "title": "Manage Stock",
+            "type": "boolean"
+          },
+          "attributes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Attributes",
+            "type": "array"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ProductVariation",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.create_product_variation",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "update_product_variation",
+      "description": "Update selected price, SKU, stock, or status fields of one product variation only after its state token is rechecked.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wc.product_variation_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "product_id": {
+            "description": "Parent variable WooCommerce product id",
+            "exclusiveMinimum": 0,
+            "title": "Product Id",
+            "type": "integer"
+          },
+          "variation_id": {
+            "description": "Existing WooCommerce variation id",
+            "exclusiveMinimum": 0,
+            "title": "Variation Id",
+            "type": "integer"
+          },
+          "expected_state_token": {
+            "description": "Exact token returned by list_product_variations; execution stops if this variation changed",
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Expected State Token",
+            "type": "string"
+          },
+          "sku": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New SKU; empty string clears it",
+            "title": "Sku"
+          },
+          "regular_price": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New non-negative regular price; empty string clears it",
+            "title": "Regular Price"
+          },
+          "sale_price": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New non-negative sale price; empty string clears it",
+            "title": "Sale Price"
+          },
+          "manage_stock": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Enable or disable exact stock tracking",
+            "title": "Manage Stock"
+          },
+          "stock_quantity": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New stock quantity; also enables stock tracking",
+            "title": "Stock Quantity"
+          },
+          "stock_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New stock state: instock, outofstock, or onbackorder",
+            "title": "Stock Status"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New status: draft, publish, pending, or private",
+            "title": "Status"
+          }
+        },
+        "required": [
+          "site_id",
+          "product_id",
+          "variation_id",
+          "expected_state_token"
+        ],
+        "title": "UpdateProductVariationParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "product_id": {
+            "default": 0,
+            "title": "Product Id",
+            "type": "integer"
+          },
+          "sku": {
+            "default": "",
+            "title": "Sku",
+            "type": "string"
+          },
+          "regular_price": {
+            "default": "",
+            "title": "Regular Price",
+            "type": "string"
+          },
+          "sale_price": {
+            "default": "",
+            "title": "Sale Price",
+            "type": "string"
+          },
+          "stock_status": {
+            "default": "",
+            "title": "Stock Status",
+            "type": "string"
+          },
+          "stock_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Stock Quantity"
+          },
+          "manage_stock": {
+            "default": false,
+            "title": "Manage Stock",
+            "type": "boolean"
+          },
+          "attributes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Attributes",
+            "type": "array"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ProductVariation",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.update_product_variation",
       "background": false,
       "long_running": false,
       "scopes": [],

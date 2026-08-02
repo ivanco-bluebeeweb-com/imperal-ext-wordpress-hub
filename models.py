@@ -235,6 +235,45 @@ class ArchiveProductParams(BaseModel):
     product_id: int = Field(gt=0, description="Numeric WooCommerce product id to move to trash")
 
 
+class VariationAttributeInput(BaseModel):
+    name: str = Field(min_length=1, max_length=100, description="Existing parent product attribute name")
+    option: str = Field(min_length=1, max_length=100, description="Existing option of that parent attribute")
+
+
+class ListProductVariationsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    product_id: int = Field(gt=0, description="Parent variable WooCommerce product id")
+    limit: int = Field(default=50, ge=1, le=100, description="Maximum variations to return")
+    page: int = Field(default=1, ge=1, description="Result page, starting at 1")
+
+
+class CreateProductVariationParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    product_id: int = Field(gt=0, description="Parent variable WooCommerce product id")
+    attributes: list[VariationAttributeInput] = Field(min_length=1, max_length=20, description="Explicit existing parent attribute options that identify this variation")
+    sku: str | None = Field(default=None, max_length=100, description="Optional unique SKU")
+    regular_price: str | None = Field(default=None, description="Optional non-negative regular price")
+    sale_price: str | None = Field(default=None, description="Optional non-negative sale price")
+    manage_stock: bool | None = Field(default=None, description="Enable or disable exact stock tracking")
+    stock_quantity: int | None = Field(default=None, ge=0, description="New stock quantity; also enables stock tracking")
+    stock_status: str | None = Field(default=None, description="New stock state: instock, outofstock, or onbackorder")
+    status: str = Field(default="draft", description="Variation status; defaults to draft for safe review")
+
+
+class UpdateProductVariationParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    product_id: int = Field(gt=0, description="Parent variable WooCommerce product id")
+    variation_id: int = Field(gt=0, description="Existing WooCommerce variation id")
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token returned by list_product_variations; execution stops if this variation changed")
+    sku: str | None = Field(default=None, max_length=100, description="New SKU; empty string clears it")
+    regular_price: str | None = Field(default=None, description="New non-negative regular price; empty string clears it")
+    sale_price: str | None = Field(default=None, description="New non-negative sale price; empty string clears it")
+    manage_stock: bool | None = Field(default=None, description="Enable or disable exact stock tracking")
+    stock_quantity: int | None = Field(default=None, ge=0, description="New stock quantity; also enables stock tracking")
+    stock_status: str | None = Field(default=None, description="New stock state: instock, outofstock, or onbackorder")
+    status: str | None = Field(default=None, description="New status: draft, publish, pending, or private")
+
+
 class ListProductCategoriesParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     limit: int = Field(default=50, ge=1, le=100, description="Maximum categories to return")
@@ -426,6 +465,18 @@ class Product(sdl.Entity):
 class ProductCategory(sdl.Entity):
     parent_id: int = 0
     product_count: int = 0
+
+
+class ProductVariation(sdl.Entity):
+    product_id: int = 0
+    sku: str = ""
+    regular_price: str = ""
+    sale_price: str = ""
+    stock_status: str = ""
+    stock_quantity: int | None = None
+    manage_stock: bool = False
+    attributes: list[str] = Field(default_factory=list)
+    state_token: str = ""
 
 
 class ProductBulkResult(sdl.Entity):
