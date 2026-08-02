@@ -9,8 +9,10 @@ from models import (
     AddOrderNoteParams,
     ArchiveCouponParams,
     CreateCouponParams,
+    CreateCustomerParams,
     CustomerOrdersParams,
     UpdateCouponParams,
+    UpdateCustomerParams,
     UpdateOrderStatusParams,
     WooObjectParams,
 )
@@ -185,3 +187,42 @@ async def test_list_customer_orders_uses_customer_filter():
         site_id="shop-test", customer_id=2, limit=10))
     assert result.status == "success" and len(result.data.items) == 1
     assert seen[-1][1]["params"]["customer"] == 2
+
+
+async def test_create_customer_normalises_privacy_safe_fields():
+    ctx = await _ctx()
+    customer = {"id": 3, "email": "new@example.com", "username": "new_user",
+                "first_name": "New", "last_name": "User", "orders_count": 0,
+                "total_spent": "0.00", "date_created": "2026-08-02T13:00:00"}
+    ctx.http.mock_post(f"{BASE}/customers", customer, 201)
+    seen = _spy(ctx)
+    result = await ho.create_customer(ctx, CreateCustomerParams(
+        site_id="shop-test", email=" NEW@EXAMPLE.COM ", first_name=" New ",
+        last_name=" User ", username=" new_user "))
+    assert result.status == "success" and result.data.email == "new@example.com"
+    assert seen[-1][1]["json"] == {
+        "email": "new@example.com", "first_name": "New",
+        "last_name": "User", "username": "new_user"}
+
+
+async def test_update_customer_sends_only_explicit_fields():
+    ctx = await _ctx()
+    customer = {"id": 3, "email": "new@example.com", "username": "new_user",
+                "first_name": "Updated", "last_name": "User", "orders_count": 0,
+                "total_spent": "0.00", "date_created": "2026-08-02T13:00:00"}
+    ctx.http.mock_post(f"{BASE}/customers/3", customer, 200)
+    seen = _spy(ctx)
+    result = await ho.update_customer(ctx, UpdateCustomerParams(
+        site_id="shop-test", customer_id=3, first_name=" Updated "))
+    assert result.status == "success" and result.data.first_name == "Updated"
+    assert seen[-1][1]["json"] == {"first_name": "Updated"}
+
+
+async def test_customer_validation_rejects_bad_email_and_empty_update():
+    ctx = await _ctx()
+    bad = await ho.create_customer(ctx, CreateCustomerParams(
+        site_id="shop-test", email="not-an-email"))
+    empty = await ho.update_customer(ctx, UpdateCustomerParams(
+        site_id="shop-test", customer_id=3))
+    assert bad.status == "error" and bad.error_code == "WOOCOMMERCE_INVALID_CUSTOMER"
+    assert empty.status == "error" and empty.error_code == "WOOCOMMERCE_NO_CHANGES"

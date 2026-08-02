@@ -21,11 +21,13 @@ from models import (
     ArchiveCouponParams,
     Coupon,
     CreateCouponParams,
+    CreateCustomerParams,
     Customer,
     CustomerOrdersParams,
     Order,
     OrderNote,
     UpdateCouponParams,
+    UpdateCustomerParams,
     UpdateOrderStatusParams,
     WooObjectParams,
 )
@@ -161,6 +163,32 @@ def _coupon_payload(params, *, creating=False):
     return payload, None
 
 
+def _customer_payload(params, *, creating=False):
+    payload = {}
+    supplied = set(params.model_fields_set) if not creating else set(type(params).model_fields)
+
+    email = getattr(params, "email", None)
+    if creating or "email" in supplied:
+        email = (email or "").strip().lower()
+        if not _EMAIL_RE.match(email):
+            return None, _error("Customer email address is invalid.", code="WOOCOMMERCE_INVALID_CUSTOMER")
+        payload["email"] = email
+
+    for field in ("first_name", "last_name", "username"):
+        if not creating and field not in supplied:
+            continue
+        value = getattr(params, field, None)
+        if value is not None:
+            value = value.strip()
+            if field == "username" and not value:
+                return None, _error("Customer username cannot be empty.", code="WOOCOMMERCE_INVALID_CUSTOMER")
+            payload[field] = value
+
+    if not creating and not payload:
+        return None, _error("No customer changes were provided.", code="WOOCOMMERCE_NO_CHANGES")
+    return payload, None
+
+
 def _note_entity(note, order_id):
     text = str(note.get("note", "") or "")
     return OrderNote(
@@ -277,6 +305,40 @@ async def get_customer(ctx, params: WooObjectParams) -> ActionResult:
         return err
     entity = _customer_entity(data)
     return ActionResult.success(entity, summary=f"{entity.title}: {entity.orders_count} order(s), {entity.total_spent} spent")
+
+
+@chat.function(
+    "create_customer",
+    description="Create a registered WooCommerce customer with email and optional name/username. Passwords, addresses, and phone numbers are intentionally excluded.",
+    action_type="write", data_model=Customer,
+    effects=["wc.customer_create"], event="wp-site-connector.create_customer")
+async def create_customer(ctx, params: CreateCustomerParams) -> ActionResult:
+    """Create one privacy-safe customer record without handling credentials or addresses."""
+    payload, err = _customer_payload(params, creating=True)
+    if err:
+        return err
+    data, err = await _write(ctx, params.site_id, "/customers", payload)
+    if err:
+        return err
+    entity = _customer_entity(data)
+    return ActionResult.success(entity, summary=f"Created customer #{entity.id}", refresh_panels=["center"])
+
+
+@chat.function(
+    "update_customer",
+    description="Update email, first name, last name, or username of one registered WooCommerce customer. Addresses, phone numbers, and passwords are not exposed.",
+    action_type="write", data_model=Customer,
+    effects=["wc.customer_update"], event="wp-site-connector.update_customer")
+async def update_customer(ctx, params: UpdateCustomerParams) -> ActionResult:
+    """Update only explicitly supplied privacy-safe customer fields."""
+    payload, err = _customer_payload(params)
+    if err:
+        return err
+    data, err = await _write(ctx, params.site_id, f"/customers/{params.customer_id}", payload)
+    if err:
+        return err
+    entity = _customer_entity(data)
+    return ActionResult.success(entity, summary=f"Updated customer #{entity.id}", refresh_panels=["center"])
 
 
 @chat.function(

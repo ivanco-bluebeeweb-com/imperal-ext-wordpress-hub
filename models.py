@@ -100,6 +100,23 @@ class CustomerOrdersParams(BaseModel):
     page: int = Field(default=1, ge=1, description="Results page, starting at 1")
 
 
+class CreateCustomerParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    email: str = Field(min_length=3, max_length=254, description="Customer email address")
+    first_name: str = Field(default="", max_length=100, description="Optional first name")
+    last_name: str = Field(default="", max_length=100, description="Optional last name")
+    username: str | None = Field(default=None, min_length=1, max_length=100, description="Optional WordPress username; omit to let WooCommerce derive it")
+
+
+class UpdateCustomerParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    customer_id: int = Field(gt=0, description="Numeric WooCommerce customer id")
+    email: str | None = Field(default=None, min_length=3, max_length=254, description="New customer email address")
+    first_name: str | None = Field(default=None, max_length=100, description="New first name; empty string clears it")
+    last_name: str | None = Field(default=None, max_length=100, description="New last name; empty string clears it")
+    username: str | None = Field(default=None, min_length=1, max_length=100, description="New WordPress username")
+
+
 class CreateCouponParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     code: str = Field(min_length=1, max_length=100, description="Unique coupon code")
