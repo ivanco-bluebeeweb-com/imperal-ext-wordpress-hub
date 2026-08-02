@@ -2,9 +2,9 @@ import asyncio
 
 from imperal_sdk import ActionResult, sdl
 from app import chat
-from models import (_NoParams, Site, ListContentParams, ListMediaParams, ListOrdersParams,
+from models import (_NoParams, Site, ListContentParams, ListMediaParams,
                     Post, Page, MediaItem, SiteIdParams, SiteHealth, RefreshAllResult,
-                    ListCommentsParams, ListCustomPostsParams, Comment, WPUser, Order,
+                    ListCommentsParams, ListCustomPostsParams, Comment, WPUser,
                     ServerInfo, UpdateMediaAltParams, MediaAltResult)
 import wp_cli
 from wp_client import wp_get, wp_post, wp_error_message, wp_error_code, wp_title, now_iso
@@ -409,49 +409,6 @@ async def list_users(ctx, params: ListContentParams) -> ActionResult:
     ]
     return ActionResult.success(sdl.EntityList[WPUser](items=items),
                                 summary=f"{len(items)} user(s)")
-
-
-@chat.function(
-    "list_orders",
-    description="List WooCommerce orders on a connected WordPress site. Returns an error if WooCommerce is not installed.",
-    action_type="read",
-    data_model=sdl.EntityList[Order],
-)
-async def list_orders(ctx, params: ListOrdersParams) -> ActionResult:
-    """Return WooCommerce orders from the site's REST API."""
-    auth, err = await _authed(ctx, params.site_id)
-    if err:
-        return ActionResult.error(err, retryable=False)
-    base_url, username, pw = auth
-    try:
-        r = await wp_get(ctx, base_url, "/wp-json/wc/v3/orders",
-                         username=username, app_password=pw,
-                         params={"per_page": params.limit, "orderby": "date", "order": "desc"})
-    except Exception as e:
-        await ctx.log(f"list_orders http error: {e}", level="error")
-        return ActionResult.error("Could not reach the site.", retryable=True)
-    if r.status_code == 404:
-        return ActionResult.error("WooCommerce is not installed on this site.", retryable=False)
-    if r.status_code in (401, 403):
-        return ActionResult.error(
-            "WooCommerce requires additional permissions — ensure the Application Password user has shop manager or admin role.",
-            retryable=False,
-        )
-    if r.status_code != 200 or not isinstance(r.body, list):
-        return ActionResult.error(wp_error_message(r.status_code), retryable=r.status_code >= 500)
-    items = [
-        Order(
-            id=str(o["id"]),
-            title=f"Order #{o['id']}",
-            kind="wc_order",
-            status=o.get("status", ""),
-            total=str(o.get("total", "")),
-            currency=o.get("currency", ""),
-        )
-        for o in r.body
-    ]
-    return ActionResult.success(sdl.EntityList[Order](items=items),
-                                summary=f"{len(items)} order(s)")
 
 
 @chat.function(

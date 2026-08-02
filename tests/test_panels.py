@@ -174,6 +174,69 @@ async def test_center_shows_detail_when_site_id():
     assert "Standard" in s and "Activity" in s  # group tab buttons
 
 
+async def _store_panel_ctx(woocommerce=True):
+    ctx = MockContext()
+    await storage.save_site_record(ctx, {"id": "shop-com", "name": "Shop",
+                                         "url": "https://shop.com", "username": "manager",
+                                         "status": "connected"})
+    await storage.set_credential(ctx, "shop-com", "pw")
+    ctx.http.mock_get("https://shop.com/wp-json/wp/v2/types", {}, 200)
+    ctx.http.mock_get("https://shop.com/wp-json/wp/v2/taxonomies", {}, 200)
+    ctx.http.mock_get("https://shop.com/wp-json/wp/v2/posts", [], 200)
+    ctx.http.mock_get("https://shop.com/wp-json/wp/v2/pages", [], 200)
+    ctx.http.mock_get("https://shop.com/wp-json/wp/v2/media", [], 200)
+    ctx.http.mock_get("https://shop.com/wp-json/wp/v2/comments", [], 200)
+    ctx.http.mock_get("https://shop.com/wp-json/wp/v2/users", [], 200)
+    if woocommerce:
+        ctx.http.mock_get("https://shop.com/wp-json/wc/v3/orders",
+                          [{"id": 8, "number": "1008", "status": "processing",
+                            "total": "49.00", "currency": "USD",
+                            "date_created": "2026-08-01T10:00:00"}], 200)
+    else:
+        ctx.http.mock_get("https://shop.com/wp-json/wc/v3/orders",
+                          {"code": "rest_no_route"}, 404)
+    return ctx
+
+
+async def test_center_store_has_separate_commerce_group():
+    ctx = await _store_panel_ctx()
+    node = await panels.center(ctx, view="", site_id="shop-com")
+    s = str(node)
+    assert "Commerce" in s
+    assert "Orders" not in s  # orders no longer leak into Activity
+
+
+async def test_center_non_store_hides_commerce_group():
+    ctx = await _store_panel_ctx(woocommerce=False)
+    node = await panels.center(ctx, view="", site_id="shop-com")
+    assert "Commerce" not in str(node)
+
+
+async def test_center_commerce_overview_renders_store_stats():
+    ctx = await _store_panel_ctx()
+    ctx.http.mock_get("https://shop.com/wp-json/wc/v3/reports/sales",
+                      [{"total_orders": 7, "net_sales": "350.00",
+                        "average_sales": "50.00", "total_refunds": "10.00",
+                        "currency": "USD"}], 200)
+    node = await panels.center(ctx, view="", site_id="shop-com",
+                               group_tab="commerce", commerce_tab="overview")
+    s = str(node)
+    assert "Net sales" in s and "350.00 USD" in s
+    assert "read-only" in s
+
+
+async def test_center_commerce_products_renders_stock_table():
+    ctx = await _store_panel_ctx()
+    ctx.http.mock_get("https://shop.com/wp-json/wc/v3/products",
+                      [{"id": 3, "name": "Blue mug", "sku": "MUG-B",
+                        "price": "20.00", "stock_status": "instock",
+                        "stock_quantity": 4}], 200)
+    node = await panels.center(ctx, view="", site_id="shop-com",
+                               group_tab="commerce", commerce_tab="products")
+    s = str(node)
+    assert "Blue mug" in s and "MUG-B" in s and "instock" in s
+
+
 async def test_center_detail_shows_alert_on_missing_credential():
     ctx = MockContext()
     await storage.save_site_record(ctx, {"id": "x-com", "name": "X",

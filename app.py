@@ -2,15 +2,15 @@ from imperal_sdk import Extension, ChatExtension
 
 ext = Extension(
     "wp-site-connector",
-    version="0.1.0",
+    version="0.2.0",
     display_name="WP Site Connector",
-    description="Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
+    description="Connect WordPress sites and read their content, health, SEO fields, and WooCommerce store data.",
     icon="icon.svg",
     actions_explicit=True,
     capabilities=["wp:read", "wp:write"],
 )
 
-chat = ChatExtension(ext, tool_name="wp-site-connector", description="Browse connected WordPress sites")
+chat = ChatExtension(ext, tool_name="wp-site-connector", description="Browse connected WordPress sites and WooCommerce stores")
 
 
 @ext.health_check

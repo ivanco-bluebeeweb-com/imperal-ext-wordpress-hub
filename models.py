@@ -36,6 +36,48 @@ class ListMediaParams(BaseModel):
 class ListOrdersParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     limit: int = Field(default=20, ge=1, le=100, description="Max items to return, 1-100")
+    page: int = Field(default=1, ge=1, description="Results page, starting at 1")
+    status: str | None = Field(default=None, description="Optional WooCommerce order status, e.g. processing, completed, refunded")
+    after: str | None = Field(default=None, description="Only orders created after this ISO-8601 date/time")
+    before: str | None = Field(default=None, description="Only orders created before this ISO-8601 date/time")
+    search: str | None = Field(default=None, description="Optional order number, customer name, or email search")
+
+
+class WooListParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    limit: int = Field(default=20, ge=1, le=100, description="Max items to return, 1-100")
+    page: int = Field(default=1, ge=1, description="Results page, starting at 1")
+    search: str | None = Field(default=None, description="Optional name, SKU, email, or code search")
+
+
+class ListProductsParams(WooListParams):
+    status: str | None = Field(default=None, description="Optional product status: publish, draft, pending, private")
+    stock_status: str | None = Field(default=None, description="Optional stock status: instock, outofstock, onbackorder")
+
+
+class ListCustomersParams(WooListParams):
+    pass
+
+
+class ListCouponsParams(WooListParams):
+    pass
+
+
+class WooObjectParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    object_id: int = Field(gt=0, description="Numeric WooCommerce object id")
+
+
+class ListRefundsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    order_id: int = Field(gt=0, description="Order id whose refunds to list")
+    limit: int = Field(default=20, ge=1, le=100, description="Max refunds to return, 1-100")
+
+
+class StoreSummaryParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    after: str | None = Field(default=None, description="Start of the reporting period as ISO-8601 date/time")
+    before: str | None = Field(default=None, description="End of the reporting period as ISO-8601 date/time")
 
 
 class MediaAltItem(BaseModel):
@@ -164,6 +206,75 @@ class WPUser(sdl.Entity):
 class Order(sdl.Entity):
     total: str = ""
     currency: str = ""
+    date_created: str = ""
+    customer_name: str = ""
+    customer_email: str = ""
+    item_count: int = 0
+    items: list[str] = Field(default_factory=list)
+    subtotal: str = ""
+    tax_total: str = ""
+    shipping_total: str = ""
+    discount_total: str = ""
+    payment_method: str = ""
+    customer_note: str = ""
+
+
+class WooStatus(sdl.Entity):
+    available: bool = False
+    version: str = ""
+    currency: str = ""
+    environment: str = ""
+
+
+class Product(sdl.Entity):
+    sku: str = ""
+    price: str = ""
+    regular_price: str = ""
+    sale_price: str = ""
+    stock_status: str = ""
+    stock_quantity: int | None = None
+    catalog_visibility: str = ""
+    categories: list[str] = Field(default_factory=list)
+    images: list[str] = Field(default_factory=list)
+    attributes: list[str] = Field(default_factory=list)
+    variations: list[int] = Field(default_factory=list)
+
+
+class Customer(sdl.Entity):
+    email: str = ""
+    orders_count: int = 0
+    total_spent: str = ""
+    date_created: str = ""
+
+
+class Coupon(sdl.Entity):
+    code: str = ""
+    discount_type: str = ""
+    amount: str = ""
+    date_expires: str = ""
+    usage_count: int = 0
+    usage_limit: int | None = None
+
+
+class Refund(sdl.Entity):
+    order_id: int = 0
+    amount: str = ""
+    reason: str = ""
+    date_created: str = ""
+    refunded_by: int = 0
+
+
+class StoreSummary(sdl.Entity):
+    period_after: str = ""
+    period_before: str = ""
+    currency: str = ""
+    orders: int = 0
+    gross_sales: str = ""
+    net_sales: str = ""
+    average_order_value: str = ""
+    refunds: str = ""
+    total_items: int = 0
+    customers: int = 0
 
 
 class ServerInfo(sdl.Entity):

@@ -110,18 +110,20 @@ async def sidebar(ctx, active_site_id="", **kwargs):
 @ext.panel("center", slot="center", center_overlay=True, title="WP Site Connector")
 async def center(ctx, view="", site_id="",
                  group_tab="standard",
-                 std_tab="posts", act_tab="comments",
+                 std_tab="posts", act_tab="comments", commerce_tab="overview",
                  cpt_tab="", tax_tab="",
                  **kwargs):
     if view == "connect":
         return _render_connect_form()
     if view == "add_ssh" and site_id:
         if await storage.has_ssh(ctx, site_id):
-            return await _render_detail(ctx, site_id, group_tab, std_tab, act_tab, cpt_tab, tax_tab)
+            return await _render_detail(ctx, site_id, group_tab, std_tab, act_tab,
+                                        commerce_tab, cpt_tab, tax_tab)
         await storage.set_pending_ssh_site(ctx, site_id)
         return _render_add_ssh_form(site_id)
     if site_id:
-        return await _render_detail(ctx, site_id, group_tab, std_tab, act_tab, cpt_tab, tax_tab)
+        return await _render_detail(ctx, site_id, group_tab, std_tab, act_tab,
+                                    commerce_tab, cpt_tab, tax_tab)
     return ui.Empty(message="Select a site from the list to view its dashboard.")
 
 
@@ -248,7 +250,7 @@ def _render_content_table(items, tab):
 
 async def _render_detail(ctx, site_id,
                          group_tab="standard",
-                         std_tab="posts", act_tab="comments",
+                         std_tab="posts", act_tab="comments", commerce_tab="overview",
                          cpt_tab="", tax_tab=""):
     record = await storage.get_site_record(ctx, site_id) or {}
     if not record:
@@ -546,7 +548,8 @@ async def _render_detail(ctx, site_id,
     def _call(**override):
         kw = dict(view="", site_id=site_id,
                   group_tab=group_tab, std_tab=std_tab,
-                  act_tab=act_tab, cpt_tab=cpt_tab, tax_tab=tax_tab)
+                  act_tab=act_tab, commerce_tab=commerce_tab,
+                  cpt_tab=cpt_tab, tax_tab=tax_tab)
         kw.update(override)
         return ui.Call("__panel__center", **kw)
 
@@ -567,6 +570,8 @@ async def _render_detail(ctx, site_id,
         _group_btn("Standard", "standard"),
         _group_btn("Activity", "activity"),
     ]
+    if orders_data is not None:
+        group_btns.append(_group_btn("Commerce", "commerce"))
     if cpt_meta:
         group_btns.append(_group_btn("Custom Types", "cpt"))
     if tax_meta:
@@ -581,11 +586,70 @@ async def _render_detail(ctx, site_id,
             _item_btn("Scheduled", "scheduled", act_tab, "act_tab"),
             _item_btn("Users",     "users",     act_tab, "act_tab"),
         ]
-        if orders_data is not None:
-            act_btns.append(_item_btn("Orders", "orders", act_tab, "act_tab"))
         active_content = ui.Stack(gap=3, children=[
             ui.Stack(direction="h", gap=1, wrap=True, children=act_btns),
             _render_content_table(content_map.get(act_tab), act_tab),
+        ])
+
+    elif group_tab == "commerce" and orders_data is not None:
+        commerce_btns = [
+            _item_btn("Overview", "overview", commerce_tab, "commerce_tab"),
+            _item_btn("Orders", "orders", commerce_tab, "commerce_tab"),
+            _item_btn("Products", "products", commerce_tab, "commerce_tab"),
+        ]
+        if commerce_tab == "products":
+            products_data = await _list(
+                "/wp-json/wc/v3/products",
+                {"per_page": 20, "orderby": "date", "order": "desc"},
+            )
+            if products_data is None:
+                commerce_body = ui.Alert(
+                    message="Could not load WooCommerce products — check the connected user's permissions.",
+                    type="info",
+                )
+            elif not products_data:
+                commerce_body = ui.Empty(message="No products found.")
+            else:
+                commerce_body = ui.DataTable(
+                    columns=[
+                        ui.DataColumn("name", "Product", sortable=True),
+                        ui.DataColumn("sku", "SKU", sortable=True),
+                        ui.DataColumn("price", "Price", sortable=True),
+                        ui.DataColumn("stock", "Stock", sortable=True),
+                        ui.DataColumn("quantity", "Quantity", sortable=True),
+                    ],
+                    rows=[{
+                        "name": item.get("name", ""),
+                        "sku": item.get("sku", ""),
+                        "price": item.get("price", ""),
+                        "stock": item.get("stock_status", ""),
+                        "quantity": item.get("stock_quantity") if item.get("stock_quantity") is not None else "—",
+                    } for item in products_data],
+                )
+        elif commerce_tab == "orders":
+            commerce_body = _render_content_table(orders_data, "orders")
+        else:
+            report_data = await _list("/wp-json/wc/v3/reports/sales", {"period": "month"})
+            if report_data is None:
+                commerce_body = ui.Alert(
+                    message="Store summary is unavailable, but orders and products can still be browsed.",
+                    type="info",
+                )
+            else:
+                report = report_data[0] if report_data else {}
+                currency = report.get("currency", "")
+                commerce_body = ui.Stack(gap=3, children=[
+                    ui.Stats(columns=4, children=[
+                        ui.Stat(label="Orders", value=str(report.get("total_orders", 0)), color="blue"),
+                        ui.Stat(label="Net sales", value=f"{report.get('net_sales', '')} {currency}".strip(), color="green"),
+                        ui.Stat(label="Average order", value=f"{report.get('average_sales', '')} {currency}".strip(), color="blue"),
+                        ui.Stat(label="Refunds", value=f"{report.get('total_refunds', '')} {currency}".strip(), color="yellow"),
+                    ]),
+                    ui.Text("WooCommerce summary for the current month. All commerce actions are read-only.", variant="caption"),
+                ])
+        active_content = ui.Stack(gap=3, children=[
+            ui.Stack(direction="h", gap=1, wrap=True, children=commerce_btns),
+            commerce_body,
         ])
 
     elif group_tab == "cpt" and cpt_meta:
