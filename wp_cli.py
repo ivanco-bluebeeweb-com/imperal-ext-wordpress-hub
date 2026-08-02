@@ -121,6 +121,27 @@ async def list_plugins(cred: dict) -> tuple[list | None, str | None]:
     return plugins, None
 
 
+async def purge_litespeed_cache(cred: dict, scope: str) -> tuple[str | None, str | None]:
+    """Purge the LiteSpeed Cache page cache through its own WP-CLI namespace.
+
+    Scoped to exactly one fixed command shape — no free-form namespace or
+    argument list reaches the shell here, unlike a generic WP-CLI runner.
+    Caller is responsible for confirming LiteSpeed Cache is the active plugin
+    before calling this (see list_plugins).
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    tail = "" if scope == "all" else f" {scope}"
+    command = f"wp litespeed-purge{tail} --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command)
+
+
 async def get_server_info(cred: dict) -> dict:
     """Run WP-CLI diagnostic commands and return results."""
     if not cred.get("key"):

@@ -5,6 +5,7 @@ from app import chat
 from models import (_NoParams, Site, ListContentParams, ListMediaParams,
                     Post, Page, MediaItem, SiteIdParams, SiteHealth, RefreshAllResult,
                     ListCommentsParams, ListCustomPostsParams, Comment, WPUser, Plugin,
+                    PurgeCacheParams, CacheActionResult,
                     ServerInfo, UpdateMediaAltParams, MediaAltResult)
 import wp_cli
 from wp_client import wp_get, wp_post, wp_error_message, wp_error_code, wp_title, now_iso
@@ -453,6 +454,75 @@ async def list_plugins(ctx, params: SiteIdParams) -> ActionResult:
     if updates:
         summary += f" — {updates} update(s) available"
     return ActionResult.success(sdl.EntityList[Plugin](items=items), summary=summary)
+
+
+@chat.function(
+    "purge_cache",
+    description=("Purge the site's page cache. Auto-detects an active cache plugin "
+                 "(currently LiteSpeed Cache) from the site's real, live plugin list — "
+                 "if none is found, reports that clearly instead of silently doing nothing. "
+                 "Requires SSH access configured with add_ssh."),
+    action_type="write",
+    data_model=CacheActionResult,
+    effects=["wp.purge_cache"],
+    event="wp-site-connector.purge_cache",
+)
+async def purge_cache(ctx, params: PurgeCacheParams) -> ActionResult:
+    """Purge the site's cache via `wp litespeed-purge` over SSH.
+
+    Detects LiteSpeed Cache from the site's own live plugin list rather than
+    assuming it is installed — a purge command for a cache plugin that is not
+    even active would silently do nothing, which is worse than refusing.
+    """
+    scope = (params.scope or "all").strip().lower()
+    if scope not in ("all", "front"):
+        return ActionResult.error(
+            f"Invalid scope '{params.scope}' — use 'all' or 'front'.", retryable=False
+        )
+
+    cred = await storage.get_ssh_cred(ctx, params.site_id)
+    if not cred:
+        return ActionResult.error(
+            "SSH is not configured for this site. Add SSH access first.", retryable=False
+        )
+
+    try:
+        rows, cli_error = await wp_cli.list_plugins(cred)
+    except Exception as error:
+        await ctx.log(f"purge_cache: {error}", level="error")
+        return ActionResult.error("Could not read the plugin list over SSH.", retryable=True)
+    if cli_error:
+        await ctx.log(f"purge_cache: rejected — could not read plugin list: {cli_error}", level="warning")
+        return ActionResult.error(f"Could not read the plugin list: {cli_error}", retryable=True)
+
+    active = {str(row.get("name", "")) for row in rows if row.get("status") == "active"}
+    if "litespeed-cache" not in active:
+        await ctx.log(
+            f"purge_cache: rejected — no known cache plugin active on site_id={params.site_id}",
+            level="info",
+        )
+        return ActionResult.error(
+            "No supported cache plugin (LiteSpeed Cache) is active on this site. "
+            "Call list_plugins to see what's installed.", retryable=False
+        )
+
+    try:
+        output, run_error = await wp_cli.purge_litespeed_cache(cred, scope)
+    except Exception as error:
+        await ctx.log(f"purge_cache: {error}", level="error")
+        return ActionResult.error("Could not purge the cache over SSH.", retryable=True)
+    if run_error:
+        await ctx.log(f"purge_cache: SSH/WP-CLI error — {run_error}", level="error")
+        return ActionResult.error(run_error, retryable=True)
+
+    await ctx.log(f"purge_cache: executed — scope={scope} site_id={params.site_id}", level="info")
+    return ActionResult.success(
+        CacheActionResult(
+            id=params.site_id, title="litespeed-cache purge", kind="wp_cache_action",
+            scope=scope, cache_plugin="litespeed-cache", output=(output or "").strip(),
+        ),
+        summary=f"Purged litespeed-cache cache ({scope}).",
+    )
 
 
 @chat.function(

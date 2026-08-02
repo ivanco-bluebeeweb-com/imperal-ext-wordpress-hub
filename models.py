@@ -477,6 +477,18 @@ class Plugin(sdl.Entity):
     update_available: str = ""
 
 
+class PurgeCacheParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    scope: str = Field(default="all", description="'all' (whole site cache) or 'front' (front page only)")
+
+
+class CacheActionResult(sdl.Entity):
+    """Result of a cache purge — which plugin ran it and what it printed."""
+    scope: str = ""
+    cache_plugin: str = ""
+    output: str = ""
+
+
 class Order(sdl.Entity):
     total: str = ""
     currency: str = ""

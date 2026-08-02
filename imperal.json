@@ -2585,6 +2585,136 @@
       "owner_chat_tool": "wp-site-connector"
     },
     {
+      "name": "purge_cache",
+      "description": "Purge the site's page cache. Auto-detects an active cache plugin (currently LiteSpeed Cache) from the site's real, live plugin list — if none is found, reports that clearly instead of silently doing nothing. Requires SSH access configured with add_ssh.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.purge_cache"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "scope": {
+            "default": "all",
+            "description": "'all' (whole site cache) or 'front' (front page only)",
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "PurgeCacheParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Result of a cache purge — which plugin ran it and what it printed.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "scope": {
+            "default": "",
+            "title": "Scope",
+            "type": "string"
+          },
+          "cache_plugin": {
+            "default": "",
+            "title": "Cache Plugin",
+            "type": "string"
+          },
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "CacheActionResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.purge_cache",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
       "name": "list_custom_posts",
       "description": "List items of a custom post type on a connected WordPress site. Use post_type= with the REST base slug (e.g. 'products', 'events', 'portfolio'). Check the site's panel to see available post types.",
       "action_type": "read",
