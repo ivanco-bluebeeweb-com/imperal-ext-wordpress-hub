@@ -96,11 +96,61 @@ async def _request(ctx, site_id, path, params=None, expected_type=list):
     return response.body, None
 
 
-def _list_query(params):
-    query = {"per_page": params.limit, "page": params.page, "orderby": "date", "order": "desc"}
+def _list_query(params, orderby="date"):
+    query = {"per_page": params.limit, "page": params.page, "orderby": orderby, "order": "desc"}
     if params.search:
         query["search"] = params.search.strip()
     return query
+
+
+def _summary_orders(orders):
+    """Calculate summary metrics from the REST order collection.
+
+    WooCommerce 10.x no longer accepts a custom period on the legacy
+    /reports/sales endpoint, while the orders collection continues to support
+    `after` and `before`. Reading the ordered records is more portable and
+    keeps this connector compatible with current WooCommerce releases.
+    """
+    completed = [order for order in orders if order.get("status") not in {"cancelled", "failed", "trash"}]
+    totals = [_decimal(order.get("total")) for order in completed]
+    gross_sales = sum((_decimal(item.get("subtotal")) for order in completed
+                       for item in (order.get("line_items") or [])), Decimal("0"))
+    refunds = sum((_decimal(order.get("total_refund")) for order in completed), Decimal("0"))
+    customer_ids = {order.get("customer_id") for order in completed if order.get("customer_id")}
+    return {
+        "orders": len(completed),
+        "gross_sales": gross_sales,
+        "net_sales": sum(totals, Decimal("0")),
+        "average_order_value": sum(totals, Decimal("0")) / len(totals) if totals else Decimal("0"),
+        "refunds": refunds,
+        "total_items": sum(int(item.get("quantity", 0) or 0) for order in completed
+                           for item in (order.get("line_items") or [])),
+        "customers": len(customer_ids),
+        "currency": next((str(order.get("currency", "")) for order in completed if order.get("currency")), ""),
+    }
+
+
+async def _all_orders(ctx, site_id, query):
+    """Read every page of a filtered order collection, up to WooCommerce's limit."""
+    items = []
+    page = 1
+    while True:
+        page_query = {**query, "per_page": 100, "page": page, "orderby": "date", "order": "desc"}
+        data, err = await _request(ctx, site_id, "/orders", page_query)
+        if err:
+            return None, err
+        items.extend(data)
+        if len(data) < 100:
+            return items, None
+        page += 1
+        if page > 100:
+            return None, ActionResult.error(
+                "This store has too many orders for an unbounded summary. Narrow the date range.",
+                retryable=False, code="WOOCOMMERCE_SUMMARY_RANGE_TOO_LARGE")
+
+
+def _money_decimal(value):
+    return format(value.quantize(Decimal("0.01")), "f")
 
 
 def _money(value):
@@ -290,7 +340,8 @@ async def get_product(ctx, params: WooObjectParams) -> ActionResult:
     action_type="read", data_model=sdl.EntityList[Customer])
 async def list_customers(ctx, params: ListCustomersParams) -> ActionResult:
     """List WooCommerce customers without postal addresses or phone numbers."""
-    data, err = await _request(ctx, params.site_id, "/customers", _list_query(params))
+    data, err = await _request(
+        ctx, params.site_id, "/customers", _list_query(params, orderby="registered_date"))
     if err:
         return err
     items = [_customer_entity(customer) for customer in data]
@@ -329,26 +380,24 @@ async def list_refunds(ctx, params: ListRefundsParams) -> ActionResult:
     description="Summarise WooCommerce orders, sales, refunds, items, and customers for an optional ISO-8601 date range.",
     action_type="read", data_model=StoreSummary)
 async def get_store_summary(ctx, params: StoreSummaryParams) -> ActionResult:
-    """Return WooCommerce sales, order, refund, item, and customer metrics for a period."""
-    query = {"period": "custom"}
+    """Return sales, order, refund, item, and customer metrics for a period."""
+    query = {}
     if params.after:
-        query["date_min"] = params.after.strip()
+        query["after"] = params.after.strip()
     if params.before:
-        query["date_max"] = params.before.strip()
-    data, err = await _request(ctx, params.site_id, "/reports/sales", query)
+        query["before"] = params.before.strip()
+    orders, err = await _all_orders(ctx, params.site_id, query)
     if err:
         return err
-    report = data[0] if data else {}
+    report = _summary_orders(orders)
     entity = StoreSummary(
         id=params.site_id, title="Store summary", kind="wc_store_summary",
         period_after=params.after or "", period_before=params.before or "",
-        currency=str(report.get("currency", "") or ""),
-        orders=int(report.get("total_orders", 0) or 0),
-        gross_sales=_money(report.get("gross_sales")),
-        net_sales=_money(report.get("net_sales")),
-        average_order_value=_money(report.get("average_sales")),
-        refunds=_money(report.get("total_refunds")),
-        total_items=int(report.get("total_items", 0) or 0),
-        customers=int(report.get("total_customers", 0) or 0),
+        currency=report["currency"], orders=report["orders"],
+        gross_sales=_money_decimal(report["gross_sales"]),
+        net_sales=_money_decimal(report["net_sales"]),
+        average_order_value=_money_decimal(report["average_order_value"]),
+        refunds=_money_decimal(report["refunds"]), total_items=report["total_items"],
+        customers=report["customers"],
     )
     return ActionResult.success(entity, summary=f"{entity.orders} order(s), net sales {entity.net_sales} {entity.currency}".strip())

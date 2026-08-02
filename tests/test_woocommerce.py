@@ -146,17 +146,19 @@ async def test_get_product_uses_numeric_path():
     assert result.status == "success" and result.data.title == "Mug"
 
 
-async def test_customers_omit_addresses_and_phone():
+async def test_customers_omit_addresses_phone_and_use_supported_sorting():
     ctx = await _ctx()
     ctx.http.mock_get(f"{BASE}/customers", [{
         "id": 3, "first_name": "Ada", "last_name": "Lovelace", "username": "ada",
         "email": "ada@example.com", "orders_count": 4, "total_spent": "500",
         "date_created": "2026-01-01", "billing": {"phone": "+100", "address_1": "Secret"},
     }], 200)
+    seen = _spy_get(ctx)
     result = await hw.list_customers(ctx, ListCustomersParams(site_id="shop-test"))
     dumped = result.data.items[0].model_dump()
     assert dumped["orders_count"] == 4 and dumped["total_spent"] == "500"
     assert "+100" not in str(dumped) and "Secret" not in str(dumped)
+    assert seen[-1][1]["orderby"] == "registered_date"
 
 
 async def test_coupons_and_refunds_map_business_context():
@@ -178,19 +180,25 @@ async def test_coupons_and_refunds_map_business_context():
     assert refund_result.data.items[0].reason == "Damaged"
 
 
-async def test_store_summary_uses_server_report_not_partial_order_page():
+async def test_store_summary_uses_filtered_orders_for_woocommerce_10_compatibility():
     ctx = await _ctx()
-    ctx.http.mock_get(f"{BASE}/reports/sales", [{
-        "total_orders": 30, "gross_sales": "3400", "net_sales": "3000",
-        "average_sales": "100", "total_refunds": "150", "total_items": 60,
-        "total_customers": 24, "currency": "USD",
-    }], 200)
+    ctx.http.mock_get(f"{BASE}/orders", [
+        _order(id=12, total="120.00", total_refund="20.00", customer_id=7),
+        _order(id=13, status="cancelled", total="40.00", customer_id=8),
+    ], 200)
     seen = _spy_get(ctx)
     result = await hw.get_store_summary(ctx, StoreSummaryParams(
         site_id="shop-test", after="2026-07-01", before="2026-07-31"))
-    assert result.data.orders == 30 and result.data.net_sales == "3000"
-    assert seen[-1][0].endswith("/reports/sales")
-    assert seen[-1][1] == {"period": "custom", "date_min": "2026-07-01", "date_max": "2026-07-31"}
+    assert result.data.orders == 1
+    assert result.data.gross_sales == "120.00"
+    assert result.data.net_sales == "120.00"
+    assert result.data.refunds == "20.00"
+    assert result.data.total_items == 3 and result.data.customers == 1
+    assert seen[-1][0].endswith("/orders")
+    assert seen[-1][1] == {
+        "after": "2026-07-01", "before": "2026-07-31",
+        "per_page": 100, "page": 1, "orderby": "date", "order": "desc",
+    }
 
 
 @pytest.mark.parametrize("status,body,code,retryable", [
