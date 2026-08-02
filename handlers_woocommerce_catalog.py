@@ -21,10 +21,12 @@ from models import (
     ApplyBulkProductChangeParams,
     ApplyBulkVariationChangeParams,
     ApplyCsvCatalogImportParams,
+    ApplyCsvVariationImportParams,
     ArchiveProductParams,
     BulkProductChangeParams,
     BulkVariationChangeParams,
     CsvCatalogImportParams,
+    CsvVariationImportParams,
     CreateProductCategoryParams,
     CreateProductParams,
     ListProductCategoriesParams,
@@ -322,6 +324,61 @@ def _parse_csv_catalog(csv_text):
     return parsed, None
 
 
+def _parse_csv_variations(csv_text):
+    try:
+        rows = list(csv.DictReader(io.StringIO(csv_text.lstrip("\ufeff"))))
+    except csv.Error:
+        return None, _validation_error("CSV could not be parsed. Use a comma-separated file with a header row.", code="WOOCOMMERCE_INVALID_CSV")
+    if not rows or not rows[0].keys():
+        return None, _validation_error("CSV must contain a header row and at least one data row.", code="WOOCOMMERCE_INVALID_CSV")
+    headers = {str(key or "").strip().lower() for key in rows[0].keys()}
+    allowed = {"parent_sku", "variation_sku", "regular_price", "sale_price", "stock_quantity", "stock_status"}
+    if not {"parent_sku", "variation_sku"} <= headers:
+        return None, _validation_error("CSV must include parent_sku and variation_sku columns.", code="WOOCOMMERCE_INVALID_CSV")
+    if not headers <= allowed:
+        return None, _validation_error(
+            "CSV supports only parent_sku, variation_sku, regular_price, sale_price, stock_quantity, and stock_status columns.",
+            code="WOOCOMMERCE_INVALID_CSV")
+    if len(rows) > 100:
+        return None, _validation_error("CSV may contain at most 100 data rows per run.", code="WOOCOMMERCE_CSV_LIMIT")
+
+    parsed, seen_pairs = [], set()
+    for row_number, row in enumerate(rows, start=2):
+        normalized = {(key or "").strip().lower(): (value or "").strip() for key, value in row.items()}
+        parent_sku, variation_sku = normalized.get("parent_sku", ""), normalized.get("variation_sku", "")
+        pair = (parent_sku.casefold(), variation_sku.casefold())
+        if not all(pair):
+            return None, _validation_error(f"CSV row {row_number} needs parent_sku and variation_sku.", code="WOOCOMMERCE_INVALID_CSV")
+        if pair in seen_pairs:
+            return None, _validation_error(
+                f"CSV contains duplicate parent_sku + variation_sku: {parent_sku} / {variation_sku}.",
+                code="WOOCOMMERCE_DUPLICATE_CSV_VARIATION")
+        seen_pairs.add(pair)
+        payload = {}
+        for field in ("regular_price", "sale_price"):
+            if normalized.get(field, ""):
+                value, err = _decimal_string(normalized[field], field)
+                if err:
+                    return None, _validation_error(f"CSV row {row_number}: {field} must be a non-negative decimal.", code="WOOCOMMERCE_INVALID_CSV")
+                payload[field] = value
+        if normalized.get("stock_quantity", ""):
+            try:
+                quantity = int(normalized["stock_quantity"])
+            except ValueError:
+                return None, _validation_error(f"CSV row {row_number}: stock_quantity must be a non-negative integer.", code="WOOCOMMERCE_INVALID_CSV")
+            if quantity < 0:
+                return None, _validation_error(f"CSV row {row_number}: stock_quantity must be a non-negative integer.", code="WOOCOMMERCE_INVALID_CSV")
+            payload.update(stock_quantity=quantity, manage_stock=True)
+        if normalized.get("stock_status", ""):
+            if normalized["stock_status"] not in _STOCK_STATUSES:
+                return None, _validation_error(f"CSV row {row_number}: invalid stock_status.", code="WOOCOMMERCE_INVALID_CSV")
+            payload["stock_status"] = normalized["stock_status"]
+        if not payload:
+            return None, _validation_error(f"CSV row {row_number} has no fields to update.", code="WOOCOMMERCE_INVALID_CSV")
+        parsed.append({"parent_sku": parent_sku, "variation_sku": variation_sku, "payload": payload})
+    return parsed, None
+
+
 async def _csv_catalog_targets(ctx, params):
     rows, err = _parse_csv_catalog(params.csv_text)
     if err:
@@ -342,6 +399,40 @@ async def _csv_catalog_targets(ctx, params):
 
 def _csv_state_token(matched):
     return _bulk_state_token([item["product"] for item in matched])
+
+
+async def _csv_variation_targets(ctx, params):
+    rows, err = _parse_csv_variations(params.csv_text)
+    if err:
+        return None, err
+    matched, missing = [], []
+    for row in rows:
+        parents, read_err = await _request(
+            ctx, params.site_id, "/products", {"sku": row["parent_sku"], "per_page": 2})
+        if read_err:
+            return None, read_err
+        parents = [item for item in parents if (
+            str(item.get("sku", "")).casefold() == row["parent_sku"].casefold()
+            and item.get("type") == "variable")]
+        if len(parents) != 1:
+            missing.append(f"{row['parent_sku']} / {row['variation_sku']}")
+            continue
+        parent = parents[0]
+        variations, read_err = await _request(
+            ctx, params.site_id, f"/products/{parent['id']}/variations",
+            {"sku": row["variation_sku"], "per_page": 2})
+        if read_err:
+            return None, read_err
+        exact = [item for item in variations if str(item.get("sku", "")).casefold() == row["variation_sku"].casefold()]
+        if len(exact) != 1:
+            missing.append(f"{row['parent_sku']} / {row['variation_sku']}")
+            continue
+        matched.append({"parent": parent, "variation": exact[0], "payload": row["payload"]})
+    return (rows, matched, missing), None
+
+
+def _csv_variation_state_token(matched):
+    return _bulk_variation_state_token([item["variation"] for item in matched])
 
 
 def _variation_state_token(variation):
@@ -702,6 +793,75 @@ async def apply_csv_catalog_import(ctx, params: ApplyCsvCatalogImportParams) -> 
             code="WOOCOMMERCE_CSV_ALL_FAILED")
     return ActionResult.success(
         entity, summary=f"Updated {len(updated_ids)} product(s); {len(failures)} skipped or failed",
+        refresh_panels=["center"])
+
+
+@chat.function(
+    "preview_csv_variation_import",
+    description="Preview a CSV import for WooCommerce variations matched strictly by parent_sku plus variation_sku. CSV columns: parent_sku, variation_sku and optional regular_price, sale_price, stock_quantity, or stock_status. Returns unmatched pairs and a state token; makes no writes.",
+    action_type="read", data_model=VariationBulkResult)
+async def preview_csv_variation_import(ctx, params: CsvVariationImportParams) -> ActionResult:
+    """Preview exact parent-SKU and variation-SKU updates without WooCommerce writes."""
+    target_data, err = await _csv_variation_targets(ctx, params)
+    if err:
+        return err
+    rows, matched, missing = target_data
+    details = [
+        f"#{item['parent']['id']}/#{item['variation']['id']} "
+        f"{item['parent'].get('sku')} / {item['variation'].get('sku')}: "
+        + ", ".join(f"{key} → {value}" for key, value in item["payload"].items())
+        for item in matched
+    ]
+    if missing:
+        details.append("Unmatched pair(s): " + ", ".join(missing))
+    entity = VariationBulkResult(
+        id=params.site_id, title="CSV variation import preview", kind="wc_variation_csv",
+        preview=True, state_token=_csv_variation_state_token(matched), requested=len(rows),
+        matched=len(matched), failed=len(missing), changes=details, failures=missing)
+    return ActionResult.success(
+        entity, summary=f"Preview: {len(matched)} matched; {len(missing)} pair(s) not found")
+
+
+@chat.function(
+    "apply_csv_variation_import",
+    description="Apply a previously previewed CSV import to strictly matched WooCommerce variations. Requires the exact state token and stops before all writes if any matched variation changed.",
+    action_type="destructive", data_model=VariationBulkResult,
+    effects=["wc.variation_csv_import"], event="wp-site-connector.apply_csv_variation_import")
+async def apply_csv_variation_import(ctx, params: ApplyCsvVariationImportParams) -> ActionResult:
+    """Apply reviewed variation CSV rows after a fresh all-target state check."""
+    target_data, err = await _csv_variation_targets(ctx, params)
+    if err:
+        return err
+    rows, matched, missing = target_data
+    if not matched:
+        return _validation_error(
+            "No CSV parent_sku + variation_sku pair matched; nothing was changed.",
+            code="WOOCOMMERCE_CSV_VARIATION_NO_MATCHES")
+    if _csv_variation_state_token(matched) != params.expected_state_token:
+        return _validation_error(
+            "One or more matched variations changed since preview. Run preview_csv_variation_import again.",
+            code="WOOCOMMERCE_CSV_VARIATION_STATE_CHANGED")
+
+    updated_ids, failures = [], list(missing)
+    for item in matched:
+        parent_id, variation = int(item["parent"]["id"]), item["variation"]
+        variation_id = int(variation["id"])
+        _, write_err = await _write(
+            ctx, params.site_id, f"/products/{parent_id}/variations/{variation_id}", item["payload"])
+        if write_err:
+            failures.append(f"#{parent_id}/#{variation_id}: {write_err.error or 'update failed'}")
+        else:
+            updated_ids.append(variation_id)
+    entity = VariationBulkResult(
+        id=params.site_id, title="CSV variation import result", kind="wc_variation_csv",
+        preview=False, requested=len(rows), matched=len(matched), updated=len(updated_ids),
+        failed=len(failures), updated_ids=updated_ids, failures=failures)
+    if not updated_ids:
+        return ActionResult.error(
+            "WooCommerce did not update any CSV-matched variations.", retryable=False,
+            code="WOOCOMMERCE_CSV_VARIATION_ALL_FAILED")
+    return ActionResult.success(
+        entity, summary=f"Updated {len(updated_ids)} variation(s); {len(failures)} skipped or failed",
         refresh_panels=["center"])
 
 

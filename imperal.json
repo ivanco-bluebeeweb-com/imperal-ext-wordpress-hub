@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.12",
   "app_id": "wp-site-connector",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "name": "WP Site Connector",
   "description": "Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
   "icon": "icon.svg",
@@ -6295,6 +6295,356 @@
         "x-sdl": "entity"
       },
       "event": "wp-site-connector.apply_csv_catalog_import",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "preview_csv_variation_import",
+      "description": "Preview a CSV import for WooCommerce variations matched strictly by parent_sku plus variation_sku. CSV columns: parent_sku, variation_sku and optional regular_price, sale_price, stock_quantity, or stock_status. Returns unmatched pairs and a state token; makes no writes.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "csv_text": {
+            "description": "CSV text with parent_sku, variation_sku and optional regular_price, sale_price, stock_quantity, stock_status columns; maximum 100 data rows",
+            "maxLength": 50000,
+            "minLength": 1,
+            "title": "Csv Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "csv_text"
+        ],
+        "title": "CsvVariationImportParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "failures": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failures",
+            "type": "array"
+          },
+          "product_id": {
+            "default": 0,
+            "title": "Product Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "VariationBulkResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "apply_csv_variation_import",
+      "description": "Apply a previously previewed CSV import to strictly matched WooCommerce variations. Requires the exact state token and stops before all writes if any matched variation changed.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wc.variation_csv_import"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "csv_text": {
+            "description": "CSV text with parent_sku, variation_sku and optional regular_price, sale_price, stock_quantity, stock_status columns; maximum 100 data rows",
+            "maxLength": 50000,
+            "minLength": 1,
+            "title": "Csv Text",
+            "type": "string"
+          },
+          "expected_state_token": {
+            "description": "Exact token returned by preview; execution stops before all writes if any matched variation changed",
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Expected State Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "csv_text",
+          "expected_state_token"
+        ],
+        "title": "ApplyCsvVariationImportParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "failures": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failures",
+            "type": "array"
+          },
+          "product_id": {
+            "default": 0,
+            "title": "Product Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "VariationBulkResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.apply_csv_variation_import",
       "background": false,
       "long_running": false,
       "scopes": [],
