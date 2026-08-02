@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.12",
   "app_id": "wp-site-connector",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "name": "WP Site Connector",
   "description": "Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
   "icon": "icon.svg",
@@ -8871,6 +8871,384 @@
         "x-sdl": "entity"
       },
       "event": "wp-site-connector.archive_coupon",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "preview_refund",
+      "description": "Preview a manual WooCommerce refund record without changing the order or contacting the payment gateway. Shows total, already-refunded, remaining, and requested amounts.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "order_id": {
+            "description": "Numeric WooCommerce order id",
+            "exclusiveMinimum": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "amount": {
+            "description": "Positive refund amount as a decimal string",
+            "title": "Amount",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "description": "Optional internal refund reason",
+            "maxLength": 1000,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "order_id",
+          "amount"
+        ],
+        "title": "PreviewRefundParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "order_id": {
+            "default": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "currency": {
+            "default": "",
+            "title": "Currency",
+            "type": "string"
+          },
+          "order_total": {
+            "default": "",
+            "title": "Order Total",
+            "type": "string"
+          },
+          "already_refunded": {
+            "default": "",
+            "title": "Already Refunded",
+            "type": "string"
+          },
+          "remaining_refundable": {
+            "default": "",
+            "title": "Remaining Refundable",
+            "type": "string"
+          },
+          "requested_amount": {
+            "default": "",
+            "title": "Requested Amount",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "gateway_refund": {
+            "default": false,
+            "title": "Gateway Refund",
+            "type": "boolean"
+          },
+          "restock_items": {
+            "default": false,
+            "title": "Restock Items",
+            "type": "boolean"
+          },
+          "idempotency_key": {
+            "default": "",
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "RefundOperation",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "create_manual_refund",
+      "description": "Record a previously previewed manual WooCommerce refund after explicit confirmation. This does NOT contact the payment gateway and does NOT restock items. Requires the exact remaining amount from preview and a unique idempotency key.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wc.refund_manual_record"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "order_id": {
+            "description": "Numeric WooCommerce order id",
+            "exclusiveMinimum": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "amount": {
+            "description": "Positive refund amount as a decimal string",
+            "title": "Amount",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "description": "Optional internal refund reason",
+            "maxLength": 1000,
+            "title": "Reason",
+            "type": "string"
+          },
+          "expected_remaining_amount": {
+            "description": "Exact refundable amount shown by preview; execution stops if it changed",
+            "title": "Expected Remaining Amount",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "description": "Unique caller-generated key preventing duplicate refund execution",
+            "maxLength": 100,
+            "minLength": 8,
+            "title": "Idempotency Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "order_id",
+          "amount",
+          "expected_remaining_amount",
+          "idempotency_key"
+        ],
+        "title": "CreateRefundParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "order_id": {
+            "default": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "currency": {
+            "default": "",
+            "title": "Currency",
+            "type": "string"
+          },
+          "order_total": {
+            "default": "",
+            "title": "Order Total",
+            "type": "string"
+          },
+          "already_refunded": {
+            "default": "",
+            "title": "Already Refunded",
+            "type": "string"
+          },
+          "remaining_refundable": {
+            "default": "",
+            "title": "Remaining Refundable",
+            "type": "string"
+          },
+          "requested_amount": {
+            "default": "",
+            "title": "Requested Amount",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "gateway_refund": {
+            "default": false,
+            "title": "Gateway Refund",
+            "type": "boolean"
+          },
+          "restock_items": {
+            "default": false,
+            "title": "Restock Items",
+            "type": "boolean"
+          },
+          "idempotency_key": {
+            "default": "",
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "RefundOperation",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.create_manual_refund",
       "background": false,
       "long_running": false,
       "scopes": [],

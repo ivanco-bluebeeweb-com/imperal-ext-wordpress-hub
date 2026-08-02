@@ -80,6 +80,22 @@ class StoreSummaryParams(BaseModel):
     before: str | None = Field(default=None, description="End of the reporting period as ISO-8601 date/time")
 
 
+class PreviewRefundParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    order_id: int = Field(gt=0, description="Numeric WooCommerce order id")
+    amount: str = Field(description="Positive refund amount as a decimal string")
+    reason: str = Field(default="", max_length=1000, description="Optional internal refund reason")
+
+
+class CreateRefundParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    order_id: int = Field(gt=0, description="Numeric WooCommerce order id")
+    amount: str = Field(description="Positive refund amount as a decimal string")
+    reason: str = Field(default="", max_length=1000, description="Optional internal refund reason")
+    expected_remaining_amount: str = Field(description="Exact refundable amount shown by preview; execution stops if it changed")
+    idempotency_key: str = Field(min_length=8, max_length=100, description="Unique caller-generated key preventing duplicate refund execution")
+
+
 class UpdateOrderStatusParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     order_id: int = Field(gt=0, description="Numeric WooCommerce order id")
@@ -448,6 +464,20 @@ class Refund(sdl.Entity):
     reason: str = ""
     date_created: str = ""
     refunded_by: int = 0
+
+
+class RefundOperation(sdl.Entity):
+    order_id: int = 0
+    currency: str = ""
+    order_total: str = ""
+    already_refunded: str = ""
+    remaining_refundable: str = ""
+    requested_amount: str = ""
+    reason: str = ""
+    gateway_refund: bool = False
+    restock_items: bool = False
+    idempotency_key: str = ""
+    preview: bool = True
 
 
 class StoreSummary(sdl.Entity):
