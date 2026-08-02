@@ -212,6 +212,7 @@ def _product_entity(product):
         stock_quantity=product.get("stock_quantity"),
         catalog_visibility=str(product.get("catalog_visibility", "") or ""),
         categories=[str(c.get("name", "")) for c in (product.get("categories") or []) if c.get("name")],
+        category_ids=[int(c.get("id")) for c in (product.get("categories") or []) if c.get("id")],
         images=[str(i.get("src", "")) for i in (product.get("images") or []) if i.get("src")],
         attributes=[str(a.get("name", "")) for a in (product.get("attributes") or []) if a.get("name")],
         variations=[int(v) for v in (product.get("variations") or [])],

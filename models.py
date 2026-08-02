@@ -80,6 +80,68 @@ class StoreSummaryParams(BaseModel):
     before: str | None = Field(default=None, description="End of the reporting period as ISO-8601 date/time")
 
 
+class CreateProductParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    name: str = Field(min_length=1, max_length=200, description="Product name")
+    product_type: str = Field(default="simple", description="Product type: simple, virtual, or downloadable")
+    status: str = Field(default="draft", description="Initial status: draft, publish, pending, or private")
+    sku: str | None = Field(default=None, max_length=100, description="Optional unique SKU")
+    regular_price: str | None = Field(default=None, description="Optional non-negative regular price as a decimal string")
+    sale_price: str | None = Field(default=None, description="Optional non-negative sale price as a decimal string")
+    description: str | None = Field(default=None, description="Optional full product description")
+    short_description: str | None = Field(default=None, description="Optional short product description")
+    manage_stock: bool = Field(default=False, description="Track an exact stock quantity")
+    stock_quantity: int | None = Field(default=None, ge=0, description="Stock quantity; enables stock management when set")
+    stock_status: str = Field(default="instock", description="Stock state: instock, outofstock, or onbackorder")
+    category_ids: list[int] = Field(default_factory=list, max_length=50, description="Existing WooCommerce product category ids")
+    image_urls: list[str] = Field(default_factory=list, max_length=20, description="Public HTTPS image URLs to attach")
+
+
+class UpdateProductParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    product_id: int = Field(gt=0, description="Numeric WooCommerce product id")
+    name: str | None = Field(default=None, min_length=1, max_length=200, description="New product name; omit to keep it")
+    status: str | None = Field(default=None, description="New status: draft, publish, pending, or private")
+    sku: str | None = Field(default=None, max_length=100, description="New SKU; empty string clears it")
+    regular_price: str | None = Field(default=None, description="New non-negative regular price; empty string clears it")
+    sale_price: str | None = Field(default=None, description="New non-negative sale price; empty string clears it")
+    description: str | None = Field(default=None, description="New full description; empty string clears it")
+    short_description: str | None = Field(default=None, description="New short description; empty string clears it")
+    manage_stock: bool | None = Field(default=None, description="Enable or disable exact stock tracking")
+    stock_quantity: int | None = Field(default=None, ge=0, description="New stock quantity; also enables stock tracking")
+    stock_status: str | None = Field(default=None, description="New stock state: instock, outofstock, or onbackorder")
+    category_ids: list[int] | None = Field(default=None, max_length=50, description="Replace categories with these existing category ids")
+    image_urls: list[str] | None = Field(default=None, max_length=20, description="Replace images with these public HTTPS URLs")
+
+
+class ArchiveProductParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    product_id: int = Field(gt=0, description="Numeric WooCommerce product id to move to trash")
+
+
+class ListProductCategoriesParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    limit: int = Field(default=50, ge=1, le=100, description="Maximum categories to return")
+    page: int = Field(default=1, ge=1, description="Result page, starting at 1")
+    search: str | None = Field(default=None, description="Optional category name search")
+
+
+class CreateProductCategoryParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    name: str = Field(min_length=1, max_length=200, description="Category name")
+    parent_id: int = Field(default=0, ge=0, description="Optional parent category id; 0 creates a top-level category")
+    description: str = Field(default="", description="Optional category description")
+
+
+class BulkProductChangeParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    product_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit product ids; 1-100, never inferred")
+    status: str | None = Field(default=None, description="Set status on every product: draft, publish, pending, or private")
+    regular_price_percent: str | None = Field(default=None, description="Percentage change to regular price, e.g. 10 or -15")
+    stock_status: str | None = Field(default=None, description="Set stock state on every product")
+    category_id_to_add: int | None = Field(default=None, gt=0, description="Add one existing category without removing current categories")
+
+
 class MediaAltItem(BaseModel):
     """One alt-text assignment: which library item, and what its alt should say."""
     media_id: int = Field(description="WordPress media library attachment id")
@@ -235,9 +297,26 @@ class Product(sdl.Entity):
     stock_quantity: int | None = None
     catalog_visibility: str = ""
     categories: list[str] = Field(default_factory=list)
+    category_ids: list[int] = Field(default_factory=list)
     images: list[str] = Field(default_factory=list)
     attributes: list[str] = Field(default_factory=list)
     variations: list[int] = Field(default_factory=list)
+
+
+class ProductCategory(sdl.Entity):
+    parent_id: int = 0
+    product_count: int = 0
+
+
+class ProductBulkResult(sdl.Entity):
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failures: list[str] = Field(default_factory=list)
 
 
 class Customer(sdl.Entity):

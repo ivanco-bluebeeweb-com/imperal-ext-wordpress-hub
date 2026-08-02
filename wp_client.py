@@ -67,6 +67,18 @@ async def wp_post(ctx, base_url, path, *, username, app_password, json=None, par
     return await ctx.http.post(f"{base_url}{path}", headers=headers, json=json, params=params)
 
 
+async def wp_request(ctx, method, base_url, path, *, username, app_password, json=None, params=None):
+    """Send an authenticated WordPress REST request using a supported HTTP verb."""
+    verb = method.lower().strip()
+    if verb not in {"post", "put", "delete"}:
+        raise ValueError(f"Unsupported WordPress HTTP method: {method}")
+    sender = getattr(ctx.http, verb)
+    kwargs = {"headers": basic_auth_header(username, app_password), "params": params}
+    if verb != "delete":
+        kwargs["json"] = json
+    return await sender(f"{base_url}{path}", **kwargs)
+
+
 def now_iso() -> str:
     """Current UTC timestamp as ISO 8601 string."""
     return datetime.now(timezone.utc).isoformat()
