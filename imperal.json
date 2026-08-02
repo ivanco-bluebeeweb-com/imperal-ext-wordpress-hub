@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.12",
   "app_id": "wp-site-connector",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "name": "WP Site Connector",
   "description": "Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
   "icon": "icon.svg",
@@ -9249,6 +9249,374 @@
         "x-sdl": "entity"
       },
       "event": "wp-site-connector.create_manual_refund",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "preview_order_line_changes",
+      "description": "Preview quantity changes for explicit existing line items on one unpaid editable WooCommerce order. Makes no changes and returns a state token required by apply.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "$defs": {
+          "OrderLineQuantityChange": {
+            "properties": {
+              "line_item_id": {
+                "description": "Existing WooCommerce order line item id",
+                "exclusiveMinimum": 0,
+                "title": "Line Item Id",
+                "type": "integer"
+              },
+              "quantity": {
+                "description": "New quantity; line removal is intentionally unsupported",
+                "maximum": 10000,
+                "minimum": 1,
+                "title": "Quantity",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "line_item_id",
+              "quantity"
+            ],
+            "title": "OrderLineQuantityChange",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "order_id": {
+            "description": "Numeric WooCommerce order id",
+            "exclusiveMinimum": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "changes": {
+            "description": "New quantities for explicit existing line item ids",
+            "items": {
+              "$ref": "#/$defs/OrderLineQuantityChange"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Changes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "site_id",
+          "order_id",
+          "changes"
+        ],
+        "title": "PreviewOrderLineChangesParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "default": "",
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "order_id": {
+            "default": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "currency": {
+            "default": "",
+            "title": "Currency",
+            "type": "string"
+          },
+          "current_total": {
+            "default": "",
+            "title": "Current Total",
+            "type": "string"
+          },
+          "expected_total": {
+            "default": "",
+            "title": "Expected Total",
+            "type": "string"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "OrderLineChangeResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "apply_order_line_changes",
+      "description": "Apply previously previewed quantity changes to existing line items on one unpaid editable WooCommerce order. Requires explicit confirmation and the exact state token from preview.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wc.order_line_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "$defs": {
+          "OrderLineQuantityChange": {
+            "properties": {
+              "line_item_id": {
+                "description": "Existing WooCommerce order line item id",
+                "exclusiveMinimum": 0,
+                "title": "Line Item Id",
+                "type": "integer"
+              },
+              "quantity": {
+                "description": "New quantity; line removal is intentionally unsupported",
+                "maximum": 10000,
+                "minimum": 1,
+                "title": "Quantity",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "line_item_id",
+              "quantity"
+            ],
+            "title": "OrderLineQuantityChange",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "order_id": {
+            "description": "Numeric WooCommerce order id",
+            "exclusiveMinimum": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "changes": {
+            "description": "New quantities for explicit existing line item ids",
+            "items": {
+              "$ref": "#/$defs/OrderLineQuantityChange"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Changes",
+            "type": "array"
+          },
+          "expected_state_token": {
+            "description": "Exact state token returned by preview; execution stops if the order changed",
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Expected State Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "order_id",
+          "changes",
+          "expected_state_token"
+        ],
+        "title": "ApplyOrderLineChangesParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "default": "",
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "order_id": {
+            "default": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "currency": {
+            "default": "",
+            "title": "Currency",
+            "type": "string"
+          },
+          "current_total": {
+            "default": "",
+            "title": "Current Total",
+            "type": "string"
+          },
+          "expected_total": {
+            "default": "",
+            "title": "Expected Total",
+            "type": "string"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "OrderLineChangeResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.apply_order_line_changes",
       "background": false,
       "long_running": false,
       "scopes": [],

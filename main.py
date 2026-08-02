@@ -12,8 +12,8 @@ if _EXT_DIR not in sys.path:
 # (the validator may run multiple extensions in the same process).
 _LOCAL = ("app", "handlers_connect", "handlers_read", "handlers_woocommerce",
           "handlers_woocommerce_catalog", "handlers_woocommerce_operations",
-          "handlers_woocommerce_finance", "handlers_seo", "skeleton", "panels",
-          "models", "storage", "wp_client")
+          "handlers_woocommerce_finance", "handlers_woocommerce_order_edit",
+          "handlers_seo", "skeleton", "panels", "models", "storage", "wp_client")
 for _mod in _LOCAL:
     sys.modules.pop(_mod, None)
 
@@ -24,6 +24,7 @@ import handlers_woocommerce  # noqa: E402,F401
 import handlers_woocommerce_catalog  # noqa: E402,F401
 import handlers_woocommerce_operations  # noqa: E402,F401
 import handlers_woocommerce_finance  # noqa: E402,F401
+import handlers_woocommerce_order_edit  # noqa: E402,F401
 import handlers_seo  # noqa: E402,F401
 import skeleton  # noqa: E402,F401
 import panels  # noqa: E402,F401

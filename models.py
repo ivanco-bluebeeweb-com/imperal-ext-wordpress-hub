@@ -109,6 +109,21 @@ class AddOrderNoteParams(BaseModel):
     customer_visible: bool = Field(default=False, description="True makes the note visible to the customer and may trigger a WooCommerce email")
 
 
+class OrderLineQuantityChange(BaseModel):
+    line_item_id: int = Field(gt=0, description="Existing WooCommerce order line item id")
+    quantity: int = Field(ge=1, le=10000, description="New quantity; line removal is intentionally unsupported")
+
+
+class PreviewOrderLineChangesParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    order_id: int = Field(gt=0, description="Numeric WooCommerce order id")
+    changes: list[OrderLineQuantityChange] = Field(min_length=1, max_length=100, description="New quantities for explicit existing line item ids")
+
+
+class ApplyOrderLineChangesParams(PreviewOrderLineChangesParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact state token returned by preview; execution stops if the order changed")
+
+
 class CustomerOrdersParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     customer_id: int = Field(gt=0, description="Numeric WooCommerce customer id")
@@ -456,6 +471,17 @@ class OrderNote(sdl.Entity):
     customer_visible: bool = False
     date_created: str = ""
     author: str = ""
+
+
+class OrderLineChangeResult(sdl.Entity):
+    order_id: int = 0
+    preview: bool = True
+    status: str = ""
+    currency: str = ""
+    current_total: str = ""
+    expected_total: str = ""
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
 
 
 class Refund(sdl.Entity):
