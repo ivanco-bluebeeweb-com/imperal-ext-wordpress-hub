@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.12",
   "app_id": "wp-site-connector",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "name": "WP Site Connector",
   "description": "Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
   "icon": "icon.svg",
@@ -14615,6 +14615,591 @@
         "x-sdl": "entity-list"
       },
       "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "create_post",
+      "description": "Create a WordPress post or page with Gutenberg content, optional category, Polylang language, and Rank Math SEO fields. Content is given as an ordered list of {type, text, level} blocks — 'heading' or 'paragraph' — which this tool renders into Gutenberg block markup. Defaults to a draft.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.post_create"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "$defs": {
+          "PostBlockInput": {
+            "description": "One content block, already decided by the caller — no document parsing here.\n\ntype == \"heading\" renders <h{level}>; anything else renders a paragraph.",
+            "properties": {
+              "type": {
+                "default": "paragraph",
+                "description": "'paragraph' or 'heading'",
+                "title": "Type",
+                "type": "string"
+              },
+              "text": {
+                "description": "Block text",
+                "title": "Text",
+                "type": "string"
+              },
+              "level": {
+                "default": 2,
+                "description": "Heading level, used only when type is 'heading'",
+                "maximum": 6,
+                "minimum": 1,
+                "title": "Level",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "title": "PostBlockInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "title": {
+            "description": "Post/page title",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "post_type": {
+            "default": "post",
+            "description": "'post', 'page', or a custom post type's slug",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "description": "Initial status: draft, publish, pending, private, or future",
+            "title": "Status",
+            "type": "string"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional URL slug; WordPress derives one from the title if omitted",
+            "title": "Slug"
+          },
+          "blocks": {
+            "description": "Content as an ordered list of {type, text, level} blocks, rendered into Gutenberg block markup",
+            "items": {
+              "$ref": "#/$defs/PostBlockInput"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional excerpt",
+            "title": "Excerpt"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional category name (posts only); resolved to an existing term, never created",
+            "title": "Category"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional publish/schedule date as YYYY-MM-DD or full ISO 8601; required when status='future'",
+            "title": "Date"
+          },
+          "lang": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Polylang language code, e.g. 'en', 'ro' — requires Polylang on the site",
+            "title": "Lang"
+          },
+          "meta_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Rank Math SEO title, set in the same call",
+            "title": "Meta Title"
+          },
+          "meta_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Rank Math SEO meta description, set in the same call",
+            "title": "Meta Description"
+          },
+          "focus_keyword": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Rank Math focus keyword, set in the same call",
+            "title": "Focus Keyword"
+          }
+        },
+        "required": [
+          "site_id",
+          "title"
+        ],
+        "title": "CreatePostParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of create_post/update_post: the WordPress post/page that was written.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "link": {
+            "default": "",
+            "title": "Link",
+            "type": "string"
+          },
+          "post_type": {
+            "default": "post",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "slug": {
+            "default": "",
+            "title": "Slug",
+            "type": "string"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date"
+          },
+          "category_resolved": {
+            "default": true,
+            "title": "Category Resolved",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PostResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.create_post",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "update_post",
+      "description": "Update selected fields of an existing WordPress post or page: title, status, slug, content (as {type, text, level} blocks), excerpt, category, or date. Omitted fields are left unchanged.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.post_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "$defs": {
+          "PostBlockInput": {
+            "description": "One content block, already decided by the caller — no document parsing here.\n\ntype == \"heading\" renders <h{level}>; anything else renders a paragraph.",
+            "properties": {
+              "type": {
+                "default": "paragraph",
+                "description": "'paragraph' or 'heading'",
+                "title": "Type",
+                "type": "string"
+              },
+              "text": {
+                "description": "Block text",
+                "title": "Text",
+                "type": "string"
+              },
+              "level": {
+                "default": 2,
+                "description": "Heading level, used only when type is 'heading'",
+                "maximum": 6,
+                "minimum": 1,
+                "title": "Level",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "title": "PostBlockInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "description": "Numeric id of the post or page to update",
+            "exclusiveMinimum": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "post",
+            "description": "'post', 'page', or a custom post type's slug — must match the item being updated",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New title; omit to keep it",
+            "title": "Title"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New status: draft, publish, pending, private, or future",
+            "title": "Status"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New URL slug; omit to keep it",
+            "title": "Slug"
+          },
+          "blocks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/PostBlockInput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Replace the content with these ordered {type, text, level} blocks; omit to keep existing content",
+            "title": "Blocks"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New excerpt; omit to keep it",
+            "title": "Excerpt"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New category name (posts only); resolved to an existing term, never created",
+            "title": "Category"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New publish/schedule date as YYYY-MM-DD or full ISO 8601",
+            "title": "Date"
+          }
+        },
+        "required": [
+          "site_id",
+          "post_id"
+        ],
+        "title": "UpdatePostParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of create_post/update_post: the WordPress post/page that was written.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "link": {
+            "default": "",
+            "title": "Link",
+            "type": "string"
+          },
+          "post_type": {
+            "default": "post",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "slug": {
+            "default": "",
+            "title": "Slug",
+            "type": "string"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date"
+          },
+          "category_resolved": {
+            "default": true,
+            "title": "Category Resolved",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PostResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.update_post",
       "background": false,
       "long_running": false,
       "scopes": [],

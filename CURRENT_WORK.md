@@ -5,6 +5,66 @@
 
 ---
 
+## 2026-08-03 — Post/page publishing ported from WP Publisher (v1.6.0)
+
+**Status:** ✅ implemented and verified (262/262 tests pass, `imperal validate` clean: 0 errors, 0 warnings)
+
+**Scope:** Migrate ONLY the WordPress-writing capability of the separate `WP Publisher`
+app (draft/post creation with Gutenberg content, category, Polylang language) into this
+connector. Explicitly OUT of scope, by request: anything about interpreting the input
+document — `docx_parser.py`, `parse_article`, `confirm_mapping`, and the heading-heuristics
+`rules.py` were deliberately NOT ported. Content now arrives as explicit, caller-decided
+`{type, text, level}` blocks; nothing in this app parses a document.
+
+**What was done:**
+- New `gutenberg.py` — `blocks_to_content()` renders an ordered list of `{type, text,
+  level}` blocks into Gutenberg block markup (`heading` → `<h{level}>`, anything else →
+  paragraph). Pure and document-agnostic, ported from WP Publisher's block renderer
+  without any of the docx-parsing context it used to run inside.
+- `wp_client.py`: added `find_category_id` (case-insensitive term lookup, optionally
+  Polylang-scoped via `lang`), `create_post`, and `update_post` — thin REST wrappers
+  around `/wp-json/wp/v2/<base>` (posts/pages/custom types), also ported from WP
+  Publisher's `wp_client.create_draft` but generalised to create OR update and to any
+  post type, not just posts.
+- New `handlers_posts.py` with 2 chat functions:
+  - `create_post` — title, post_type (post/page/CPT), status (draft/publish/pending/
+    private/future — future requires `date`), slug, blocks, excerpt, category (resolved
+    by name, never created), date, lang (Polylang). Category-not-found is a soft warning,
+    not a failure — mirrors WP Publisher's own fallback behaviour.
+  - `update_post` — same fields, all optional; refuses with `POST_UPDATE_NO_FIELDS` if
+    nothing was given; empty string on `category` clears it.
+  - Both accept optional `meta_title` / `meta_description` / `focus_keyword` and delegate
+    the actual SEO write to the EXISTING `handlers_seo.update_seo_meta` (bridge/core-meta
+    tiers) instead of re-adding WP Publisher's own bridge-only Rank Math write path — one
+    SEO write path in this app, not two. A failed SEO write degrades to a warning in the
+    summary; the post itself is not rolled back.
+- New models in `models.py`: `PostBlockInput`, `CreatePostParams`, `UpdatePostParams`,
+  `PostResult` (SDL entity: id, title, kind, url=link, status, post_type, category_resolved,
+  warnings).
+- Registered `handlers_posts` in `main.py`'s `_LOCAL` tuple and import list.
+- Added `tests/test_posts.py` (13 new tests): happy path block rendering, category
+  resolution by name, category-not-found warning, page vs post REST base, `future` status
+  requiring a date, SEO fields delegated to `update_seo_meta`, SEO failure surfaced as a
+  warning not an error, HTTP failure mapping, missing site, update with partial fields,
+  clearing category with `""`, update re-rendering blocks into fresh content, update with
+  no fields refused.
+- Bumped `app.py` / `pyproject.toml` to v1.6.0; updated `description` and the project
+  structure section of `CLAUDE.md`. `imperal build` / `imperal validate`: 73 functions
+  (was 71), 0 errors, 0 warnings, same pre-existing `on_install` info note.
+- Full suite: **262 passed** (was 249 before this session).
+
+**Not done / not in scope:**
+- The `WP Publisher` app itself was left untouched — this was a one-way port of
+  capability, not a decommission. Whether to deprecate/retire WP Publisher now that its
+  posting half has a home here is a separate decision, not made in this session.
+- No live WordPress round-trip smoke test yet — only `MockContext` tests. The bridge
+  plugins this module relies on for SEO (`imperal-seo-bridge`) already exist and are
+  presumably live on connected sites; `create_post`/`update_post` themselves need no new
+  bridge plugin (stock `wp/v2/<base>` REST + Application Password is enough), but a real
+  site was not exercised in this session.
+
+---
+
 ## 2026-08-03 — Elementor/Bricks builder point-editing (v1.4.0)
 
 **Status:** ✅ implemented and verified (246/246 tests pass, `imperal validate` clean: 0 errors, 0 warnings)
@@ -49,10 +109,14 @@
   pass (missing `event=` / `effects=` on `update_builder_field`), fixed, then
   re-validated clean (0 errors, 0 warnings, 1 info about no `on_install` hook
   — pre-existing, not new).
-- Not yet done: git commit/push and deploy to the Imperal registry (next
-  step); no live WordPress site with Elementor/Bricks installed was used to
-  smoke-test the actual bridge plugin end-to-end — only the offline PHP
-  harness and Python `MockContext` tests. A real install/activation +
+- Committed and pushed to `origin/main` (`a1ede8d8`). Deployed to the
+  Imperal registry: 4 tools synced, icon/manifest/panels synced, status
+  `warning` (19/21 checks — same non-blocking pattern seen on prior releases
+  of this connector; not investigated further since it hasn't blocked any
+  previous release either).
+- Still not done: no live WordPress site with Elementor/Bricks installed was
+  used to smoke-test the actual bridge plugin end-to-end — only the offline
+  PHP harness and Python `MockContext` tests. A real install/activation +
   live-site round trip is recommended before relying on this in production.
 
 ---

@@ -805,3 +805,57 @@ class SeoMeta(sdl.Entity):
     rank_math_version: str = ""
     post_types: list[str] = Field(default_factory=list)
     taxonomies: list[str] = Field(default_factory=list)
+
+
+# ─────────── post/page publishing ───────────
+
+class PostBlockInput(BaseModel):
+    """One content block, already decided by the caller — no document parsing here.
+
+    type == "heading" renders <h{level}>; anything else renders a paragraph.
+    """
+    type: str = Field(default="paragraph", description="'paragraph' or 'heading'")
+    text: str = Field(description="Block text")
+    level: int = Field(default=2, ge=1, le=6, description="Heading level, used only when type is 'heading'")
+
+
+class CreatePostParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    title: str = Field(min_length=1, max_length=300, description="Post/page title")
+    post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug")
+    status: str = Field(default="draft", description="Initial status: draft, publish, pending, private, or future")
+    slug: str | None = Field(default=None, description="Optional URL slug; WordPress derives one from the title if omitted")
+    blocks: list[PostBlockInput] = Field(
+        default_factory=list,
+        description="Content as an ordered list of {type, text, level} blocks, rendered into Gutenberg block markup")
+    excerpt: str | None = Field(default=None, description="Optional excerpt")
+    category: str | None = Field(default=None, description="Optional category name (posts only); resolved to an existing term, never created")
+    date: str | None = Field(default=None, description="Optional publish/schedule date as YYYY-MM-DD or full ISO 8601; required when status='future'")
+    lang: str | None = Field(default=None, description="Optional Polylang language code, e.g. 'en', 'ro' — requires Polylang on the site")
+    meta_title: str | None = Field(default=None, description="Optional Rank Math SEO title, set in the same call")
+    meta_description: str | None = Field(default=None, description="Optional Rank Math SEO meta description, set in the same call")
+    focus_keyword: str | None = Field(default=None, description="Optional Rank Math focus keyword, set in the same call")
+
+
+class UpdatePostParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(gt=0, description="Numeric id of the post or page to update")
+    post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug — must match the item being updated")
+    title: str | None = Field(default=None, min_length=1, max_length=300, description="New title; omit to keep it")
+    status: str | None = Field(default=None, description="New status: draft, publish, pending, private, or future")
+    slug: str | None = Field(default=None, description="New URL slug; omit to keep it")
+    blocks: list[PostBlockInput] | None = Field(
+        default=None,
+        description="Replace the content with these ordered {type, text, level} blocks; omit to keep existing content")
+    excerpt: str | None = Field(default=None, description="New excerpt; omit to keep it")
+    category: str | None = Field(default=None, description="New category name (posts only); resolved to an existing term, never created")
+    date: str | None = Field(default=None, description="New publish/schedule date as YYYY-MM-DD or full ISO 8601")
+
+
+class PostResult(sdl.Entity):
+    """Outcome of create_post/update_post: the WordPress post/page that was written."""
+    link: str = ""
+    post_type: str = "post"
+    slug: str = ""
+    date: str | None = None
+    category_resolved: bool = True

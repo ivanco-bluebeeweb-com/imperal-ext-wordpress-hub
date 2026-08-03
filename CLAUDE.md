@@ -38,10 +38,16 @@ Apps/WP Site Connector/
 ├── handlers_read.py        ← list_sites, list_posts, list_pages, list_media, get_site_health,
 │                               list_comments, list_scheduled, list_users, list_orders,
 │                               list_custom_posts, get_server_info
+├── handlers_seo.py         ← get/update_seo_meta, get/update_term_seo_meta, check_seo_support (Rank Math)
+├── handlers_builders.py    ← check_builder_support, get_builder_content, update_builder_field (Elementor/Bricks)
+├── handlers_posts.py       ← create_post, update_post — Gutenberg content, category, Polylang lang;
+│                               SEO fields delegate to handlers_seo.update_seo_meta (ported from WP Publisher;
+│                               document parsing/understanding was NOT ported — content arrives as explicit blocks)
+├── gutenberg.py            ← blocks_to_content: {type,text,level} blocks -> Gutenberg block markup
 ├── panels.py               ← dashboard panel (sites list + content detail + connection form)
 ├── skeleton.py             ← ambient sites count probe
 ├── models.py               ← Pydantic param models + SDL entities
-├── wp_client.py            ← WP REST helper (auth, error mapping, timeouts)
+├── wp_client.py            ← WP REST helper (auth, error mapping, timeouts, find_category_id, create/update_post)
 ├── storage.py              ← ctx.store wrappers
 ├── wp_cli.py               ← SSH + WP-CLI helpers for get_server_info
 ├── icon.svg                ← app icon

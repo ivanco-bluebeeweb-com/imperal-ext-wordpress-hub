@@ -90,3 +90,66 @@ def wp_title(item: dict) -> str:
     if isinstance(t, dict):
         return t.get("rendered") or str(item.get("id", "")) or ""
     return t or str(item.get("id", "")) or ""
+
+
+async def find_category_id(ctx, base_url: str, username: str, app_password: str,
+                            name: str, lang: str | None = None) -> int | None:
+    """Resolve a category name to its term id (case-insensitive exact match).
+
+    Unreachable site / network errors are treated the same as "not found" —
+    the caller falls back to creating/updating the post without a category
+    rather than failing the whole write over an optional lookup.
+    """
+    params = {"search": name, "per_page": 100}
+    if lang:
+        params["lang"] = lang
+    try:
+        resp = await wp_get(ctx, base_url, "/wp-json/wp/v2/categories",
+                            username=username, app_password=app_password, params=params)
+    except Exception:
+        return None
+    if resp.status_code >= 400 or not isinstance(resp.body, list):
+        return None
+    wanted = name.strip().lower()
+    for term in resp.body:
+        if str(term.get("name", "")).strip().lower() == wanted:
+            return term.get("id")
+    return None
+
+
+async def create_post(ctx, base_url: str, username: str, app_password: str, *,
+                      post_type: str = "posts", title: str, content: str,
+                      status: str = "draft", slug: str | None = None,
+                      category_id: int | None = None, lang: str | None = None,
+                      date: str | None = None, excerpt: str | None = None):
+    """Create a WordPress post/page. Returns the raw HTTPResponse.
+
+    ``post_type`` is the REST base ('posts', 'pages', or a custom type's own
+    base) — categories only apply to types that support them; passing
+    category_id for a type without taxonomy support is silently ignored by
+    WordPress itself, not by this helper.
+    """
+    payload: dict = {"title": title, "content": content, "status": status}
+    if slug:
+        payload["slug"] = slug
+    if excerpt is not None:
+        payload["excerpt"] = excerpt
+    if category_id:
+        payload["categories"] = [category_id]
+    if date:
+        payload["date"] = date if "T" in date else f"{date}T10:00:00"
+    path = f"/wp-json/wp/v2/{post_type}"
+    params = {"lang": lang} if lang else None  # Polylang reads language from the query string on create
+    return await wp_post(ctx, base_url, path, username=username, app_password=app_password,
+                         json=payload, params=params)
+
+
+async def update_post(ctx, base_url: str, username: str, app_password: str, *,
+                      post_id: int, post_type: str = "posts", **fields):
+    """Update selected fields of an existing post/page. Returns the raw HTTPResponse.
+
+    Only keys present in ``fields`` are sent — WordPress leaves everything
+    else untouched, so omitted fields are never clobbered.
+    """
+    path = f"/wp-json/wp/v2/{post_type}/{post_id}"
+    return await wp_post(ctx, base_url, path, username=username, app_password=app_password, json=fields)
