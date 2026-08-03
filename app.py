@@ -2,7 +2,7 @@ from imperal_sdk import Extension, ChatExtension
 
 ext = Extension(
     "wp-site-connector",
-    version="1.4.0",
+    version="1.5.0",
     display_name="WP Site Connector",
     description="Connect WordPress sites; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
     icon="icon.svg",

@@ -32,13 +32,14 @@ from imperal_sdk import ActionResult, sdl
 from app import chat
 from models import (GetBuilderContentParams, UpdateBuilderFieldParams,
                     BuilderContent, BuilderElement, BuilderFieldUpdateResult,
-                    BuilderSupport, SiteIdParams)
+                    BuilderScanItem, BuilderSupport, SiteIdParams)
 from wp_client import wp_get, wp_post, wp_error_message, wp_error_code
 import storage
 
 BRIDGE_PATH = "/wp-json/imperal/v1/builder"
 BRIDGE_FIELD_PATH = "/wp-json/imperal/v1/builder/field"
 BRIDGE_STATUS_PATH = "/wp-json/imperal/v1/builder/status"
+BRIDGE_SCAN_PATH = "/wp-json/imperal/v1/builder/scan"
 
 _INSTALL_HINT = (
     "Install the Imperal Builder Bridge plugin on the site (bridge/imperal-builder-bridge "
@@ -320,3 +321,65 @@ async def check_builder_support(ctx, params: SiteIdParams) -> ActionResult:
     active = [name for name, on in (("Elementor", support.elementor_active), ("Bricks", support.bricks_active)) if on]
     summary = f"Builder bridge v{support.bridge_version} — active: {', '.join(active) if active else 'none'}"
     return ActionResult.success(support, summary=summary)
+
+
+@chat.function(
+    "scan_builder_content",
+    description=("Diagnostic scan of a connected WordPress site's database for ANY post, page, "
+                 "or template (including custom post types like bricks_template that list_pages/"
+                 "list_posts never see, since they are not registered for the normal REST posts "
+                 "endpoints) carrying non-empty Elementor or Bricks builder content. Use this when "
+                 "get_builder_content reports BUILDER_NONE_ACTIVE on the items you tried, to find "
+                 "where builder content actually lives on the site. Read-only; requires Builder "
+                 "Bridge plugin v1.1.0 or later."),
+    action_type="read",
+    data_model=sdl.EntityList[BuilderScanItem],
+)
+async def scan_builder_content(ctx, params: SiteIdParams) -> ActionResult:
+    """Scan postmeta directly for Elementor/Bricks content across all post types."""
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+
+    try:
+        r = await wp_get(ctx, base_url, BRIDGE_SCAN_PATH, username=username, app_password=pw)
+    except Exception as e:
+        await ctx.log(f"scan_builder_content request failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.",
+                                  retryable=True, code="WP_UNREACHABLE")
+
+    if r.status_code == 404:
+        return ActionResult.error(
+            "This site's Imperal Builder Bridge plugin does not support /builder/scan yet — "
+            "update it to v1.1.0 or later.",
+            retryable=False, code="BUILDER_BRIDGE_MISSING")
+    if r.status_code != 200 or not isinstance(r.body, dict):
+        return _http_failure(r.status_code, r.body)
+
+    items_raw = r.body.get("items_with_builder_content", [])
+    if not isinstance(items_raw, list):
+        items_raw = []
+
+    items = [
+        BuilderScanItem(
+            id=str(it.get("id", "")), title=str(it.get("title", "") or "(untitled)"),
+            kind="wp_builder_scan_item",
+            post_id=int(it.get("id", 0) or 0),
+            post_type=str(it.get("type", "") or ""),
+            status=str(it.get("status", "") or ""),
+            builders=list(it.get("builders", []) or []),
+            meta_keys=list(it.get("meta_keys", []) or []),
+        )
+        for it in items_raw
+    ]
+
+    total = len(items)
+    by_type = {}
+    for it in items:
+        by_type[it.post_type] = by_type.get(it.post_type, 0) + 1
+    breakdown = ", ".join(f"{count} {ptype}" for ptype, count in sorted(by_type.items()))
+    summary = (f"Found {total} item(s) with builder content" +
+               (f" ({breakdown})" if breakdown else "") + "." if total else
+               "No posts, pages, or templates on this site carry Elementor or Bricks content.")
+    return ActionResult.success(sdl.EntityList(items=items, total=total), summary=summary)

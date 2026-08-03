@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.12",
   "app_id": "wp-site-connector",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "name": "WP Site Connector",
   "description": "Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
   "icon": "icon.svg",
@@ -14441,6 +14441,178 @@
         "title": "BuilderSupport",
         "type": "object",
         "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "scan_builder_content",
+      "description": "Diagnostic scan of a connected WordPress site's database for ANY post, page, or template (including custom post types like bricks_template that list_pages/list_posts never see, since they are not registered for the normal REST posts endpoints) carrying non-empty Elementor or Bricks builder content. Use this when get_builder_content reports BUILDER_NONE_ACTIVE on the items you tried, to find where builder content actually lives on the site. Read-only; requires Builder Bridge plugin v1.1.0 or later.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "BuilderScanItem": {
+            "description": "One post/page/template found by the /builder/scan diagnostic to carry\nnon-empty Elementor or Bricks meta — including custom post types like\nbricks_template that list_pages/list_posts never surface, since they are\nnot registered for the normal REST posts endpoints.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "default": "",
+                "title": "Status",
+                "type": "string"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "post_id": {
+                "default": 0,
+                "title": "Post Id",
+                "type": "integer"
+              },
+              "post_type": {
+                "default": "",
+                "title": "Post Type",
+                "type": "string"
+              },
+              "builders": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Builders",
+                "type": "array"
+              },
+              "meta_keys": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Meta Keys",
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "BuilderScanItem",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/BuilderScanItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[BuilderScanItem]",
+        "type": "object",
+        "x-sdl": "entity-list"
       },
       "event": "",
       "background": false,

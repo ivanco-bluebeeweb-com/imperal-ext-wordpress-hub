@@ -764,6 +764,18 @@ class BuilderSupport(sdl.Entity):
     bricks_version: str = ""
 
 
+class BuilderScanItem(sdl.Entity):
+    """One post/page/template found by the /builder/scan diagnostic to carry
+    non-empty Elementor or Bricks meta — including custom post types like
+    bricks_template that list_pages/list_posts never surface, since they are
+    not registered for the normal REST posts endpoints."""
+    post_id: int = 0
+    post_type: str = ""
+    status: str = ""
+    builders: list[str] = Field(default_factory=list)
+    meta_keys: list[str] = Field(default_factory=list)
+
+
 class SeoMeta(sdl.Entity):
     """Rank Math SEO fields for a single post or page.
 

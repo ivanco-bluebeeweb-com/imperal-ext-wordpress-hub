@@ -15,6 +15,7 @@ from models import GetBuilderContentParams, UpdateBuilderFieldParams, SiteIdPara
 TREE = "https://x.com/wp-json/imperal/v1/builder"
 FIELD = "https://x.com/wp-json/imperal/v1/builder/field"
 STATUS = "https://x.com/wp-json/imperal/v1/builder/status"
+SCAN = "https://x.com/wp-json/imperal/v1/builder/scan"
 
 
 async def _ctx():
@@ -313,6 +314,48 @@ async def test_check_reports_missing_bridge():
     ctx = await _ctx()
     ctx.http.mock_get(STATUS, {"code": "rest_no_route"}, 404)
     r = await hb.check_builder_support(ctx, SiteIdParams(site_id="x-com"))
+    assert r.status == "error"
+    assert r.error_code == "BUILDER_BRIDGE_MISSING"
+
+
+# ── diagnostic scan ──────────────────────────────────────────────────────────
+
+async def test_scan_reports_items_with_builder_content():
+    ctx = await _ctx()
+    ctx.http.mock_get(SCAN, {
+        "items_with_builder_content": [
+            {"id": 7, "title": "Header", "type": "bricks_template", "status": "publish",
+             "builders": ["bricks"], "meta_keys": ["_bricks_page_content_2"]},
+            {"id": 42, "title": "Home", "type": "page", "status": "publish",
+             "builders": ["elementor"], "meta_keys": ["_elementor_data"]},
+        ],
+        "total_found": 2,
+        "registered_post_types": ["post", "page", "bricks_template"],
+    }, 200)
+    r = await hb.scan_builder_content(ctx, SiteIdParams(site_id="x-com"))
+    assert r.status == "success"
+    assert len(r.data.items) == 2
+    assert r.data.items[0].post_id == 7
+    assert r.data.items[0].post_type == "bricks_template"
+    assert r.data.items[0].builders == ["bricks"]
+    assert r.data.items[1].builders == ["elementor"]
+
+
+async def test_scan_reports_empty_when_nothing_found():
+    ctx = await _ctx()
+    ctx.http.mock_get(SCAN, {
+        "items_with_builder_content": [], "total_found": 0,
+        "registered_post_types": ["post", "page"],
+    }, 200)
+    r = await hb.scan_builder_content(ctx, SiteIdParams(site_id="x-com"))
+    assert r.status == "success"
+    assert r.data.items == []
+
+
+async def test_scan_reports_missing_bridge_or_outdated_version():
+    ctx = await _ctx()
+    ctx.http.mock_get(SCAN, {"code": "rest_no_route"}, 404)
+    r = await hb.scan_builder_content(ctx, SiteIdParams(site_id="x-com"))
     assert r.status == "error"
     assert r.error_code == "BUILDER_BRIDGE_MISSING"
 
