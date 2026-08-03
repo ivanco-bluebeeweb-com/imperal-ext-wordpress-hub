@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Builder Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       Exposes Elementor and Bricks page-builder element trees to the WordPress REST API, with guarded single-field point edits, so Imperal / Webbee can read and precisely edit builder content without touching the rest of the page.
- * Version:           1.1.0
+ * Version:           1.2.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -51,7 +51,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BUILDER_BRIDGE_VERSION', '1.0.0' );
+define( 'IMPERAL_BUILDER_BRIDGE_VERSION', '1.2.0' );
 define( 'IMPERAL_BUILDER_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 const IMPERAL_BUILDER_ELEMENTOR_META = '_elementor_data';
@@ -160,13 +160,13 @@ function imperal_builder_bridge_active_builders( $post_id ) {
 	$active = array();
 
 	$elementor_data = get_post_meta( $post_id, IMPERAL_BUILDER_ELEMENTOR_META, true );
-	if ( is_string( $elementor_data ) && '' !== trim( $elementor_data ) && '[]' !== trim( $elementor_data ) ) {
+	if ( ! empty( imperal_builder_bridge_decode_meta( $elementor_data ) ) ) {
 		$active[] = 'elementor';
 	}
 
 	foreach ( IMPERAL_BUILDER_BRICKS_META as $zone => $meta_key ) {
 		$zone_data = get_post_meta( $post_id, $meta_key, true );
-		if ( is_string( $zone_data ) && '' !== trim( $zone_data ) && '[]' !== trim( $zone_data ) ) {
+		if ( ! empty( imperal_builder_bridge_decode_meta( $zone_data ) ) ) {
 			$active[] = 'bricks';
 			break;
 		}
@@ -181,11 +181,47 @@ function imperal_builder_bridge_active_builders( $post_id ) {
  * this hash, so a stale-write attempt is caught before it overwrites
  * something the WordPress editor changed in the meantime.
  *
- * @param string $raw_json Raw meta value as stored (may be empty).
+ * @param mixed $raw Raw meta value as returned by get_post_meta() — may be a
+ *                    JSON string OR an already-unserialized PHP array. Both
+ *                    are hashed to the SAME token for the same logical
+ *                    content, since get_post_meta() silently auto-unserializes
+ *                    PHP-serialized values, and either storage format is
+ *                    legitimate depending on how the builder itself wrote it.
  * @return string sha256 hex digest.
  */
-function imperal_builder_bridge_state_token( $raw_json ) {
-	return hash( 'sha256', (string) $raw_json );
+function imperal_builder_bridge_state_token( $raw ) {
+	$decoded = imperal_builder_bridge_decode_meta( $raw );
+	return hash( 'sha256', (string) wp_json_encode( $decoded ) );
+}
+
+/**
+ * Normalize a raw post-meta value into a decoded array, regardless of
+ * whether WordPress handed it back as a JSON string (typical when the
+ * builder itself calls wp_json_encode() before storing) or as an
+ * already-unserialized PHP array (get_post_meta() auto-unserializes any
+ * value that was stored via PHP's serialize() format, which is what
+ * update_post_meta() does by default when given an array/object).
+ *
+ * Root cause this fixes: earlier versions of this bridge assumed the meta
+ * value was ALWAYS a JSON string and used `is_string( $raw ) ? $raw : '[]'`
+ * before json_decode — so any post where the builder stored its data as a
+ * native PHP array (auto-unserialized back to an array by WordPress) was
+ * silently treated as empty, even though real content was there.
+ *
+ * @param mixed $raw Raw meta value as returned by get_post_meta().
+ * @return array Decoded content, or an empty array if there is none.
+ */
+function imperal_builder_bridge_decode_meta( $raw ) {
+	if ( is_array( $raw ) ) {
+		return $raw;
+	}
+	if ( is_string( $raw ) && '' !== trim( $raw ) ) {
+		$decoded = json_decode( $raw, true );
+		if ( is_array( $decoded ) ) {
+			return $decoded;
+		}
+	}
+	return array();
 }
 
 /**
@@ -448,10 +484,7 @@ function imperal_builder_bridge_get_tree( $request ) {
 
 	if ( in_array( 'elementor', $active, true ) && ( '' === $requested_builder || 'elementor' === $requested_builder ) ) {
 		$raw     = get_post_meta( $post->ID, IMPERAL_BUILDER_ELEMENTOR_META, true );
-		$decoded = json_decode( is_string( $raw ) ? $raw : '[]', true );
-		if ( ! is_array( $decoded ) ) {
-			$decoded = array();
-		}
+		$decoded = imperal_builder_bridge_decode_meta( $raw );
 
 		$flat = imperal_builder_bridge_flatten_elementor( $decoded );
 
@@ -466,10 +499,7 @@ function imperal_builder_bridge_get_tree( $request ) {
 		$zones = array();
 		foreach ( IMPERAL_BUILDER_BRICKS_META as $zone => $meta_key ) {
 			$raw     = get_post_meta( $post->ID, $meta_key, true );
-			$decoded = json_decode( is_string( $raw ) ? $raw : '[]', true );
-			if ( ! is_array( $decoded ) ) {
-				$decoded = array();
-			}
+			$decoded = imperal_builder_bridge_decode_meta( $raw );
 			$zones[ $zone ] = array(
 				'elements'    => imperal_builder_bridge_flatten_bricks( $decoded, $zone ),
 				'state_token' => imperal_builder_bridge_state_token( $raw ),
@@ -488,6 +518,39 @@ function imperal_builder_bridge_get_tree( $request ) {
 			'builders'        => $builders_out,
 		)
 	);
+}
+
+/**
+ * Write a decoded builder tree back to post meta, preserving whichever
+ * storage format the ORIGINAL raw value was in — a native PHP array (which
+ * WordPress will re-serialize via serialize(), exactly as update_post_meta()
+ * does by default for array/object values) or a JSON string (if the builder
+ * itself always wp_json_encode()s before storing).
+ *
+ * This matters because Bricks/Elementor read their own meta with
+ * get_post_meta() too: if we always wrote back a JSON STRING regardless of
+ * how the value was originally stored, a site that stores it as a native
+ * array would suddenly get a JSON string back on its next read — which the
+ * builder's own PHP does not expect and would silently fail to render or
+ * edit correctly. Round-tripping the same shape keeps both sides working.
+ *
+ * @param int    $post_id  Post id.
+ * @param string $meta_key Meta key to write.
+ * @param mixed  $raw      The raw value as originally returned by
+ *                          get_post_meta() before this edit — decides the
+ *                          format to write back.
+ * @param array  $decoded  The mutated, decoded content to persist.
+ * @return void
+ */
+function imperal_builder_bridge_write_meta( $post_id, $meta_key, $raw, $decoded ) {
+	if ( is_array( $raw ) ) {
+		// Originally a native PHP array — write it back the same way so
+		// WordPress serializes it, matching how the builder itself stored it.
+		update_post_meta( $post_id, $meta_key, $decoded );
+		return;
+	}
+	// Originally a JSON string (or empty/missing) — keep writing JSON.
+	update_post_meta( $post_id, $meta_key, wp_slash( wp_json_encode( $decoded ) ) );
 }
 
 /**
@@ -575,10 +638,7 @@ function imperal_builder_bridge_update_field( $request ) {
 			);
 		}
 
-		$decoded = json_decode( is_string( $raw ) ? $raw : '[]', true );
-		if ( ! is_array( $decoded ) ) {
-			$decoded = array();
-		}
+		$decoded = imperal_builder_bridge_decode_meta( $raw );
 
 		$found = imperal_builder_bridge_mutate_elementor(
 			$decoded,
@@ -597,8 +657,7 @@ function imperal_builder_bridge_update_field( $request ) {
 			);
 		}
 
-		$new_raw = wp_json_encode( $decoded );
-		update_post_meta( $post->ID, $meta_key, wp_slash( $new_raw ) );
+		imperal_builder_bridge_write_meta( $post->ID, $meta_key, $raw, $decoded );
 
 		// Elementor caches rendered CSS per element — clear it so the edit
 		// shows up immediately instead of a stale cached render.
@@ -618,7 +677,7 @@ function imperal_builder_bridge_update_field( $request ) {
 				'builder'     => 'elementor',
 				'element_id'  => $element_id,
 				'field'       => $field,
-				'state_token' => imperal_builder_bridge_state_token( $new_raw ),
+				'state_token' => imperal_builder_bridge_state_token( $decoded ),
 			)
 		);
 	}
@@ -643,10 +702,7 @@ function imperal_builder_bridge_update_field( $request ) {
 		);
 	}
 
-	$decoded = json_decode( is_string( $raw ) ? $raw : '[]', true );
-	if ( ! is_array( $decoded ) ) {
-		$decoded = array();
-	}
+	$decoded = imperal_builder_bridge_decode_meta( $raw );
 
 	$found = imperal_builder_bridge_mutate_bricks(
 		$decoded,
@@ -669,8 +725,7 @@ function imperal_builder_bridge_update_field( $request ) {
 		);
 	}
 
-	$new_raw = wp_json_encode( $decoded );
-	update_post_meta( $post->ID, $meta_key, wp_slash( $new_raw ) );
+	imperal_builder_bridge_write_meta( $post->ID, $meta_key, $raw, $decoded );
 
 	return rest_ensure_response(
 		array(
@@ -679,7 +734,7 @@ function imperal_builder_bridge_update_field( $request ) {
 			'zone'        => $zone,
 			'element_id'  => $element_id,
 			'field'       => $field,
-			'state_token' => imperal_builder_bridge_state_token( $new_raw ),
+			'state_token' => imperal_builder_bridge_state_token( $decoded ),
 		)
 	);
 }

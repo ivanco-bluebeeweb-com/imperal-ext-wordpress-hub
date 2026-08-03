@@ -485,6 +485,36 @@ ok( isset( $GLOBALS['_routes']['imperal/v1/builder'] ), 'registers /imperal/v1/b
 ok( isset( $GLOBALS['_routes']['imperal/v1/builder/field'] ), 'registers /imperal/v1/builder/field' );
 ok( isset( $GLOBALS['_routes']['imperal/v1/builder/status'] ), 'registers /imperal/v1/builder/status' );
 
+echo "\nnative-array-stored meta (get_post_meta auto-unserialize case)\n";
+// WordPress auto-unserializes any meta value that was stored via PHP's
+// serialize() format (what update_post_meta() does by default when given
+// an array), handing get_post_meta() back a native array instead of a JSON
+// string. Earlier versions of this bridge assumed the value was ALWAYS a
+// JSON string and treated any non-string as empty — so a site whose builder
+// happened to store this way looked like it had no builder content at all,
+// on every single post, even though the content was real.
+reset_state();
+seed_post( 90, 'array-stored', 'page' );
+$GLOBALS['_meta'][90]['_elementor_data'] = json_decode( elementor_fixture(), true ); // native array, not a string
+eq( imperal_builder_bridge_active_builders( 90 ), array( 'elementor' ), 'native-array-stored elementor meta is still detected as active' );
+
+reset_state();
+seed_post( 91, 'brx-array-stored', 'page' );
+$GLOBALS['_meta'][91]['_bricks_page_content_2'] = json_decode( bricks_fixture(), true ); // native array
+eq( imperal_builder_bridge_active_builders( 91 ), array( 'bricks' ), 'native-array-stored bricks meta is still detected as active' );
+
+$tree = imperal_builder_bridge_get_tree( new WP_REST_Request( array( 'id' => 91 ) ) );
+ok( ! is_wp_error( $tree ), 'reading a native-array-stored bricks post does not error' );
+eq( count( $tree['builders']['bricks']['zones']['content']['elements'] ), 2, 'native-array-stored bricks content is flattened correctly' );
+
+$token_before = $tree['builders']['bricks']['zones']['content']['state_token'];
+$res = imperal_builder_bridge_update_field( new WP_REST_Request( array(
+	'id' => 91, 'zone' => 'content', 'element_id' => 'brx2', 'field' => 'text',
+	'value' => 'Updated via array-stored path', 'state_token' => $token_before,
+) ) );
+ok( ! is_wp_error( $res ), 'writing to a native-array-stored bricks post succeeds' );
+ok( is_array( $GLOBALS['_meta'][91]['_bricks_page_content_2'] ), 'write preserves the original native-array storage format (round-trips as an array, not a JSON string)' );
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 
 printf( "\n%d passed, %d failed\n\n", $GLOBALS['_pass'], $GLOBALS['_fail'] );
