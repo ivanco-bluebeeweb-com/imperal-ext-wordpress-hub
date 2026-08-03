@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Builder Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       Exposes Elementor and Bricks page-builder element trees to the WordPress REST API, with guarded single-field point edits, so Imperal / Webbee can read and precisely edit builder content without touching the rest of the page.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -332,6 +332,79 @@ function imperal_builder_bridge_mutate_bricks( &$nodes, $id, $mutator ) {
 	unset( $node );
 
 	return false;
+}
+
+/**
+ * GET /imperal/v1/builder/scan — diagnostic: which posts/pages/templates on
+ * this site actually carry non-empty builder meta, across ALL post types
+ * (including custom ones like `bricks_template` that plain list_pages /
+ * list_posts calls never see, since they are not registered for the normal
+ * REST posts endpoints). Read-only, capped, for figuring out WHERE builder
+ * content actually lives before trying to read/edit a specific item.
+ *
+ * @return WP_REST_Response
+ */
+function imperal_builder_bridge_scan() {
+	global $wpdb;
+
+	// Discover every post_type/id pair that has ANY of our meta keys
+	// non-empty and non-'[]', in one query against postmeta — cheaper and
+	// more honest than looping get_posts() per public post type, and it
+	// also reaches non-public / non-REST-exposed types like bricks_template.
+	$meta_keys = array_merge(
+		array( IMPERAL_BUILDER_ELEMENTOR_META ),
+		array_values( IMPERAL_BUILDER_BRICKS_META )
+	);
+	$placeholders = implode( ',', array_fill( 0, count( $meta_keys ), '%s' ) );
+
+	// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+	$sql = $wpdb->prepare(
+		"SELECT pm.post_id, pm.meta_key, p.post_type, p.post_title, p.post_status
+		 FROM {$wpdb->postmeta} pm
+		 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+		 WHERE pm.meta_key IN ($placeholders)
+		 AND pm.meta_value IS NOT NULL
+		 AND pm.meta_value != ''
+		 AND pm.meta_value != '[]'
+		 ORDER BY p.post_type, pm.post_id
+		 LIMIT 500",
+		$meta_keys
+	);
+
+	$rows = $wpdb->get_results( $sql );
+
+	$by_post = array();
+	foreach ( (array) $rows as $row ) {
+		$id = (int) $row->post_id;
+		if ( ! isset( $by_post[ $id ] ) ) {
+			$by_post[ $id ] = array(
+				'id'          => $id,
+				'title'       => $row->post_title,
+				'type'        => $row->post_type,
+				'status'      => $row->post_status,
+				'builders'    => array(),
+				'meta_keys'   => array(),
+			);
+		}
+		$by_post[ $id ]['meta_keys'][] = $row->meta_key;
+		$builder = ( IMPERAL_BUILDER_ELEMENTOR_META === $row->meta_key ) ? 'elementor' : 'bricks';
+		if ( ! in_array( $builder, $by_post[ $id ]['builders'], true ) ) {
+			$by_post[ $id ]['builders'][] = $builder;
+		}
+	}
+
+	// Also surface which registered post types exist at all (helps explain
+	// e.g. why list_custom_posts('bricks_template') 404s: the type may not
+	// be REST-exposed even though it holds real builder content here).
+	$post_types = get_post_types( array(), 'names' );
+
+	return rest_ensure_response(
+		array(
+			'items_with_builder_content' => array_values( $by_post ),
+			'total_found'                => count( $by_post ),
+			'registered_post_types'      => array_values( $post_types ),
+		)
+	);
 }
 
 /**
@@ -682,6 +755,20 @@ function imperal_builder_bridge_register_routes() {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => 'imperal_builder_bridge_status',
+				'permission_callback' => function () {
+					return current_user_can( 'edit_posts' );
+				},
+			),
+		)
+	);
+
+	register_rest_route(
+		IMPERAL_BUILDER_BRIDGE_NAMESPACE,
+		'/builder/scan',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_builder_bridge_scan',
 				'permission_callback' => function () {
 					return current_user_can( 'edit_posts' );
 				},
