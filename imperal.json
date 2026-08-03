@@ -1,8 +1,8 @@
 {
   "manifest_schema_version": 3,
-  "sdk_version": "5.9.13",
+  "sdk_version": "5.9.12",
   "app_id": "wp-site-connector",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "name": "WP Site Connector",
   "description": "Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
   "icon": "icon.svg",
@@ -13764,6 +13764,681 @@
           "title"
         ],
         "title": "SeoMeta",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "get_builder_content",
+      "description": "Read the Elementor and/or Bricks page-builder element tree of one post or page on a connected WordPress site, flattened into a simple list of elements with ids, types, and settings. Identify the item by post_id or by slug. Each result row carries a state_token required to edit any of its elements.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Numeric id of the post or page. Give this OR slug.",
+            "title": "Post Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Slug of the post or page, e.g. 'home'. Used when post_id is not given.",
+            "title": "Slug"
+          },
+          "post_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional post type ('post', 'page', or a custom type) to disambiguate a slug used by several items.",
+            "title": "Post Type"
+          },
+          "builder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional: 'elementor' or 'bricks', to read only that builder when both are active on the item.",
+            "title": "Builder"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "GetBuilderContentParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "BuilderContent": {
+            "description": "One builder's (or one Bricks zone's) element tree for a single post.\n\nstate_token is required to call update_builder_field against any element\nin this exact tree — copy it from here, do not invent it.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "post_id": {
+                "default": 0,
+                "title": "Post Id",
+                "type": "integer"
+              },
+              "slug": {
+                "default": "",
+                "title": "Slug",
+                "type": "string"
+              },
+              "post_type": {
+                "default": "",
+                "title": "Post Type",
+                "type": "string"
+              },
+              "link": {
+                "default": "",
+                "title": "Link",
+                "type": "string"
+              },
+              "builder": {
+                "default": "",
+                "title": "Builder",
+                "type": "string"
+              },
+              "zone": {
+                "default": "",
+                "title": "Zone",
+                "type": "string"
+              },
+              "state_token": {
+                "default": "",
+                "title": "State Token",
+                "type": "string"
+              },
+              "element_count": {
+                "default": 0,
+                "title": "Element Count",
+                "type": "integer"
+              },
+              "elements": {
+                "items": {
+                  "$ref": "#/$defs/BuilderElement"
+                },
+                "title": "Elements",
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "BuilderContent",
+            "type": "object",
+            "x-sdl": "entity"
+          },
+          "BuilderElement": {
+            "description": "One flattened builder element row: a widget, section, column or container.\n\nNesting is expressed by parent_id (this row's parent element_id), not by\nphysical structure — both Elementor's tree and Bricks' flat array are\nflattened into this same shape so a caller doesn't need two mental models.",
+            "properties": {
+              "element_id": {
+                "default": "",
+                "title": "Element Id",
+                "type": "string"
+              },
+              "parent_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Parent Id"
+              },
+              "el_type": {
+                "default": "",
+                "title": "El Type",
+                "type": "string"
+              },
+              "widget_type": {
+                "default": "",
+                "title": "Widget Type",
+                "type": "string"
+              },
+              "settings": {
+                "additionalProperties": true,
+                "title": "Settings",
+                "type": "object"
+              }
+            },
+            "title": "BuilderElement",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/BuilderContent"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[BuilderContent]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "update_builder_field",
+      "description": "Change exactly ONE settings field on exactly ONE existing Elementor or Bricks element, identified by element_id from a previous get_builder_content call. Requires the exact state_token from that same read; the write is refused if the page changed since. Cannot create elements or replace the page — point edits only.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.builder_field_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Numeric id of the post or page. Give this OR slug.",
+            "title": "Post Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Slug of the post or page. Used when post_id is not given.",
+            "title": "Slug"
+          },
+          "post_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional post type to disambiguate a slug used by several items.",
+            "title": "Post Type"
+          },
+          "element_id": {
+            "description": "Builder-native id of the exact element to edit — from a previous get_builder_content call",
+            "title": "Element Id",
+            "type": "string"
+          },
+          "field": {
+            "description": "Name of the single settings field to change on that element, e.g. 'title' or '_typography'",
+            "title": "Field",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New value for the field — a plain string/number for simple fields, or an object for structured ones like {'unit': 'px', 'size': 20}",
+            "title": "Value"
+          },
+          "state_token": {
+            "description": "Exact state_token from a previous get_builder_content call for this item/builder/zone — the write is refused if the page changed since",
+            "title": "State Token",
+            "type": "string"
+          },
+          "builder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "'elementor' or 'bricks' — required only when both are active on the same item",
+            "title": "Builder"
+          },
+          "zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Bricks only: 'header', 'content', or 'footer' — which template area the element lives in",
+            "title": "Zone"
+          }
+        },
+        "required": [
+          "site_id",
+          "element_id",
+          "field",
+          "value",
+          "state_token"
+        ],
+        "title": "UpdateBuilderFieldParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "post_id": {
+            "default": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "builder": {
+            "default": "",
+            "title": "Builder",
+            "type": "string"
+          },
+          "zone": {
+            "default": "",
+            "title": "Zone",
+            "type": "string"
+          },
+          "element_id": {
+            "default": "",
+            "title": "Element Id",
+            "type": "string"
+          },
+          "field": {
+            "default": "",
+            "title": "Field",
+            "type": "string"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "BuilderFieldUpdateResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.update_builder_field",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "check_builder_support",
+      "description": "Check whether a connected WordPress site can read/edit Elementor or Bricks page-builder content — whether the Imperal Builder Bridge plugin is installed and which builder plugin(s) are active site-wide.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "bridge_version": {
+            "default": "",
+            "title": "Bridge Version",
+            "type": "string"
+          },
+          "elementor_active": {
+            "default": false,
+            "title": "Elementor Active",
+            "type": "boolean"
+          },
+          "elementor_version": {
+            "default": "",
+            "title": "Elementor Version",
+            "type": "string"
+          },
+          "bricks_active": {
+            "default": false,
+            "title": "Bricks Active",
+            "type": "boolean"
+          },
+          "bricks_version": {
+            "default": "",
+            "title": "Bricks Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "BuilderSupport",
         "type": "object",
         "x-sdl": "entity"
       },

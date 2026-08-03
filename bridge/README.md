@@ -1,3 +1,19 @@
+# WP Site Connector — companion bridge plugins
+
+Two small WordPress plugins live under `bridge/`, each solving the same root
+problem for a different kind of data: WordPress core only exposes post meta
+over the REST API when it is registered with `show_in_rest`, and neither Rank
+Math nor the page builders below do that for their own data. No Application
+Password can work around that — a companion plugin is required.
+
+| Plugin | Folder | Exposes |
+|---|---|---|
+| Imperal SEO Bridge | `imperal-seo-bridge/` | Rank Math SEO fields (posts, pages, CPTs, terms) |
+| Imperal Builder Bridge | `imperal-builder-bridge/` | Elementor and Bricks page-builder element trees, with guarded single-field point edits |
+
+See `imperal-builder-bridge/README.md` for the builder bridge. The rest of
+this file covers the SEO bridge.
+
 # Imperal SEO Bridge
 
 Companion WordPress plugin that exposes **Rank Math** SEO fields to the REST API

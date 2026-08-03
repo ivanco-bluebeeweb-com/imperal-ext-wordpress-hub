@@ -685,6 +685,85 @@ class SiteHealth(sdl.Entity):
     php_version: str = VNEXT
 
 
+# ── Builder (Elementor / Bricks) point editing ───────────────────────────────
+#
+# A JSON value as WordPress/PHP would send or accept it. Builder settings are
+# sometimes a plain string ("My Title"), sometimes a structured value
+# ({"unit": "px", "size": 20}), so the field cannot be a plain str — but it
+# must still be a value pydantic can validate and turn into a clean JSON
+# schema, so this is an explicit union rather than typing.Any.
+JsonValue = dict | list | str | int | float | bool | None
+
+
+class GetBuilderContentParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int | None = Field(default=None, description="Numeric id of the post or page. Give this OR slug.")
+    slug: str | None = Field(default=None, description="Slug of the post or page, e.g. 'home'. Used when post_id is not given.")
+    post_type: str | None = Field(default=None, description="Optional post type ('post', 'page', or a custom type) to disambiguate a slug used by several items.")
+    builder: str | None = Field(default=None, description="Optional: 'elementor' or 'bricks', to read only that builder when both are active on the item.")
+
+
+class UpdateBuilderFieldParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int | None = Field(default=None, description="Numeric id of the post or page. Give this OR slug.")
+    slug: str | None = Field(default=None, description="Slug of the post or page. Used when post_id is not given.")
+    post_type: str | None = Field(default=None, description="Optional post type to disambiguate a slug used by several items.")
+    element_id: str = Field(description="Builder-native id of the exact element to edit — from a previous get_builder_content call")
+    field: str = Field(description="Name of the single settings field to change on that element, e.g. 'title' or '_typography'")
+    value: JsonValue = Field(description="New value for the field — a plain string/number for simple fields, or an object for structured ones like {'unit': 'px', 'size': 20}")
+    state_token: str = Field(description="Exact state_token from a previous get_builder_content call for this item/builder/zone — the write is refused if the page changed since")
+    builder: str | None = Field(default=None, description="'elementor' or 'bricks' — required only when both are active on the same item")
+    zone: str | None = Field(default=None, description="Bricks only: 'header', 'content', or 'footer' — which template area the element lives in")
+
+
+class BuilderElement(BaseModel):
+    """One flattened builder element row: a widget, section, column or container.
+
+    Nesting is expressed by parent_id (this row's parent element_id), not by
+    physical structure — both Elementor's tree and Bricks' flat array are
+    flattened into this same shape so a caller doesn't need two mental models.
+    """
+    element_id: str = ""
+    parent_id: str | None = None
+    el_type: str = ""
+    widget_type: str = ""
+    settings: dict = Field(default_factory=dict)
+
+
+class BuilderContent(sdl.Entity):
+    """One builder's (or one Bricks zone's) element tree for a single post.
+
+    state_token is required to call update_builder_field against any element
+    in this exact tree — copy it from here, do not invent it.
+    """
+    post_id: int = 0
+    slug: str = ""
+    post_type: str = ""
+    link: str = ""
+    builder: str = ""
+    zone: str = ""
+    state_token: str = ""
+    element_count: int = 0
+    elements: list[BuilderElement] = Field(default_factory=list)
+
+
+class BuilderFieldUpdateResult(sdl.Entity):
+    post_id: int = 0
+    builder: str = ""
+    zone: str = ""
+    element_id: str = ""
+    field: str = ""
+    state_token: str = ""
+
+
+class BuilderSupport(sdl.Entity):
+    bridge_version: str = ""
+    elementor_active: bool = False
+    elementor_version: str = ""
+    bricks_active: bool = False
+    bricks_version: str = ""
+
+
 class SeoMeta(sdl.Entity):
     """Rank Math SEO fields for a single post or page.
 
