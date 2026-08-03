@@ -15,6 +15,7 @@ from models import CreatePostParams, PostBlockInput, UpdatePostParams
 POSTS = "https://x.com/wp-json/wp/v2/posts"
 PAGES = "https://x.com/wp-json/wp/v2/pages"
 CATEGORIES = "https://x.com/wp-json/wp/v2/categories"
+TAGS = "https://x.com/wp-json/wp/v2/tags"
 SEO_BRIDGE = "https://x.com/wp-json/imperal/v1/seo"
 
 
@@ -191,3 +192,150 @@ async def test_update_post_renders_new_blocks_into_content():
     assert result.status == "success"
     _, kwargs = seen[0]
     assert "New body" in kwargs["json"]["content"]
+
+
+# ─────────── tags ───────────
+
+async def test_create_post_resolves_tags_by_name():
+    ctx = await _ctx()
+    ctx.http.mock_get(TAGS, [{"id": 3, "name": "Guides"}, {"id": 4, "name": "News"}], 200)
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello", tags=["Guides", "News"],
+    ))
+    assert result.status == "success"
+    assert result.data.tags_not_found == []
+    _, kwargs = seen[0]
+    assert sorted(kwargs["json"]["tags"]) == [3, 4]
+
+
+async def test_create_post_reports_tags_not_found_without_failing():
+    ctx = await _ctx()
+    ctx.http.mock_get(TAGS, [{"id": 3, "name": "Guides"}], 200)
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello", tags=["Guides", "Nonexistent"],
+    ))
+    assert result.status == "success"
+    assert result.data.tags_not_found == ["Nonexistent"]
+    assert "Nonexistent" in result.summary
+
+
+async def test_update_post_replaces_tags():
+    ctx = await _ctx()
+    ctx.http.mock_get(TAGS, [{"id": 5, "name": "Guides"}], 200)
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_post(f"{POSTS}/42", _wp_post(), 200)
+    result = await hp.update_post(ctx, UpdatePostParams(
+        site_id="x-com", post_id=42, tags=["Guides"],
+    ))
+    assert result.status == "success"
+    _, kwargs = seen[0]
+    assert kwargs["json"]["tags"] == [5]
+
+
+async def test_update_post_clears_tags_with_empty_list():
+    ctx = await _ctx()
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_post(f"{POSTS}/42", _wp_post(), 200)
+    result = await hp.update_post(ctx, UpdatePostParams(
+        site_id="x-com", post_id=42, tags=[],
+    ))
+    assert result.status == "success"
+    _, kwargs = seen[0]
+    assert kwargs["json"]["tags"] == []
+
+
+# ─────────── featured_media ───────────
+
+async def test_create_post_sets_featured_media():
+    ctx = await _ctx()
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello", featured_media_id=99,
+    ))
+    assert result.status == "success"
+    assert result.data.featured_media_set is True
+    _, kwargs = seen[0]
+    assert kwargs["json"]["featured_media"] == 99
+
+
+async def test_update_post_sets_featured_media():
+    ctx = await _ctx()
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_post(f"{POSTS}/42", _wp_post(), 200)
+    result = await hp.update_post(ctx, UpdatePostParams(
+        site_id="x-com", post_id=42, featured_media_id=101,
+    ))
+    assert result.status == "success"
+    assert result.data.featured_media_set is True
+    _, kwargs = seen[0]
+    assert kwargs["json"]["featured_media"] == 101
+
+
+# ─────────── inline image blocks ───────────
+
+async def test_create_post_renders_image_block_into_content():
+    ctx = await _ctx()
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello",
+        blocks=[
+            PostBlockInput(type="paragraph", text="Intro"),
+            PostBlockInput(type="image", text="A cat", media_id=55,
+                          media_url="https://x.com/wp-content/uploads/cat.jpg",
+                          caption="A very good cat"),
+        ],
+    ))
+    assert result.status == "success"
+    _, kwargs = seen[0]
+    content = kwargs["json"]["content"]
+    assert "wp:image" in content
+    assert "wp-image-55" in content
+    assert "cat.jpg" in content
+    assert "A very good cat" in content

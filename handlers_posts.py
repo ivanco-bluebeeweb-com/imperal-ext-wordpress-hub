@@ -22,6 +22,7 @@ from models import CreatePostParams, PostResult, UpdatePostParams, UpdateSeoMeta
 from wp_client import (
     create_post as wp_create_post,
     find_category_id,
+    find_term_ids,
     update_post as wp_update_post,
     wp_error_code,
     wp_error_message,
@@ -50,13 +51,15 @@ async def _authed(ctx, site_id):
     return (record["url"], record["username"], pw), None
 
 
-def _post_result(item: dict, *, post_type: str, category_resolved: bool = True) -> PostResult:
+def _post_result(item: dict, *, post_type: str, category_resolved: bool = True,
+                  tags_not_found: list[str] | None = None, featured_media_set: bool = False) -> PostResult:
     link = item.get("link", "")
     return PostResult(
         id=str(item.get("id", "")), title=wp_title(item), kind=f"wp_{post_type}",
         url=link, link=link, post_type=post_type,
         slug=item.get("slug", ""), status=item.get("status"),
         date=item.get("date"), category_resolved=category_resolved,
+        tags_not_found=tags_not_found or [], featured_media_set=featured_media_set,
     )
 
 
@@ -95,12 +98,17 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
         category_id = await find_category_id(ctx, base_url, username, pw, params.category, lang=params.lang)
         category_resolved = category_id is not None
 
+    tag_ids = []
+    tags_not_found = []
+    if params.tags:
+        tag_ids, tags_not_found = await find_term_ids(ctx, base_url, username, pw, "tags", params.tags, lang=params.lang)
+
     try:
         resp = await wp_create_post(
             ctx, base_url, username, pw, post_type=rest_base, title=params.title,
             content=content, status=params.status, slug=params.slug,
-            category_id=category_id, lang=params.lang, date=params.date,
-            excerpt=params.excerpt,
+            category_id=category_id, tag_ids=tag_ids, featured_media=params.featured_media_id,
+            lang=params.lang, date=params.date, excerpt=params.excerpt,
         )
     except Exception as e:
         await ctx.log(f"create_post request failed: {e}", level="error")
@@ -119,6 +127,8 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
     warnings = []
     if params.category and not category_resolved:
         warnings.append(f"category '{params.category}' was not found — the post was created without one")
+    if tags_not_found:
+        warnings.append(f"tag(s) not found and skipped: {', '.join(tags_not_found)}")
 
     seo_fields = {}
     if params.meta_title is not None:
@@ -134,7 +144,8 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
         if seo_result.status != "success":
             warnings.append(f"post was created, but SEO fields were not saved: {seo_result.error}")
 
-    result = _post_result(post, post_type=post_type, category_resolved=category_resolved)
+    result = _post_result(post, post_type=post_type, category_resolved=category_resolved,
+                          tags_not_found=tags_not_found, featured_media_set=bool(params.featured_media_id))
     summary = f"Created {post_type} '{result.title}' ({params.status})"
     if warnings:
         summary += " — " + "; ".join(warnings)
@@ -187,6 +198,17 @@ async def update_post(ctx, params: UpdatePostParams) -> ActionResult:
             if category_id:
                 fields["categories"] = [category_id]
 
+    tags_not_found = []
+    if params.tags is not None:
+        if not params.tags:
+            fields["tags"] = []
+        else:
+            tag_ids, tags_not_found = await find_term_ids(ctx, base_url, username, pw, "tags", params.tags)
+            fields["tags"] = tag_ids
+
+    if params.featured_media_id is not None:
+        fields["featured_media"] = params.featured_media_id
+
     if not fields and params.category is None:
         return ActionResult.error(
             "Nothing to update — pass at least one field to change.",
@@ -208,7 +230,8 @@ async def update_post(ctx, params: UpdatePostParams) -> ActionResult:
         return ActionResult.error("WordPress returned an unexpected response.",
                                   retryable=False, code="WP_RESPONSE_UNEXPECTED")
 
-    result = _post_result(resp.body, post_type=post_type, category_resolved=category_resolved)
+    result = _post_result(resp.body, post_type=post_type, category_resolved=category_resolved,
+                          tags_not_found=tags_not_found, featured_media_set=params.featured_media_id is not None)
     summary = f"Updated {post_type} '{result.title}'"
     if params.category and not category_resolved:
         summary += f" — category '{params.category}' was not found, left unchanged"

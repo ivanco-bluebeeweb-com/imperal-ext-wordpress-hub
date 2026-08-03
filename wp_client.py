@@ -61,10 +61,13 @@ async def wp_get(ctx, base_url, path, *, username, app_password, params=None):
     return await ctx.http.get(f"{base_url}{path}", headers=headers, params=params)
 
 
-async def wp_post(ctx, base_url, path, *, username, app_password, json=None, params=None):
+async def wp_post(ctx, base_url, path, *, username, app_password, json=None, params=None, timeout=None):
     """POST to the WordPress REST API with Application Password auth."""
     headers = basic_auth_header(username, app_password)
-    return await ctx.http.post(f"{base_url}{path}", headers=headers, json=json, params=params)
+    kwargs = {"headers": headers, "json": json, "params": params}
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+    return await ctx.http.post(f"{base_url}{path}", **kwargs)
 
 
 async def wp_request(ctx, method, base_url, path, *, username, app_password, json=None, params=None):
@@ -92,19 +95,20 @@ def wp_title(item: dict) -> str:
     return t or str(item.get("id", "")) or ""
 
 
-async def find_category_id(ctx, base_url: str, username: str, app_password: str,
-                            name: str, lang: str | None = None) -> int | None:
-    """Resolve a category name to its term id (case-insensitive exact match).
+async def find_term_id(ctx, base_url: str, username: str, app_password: str,
+                        taxonomy_base: str, name: str, lang: str | None = None) -> int | None:
+    """Resolve a term name to its id within one taxonomy (case-insensitive exact match).
 
+    ``taxonomy_base`` is the taxonomy's REST base, e.g. 'categories' or 'tags'.
     Unreachable site / network errors are treated the same as "not found" —
-    the caller falls back to creating/updating the post without a category
-    rather than failing the whole write over an optional lookup.
+    the caller falls back to writing the post without that term rather than
+    failing the whole write over an optional lookup. Never creates a term.
     """
     params = {"search": name, "per_page": 100}
     if lang:
         params["lang"] = lang
     try:
-        resp = await wp_get(ctx, base_url, "/wp-json/wp/v2/categories",
+        resp = await wp_get(ctx, base_url, f"/wp-json/wp/v2/{taxonomy_base}",
                             username=username, app_password=app_password, params=params)
     except Exception:
         return None
@@ -117,17 +121,43 @@ async def find_category_id(ctx, base_url: str, username: str, app_password: str,
     return None
 
 
+async def find_category_id(ctx, base_url: str, username: str, app_password: str,
+                            name: str, lang: str | None = None) -> int | None:
+    """Resolve a category name to its term id. Thin wrapper over find_term_id."""
+    return await find_term_id(ctx, base_url, username, app_password, "categories", name, lang=lang)
+
+
+async def find_term_ids(ctx, base_url: str, username: str, app_password: str,
+                         taxonomy_base: str, names: list[str],
+                         lang: str | None = None) -> tuple[list[int], list[str]]:
+    """Resolve several term names within one taxonomy. Never creates a term.
+
+    Returns (resolved_ids, names_not_found) — a name that doesn't match any
+    existing term is reported back rather than silently dropped or created.
+    """
+    resolved: list[int] = []
+    missing: list[str] = []
+    for name in names:
+        term_id = await find_term_id(ctx, base_url, username, app_password, taxonomy_base, name, lang=lang)
+        if term_id:
+            resolved.append(term_id)
+        else:
+            missing.append(name)
+    return resolved, missing
+
+
 async def create_post(ctx, base_url: str, username: str, app_password: str, *,
                       post_type: str = "posts", title: str, content: str,
                       status: str = "draft", slug: str | None = None,
-                      category_id: int | None = None, lang: str | None = None,
+                      category_id: int | None = None, tag_ids: list[int] | None = None,
+                      featured_media: int | None = None, lang: str | None = None,
                       date: str | None = None, excerpt: str | None = None):
     """Create a WordPress post/page. Returns the raw HTTPResponse.
 
     ``post_type`` is the REST base ('posts', 'pages', or a custom type's own
-    base) — categories only apply to types that support them; passing
-    category_id for a type without taxonomy support is silently ignored by
-    WordPress itself, not by this helper.
+    base) — categories/tags/featured_media only apply to types that support
+    them; passing them for a type without that support is silently ignored
+    by WordPress itself, not by this helper.
     """
     payload: dict = {"title": title, "content": content, "status": status}
     if slug:
@@ -136,6 +166,10 @@ async def create_post(ctx, base_url: str, username: str, app_password: str, *,
         payload["excerpt"] = excerpt
     if category_id:
         payload["categories"] = [category_id]
+    if tag_ids:
+        payload["tags"] = tag_ids
+    if featured_media:
+        payload["featured_media"] = featured_media
     if date:
         payload["date"] = date if "T" in date else f"{date}T10:00:00"
     path = f"/wp-json/wp/v2/{post_type}"

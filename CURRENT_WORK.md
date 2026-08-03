@@ -5,6 +5,82 @@
 
 ---
 
+## 2026-08-03 — Media, tags, featured/inline images for the blog-posting pipeline (v1.7.0)
+
+**Status:** ✅ implemented and verified (288/288 Python tests pass; 42+62+119 PHP bridge assertions pass; `imperal validate` clean: 0 errors, 0 warnings)
+
+**Why:** reviewed this app's role as the execution/publish layer of the marketing-
+automation blog-posting pipeline (per team notes: Content Strategy app decides what/why →
+Webbee writes text + plans images → Image/Media app (Magnific) produces assets → WP Site
+Connector publishes). Gap found: no way to get an image INTO WordPress, set a featured
+image, or reference an image inline in content — only category, no tags. User approved
+adding all necessary functions, scoped strictly to this app's execution responsibilities
+(upload/attach/insert media it is GIVEN) — not image planning or generation, which stay in
+the other two apps.
+
+**Key technical finding:** `ctx.http` (Imperal's outbound HTTP client) decodes every
+non-JSON response body as UTF-8 **text**, which irreversibly corrupts binary bytes —
+confirmed empirically (round-tripping a JPEG-like byte string through `httpx.Response.text`
+does not reproduce the original bytes). So a naive "Imperal downloads the image, re-uploads
+the bytes" flow was never viable. Solution: a third companion bridge plugin that asks
+WordPress to fetch its OWN copy of a public image (`media_sideload_image()`, the same
+mechanism as the native "Insert from URL" flow) — Imperal only ever sends a URL, never bytes.
+
+**What was done:**
+- New companion plugin `bridge/imperal-media-bridge/imperal-media-bridge.php` (344 lines):
+  `POST /wp-json/imperal/v1/media/sideload` (source_url, optional post_id/post_slug+post_type,
+  alt_text, caption, set_featured) and `GET /wp-json/imperal/v1/media/status`. HTTPS-only
+  source URLs; rejects loopback/private/link-local hosts (127.*, 10.*, 172.16-31.*, 192.168.*,
+  169.254.*, localhost, ::1, fc../fd..) before ever fetching. No fallback tier — missing
+  bridge is a hard stop, same pattern as the Builder Bridge.
+- Offline PHP logic harness `bridge/imperal-media-bridge/tests/bridge_logic_test.php` — 42
+  assertions (URL validation, post resolution, permission checks, sideload happy path,
+  featured-image attach, alt text, error mapping, status). Plus `bridge/imperal-media-bridge/
+  README.md` and an index entry in the shared `bridge/README.md`.
+- `wp_client.py`: generalised `find_category_id` into `find_term_id(taxonomy_base, name)` +
+  `find_term_ids(taxonomy_base, names)` (bulk, reports names-not-found without failing the
+  whole write); `find_category_id` kept as a thin wrapper so existing callers are untouched.
+  `create_post`/`update_post` now also accept `tag_ids`/`featured_media`. `wp_post` gained an
+  optional `timeout=` kwarg (sideload can take longer than the 30s default).
+- `gutenberg.py`: new `image_block(media_id, media_url, alt, caption)` renders a Gutenberg
+  image block from an existing attachment; `blocks_to_content` dispatches `type == "image"`
+  blocks (skipped if `media_id`/`media_url` missing — nothing invented).
+- `models.py`: `PostBlockInput` gained `media_id`/`media_url`/`caption` fields (type can now
+  be `"image"`); `CreatePostParams`/`UpdatePostParams` gained `tags: list[str]` and
+  `featured_media_id: int | None`; `PostResult` gained `tags_not_found`/`featured_media_set`;
+  new `UploadMediaParams`, `MediaUploadResult`, `MediaSupport`.
+- New `handlers_media.py` with 2 chat functions: `upload_media` (sideload one image, optional
+  attach/featured-image/alt/caption) and `check_media_support` (bridge presence + upload
+  capability). Same bridge-error-code-mapping style as `handlers_builders.py`/`handlers_seo.py`.
+- `handlers_posts.py`: `create_post`/`update_post` now resolve `tags` via `find_term_ids` and
+  wire `featured_media_id` straight through; tag names not found degrade to a warning in the
+  summary, never a failure (mirrors category's existing fallback behaviour).
+- Registered `handlers_media` in `main.py`'s `_LOCAL` tuple and import list (also added
+  `gutenberg` itself to the stale-module purge list, which had been missing).
+- New tests: `tests/test_media.py` (10), `tests/test_gutenberg.py` (9), plus 12 new cases in
+  `tests/test_posts.py` for tags/featured_media/inline-image-in-content. Full suite: **288
+  passed** (was 262 before this session).
+- Bumped `app.py`/`pyproject.toml` to v1.7.0; updated `description` and the project structure
+  section of `CLAUDE.md` (handlers_media.py, gutenberg.py signature change, bridge/ folder,
+  new test files). `imperal build`/`imperal validate`: 75 functions (was 73), 0 errors, 0
+  warnings, same pre-existing `on_install` info note.
+
+**Not done / not in scope:**
+- Image *planning* (which images, where, what prompt) stays in the Content Strategy app per
+  the team's architecture notes — this app only executes an upload/attach/insert it is given
+  a ready URL for.
+- Image *generation* stays in the Image/Media app (Magnific/Mystic) — this app never creates
+  pixels, only moves a finished public URL into WordPress.
+- No live WordPress round-trip smoke test of the new bridge yet — only the offline PHP
+  harness and Python `MockContext` tests. The plugin still needs to be installed on a real
+  site and exercised end-to-end before relying on it in production, same caveat as the other
+  two bridges when they first shipped.
+- Arbitrary custom taxonomies (beyond categories/tags) were not added — `find_term_id`/
+  `find_term_ids` are already taxonomy-generic, so adding one would just be a new REST base
+  string if/when a real need shows up.
+
+---
+
 ## 2026-08-03 — Post/page publishing ported from WP Publisher (v1.6.0)
 
 **Status:** ✅ implemented and verified (262/262 tests pass, `imperal validate` clean: 0 errors, 0 warnings)

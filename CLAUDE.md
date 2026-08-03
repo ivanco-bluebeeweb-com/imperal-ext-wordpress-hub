@@ -40,14 +40,20 @@ Apps/WP Site Connector/
 │                               list_custom_posts, get_server_info
 ├── handlers_seo.py         ← get/update_seo_meta, get/update_term_seo_meta, check_seo_support (Rank Math)
 ├── handlers_builders.py    ← check_builder_support, get_builder_content, update_builder_field (Elementor/Bricks)
-├── handlers_posts.py       ← create_post, update_post — Gutenberg content, category, Polylang lang;
-│                               SEO fields delegate to handlers_seo.update_seo_meta (ported from WP Publisher;
-│                               document parsing/understanding was NOT ported — content arrives as explicit blocks)
-├── gutenberg.py            ← blocks_to_content: {type,text,level} blocks -> Gutenberg block markup
+├── handlers_posts.py       ← create_post, update_post — Gutenberg content (incl. inline image blocks),
+│                               category, tags, featured_media, Polylang lang; SEO fields delegate to
+│                               handlers_seo.update_seo_meta (ported from WP Publisher; document
+│                               parsing/understanding was NOT ported — content arrives as explicit blocks)
+├── handlers_media.py       ← upload_media, check_media_support — sideload a public image URL into the
+│                               media library via the Imperal Media Bridge (WordPress fetches its own
+│                               copy; ctx.http is never used to move image bytes, see module docstring)
+├── gutenberg.py            ← blocks_to_content: {type,text,level,media_id,media_url,caption} blocks ->
+│                               Gutenberg block markup, incl. image_block() for inline images
 ├── panels.py               ← dashboard panel (sites list + content detail + connection form)
 ├── skeleton.py             ← ambient sites count probe
 ├── models.py               ← Pydantic param models + SDL entities
-├── wp_client.py            ← WP REST helper (auth, error mapping, timeouts, find_category_id, create/update_post)
+├── wp_client.py            ← WP REST helper (auth, error mapping, timeouts, find_term_id/find_term_ids,
+│                               find_category_id wrapper, create/update_post with tags/featured_media)
 ├── storage.py              ← ctx.store wrappers
 ├── wp_cli.py               ← SSH + WP-CLI helpers for get_server_info
 ├── icon.svg                ← app icon
@@ -56,6 +62,10 @@ Apps/WP Site Connector/
 ├── requirements.txt
 ├── design/
 │   └── wp-site-connector-panel.html  ← UI wireframe (source of truth for panel layout)
+├── bridge/                 ← companion WordPress plugins (see bridge/README.md)
+│   ├── imperal-seo-bridge/       ← Rank Math SEO fields over REST
+│   ├── imperal-builder-bridge/   ← Elementor/Bricks element trees, guarded point edits
+│   └── imperal-media-bridge/     ← sideload a public image URL into the media library (media_sideload_image)
 ├── docs/
 │   ├── 2026-06-16-wp-site-connector-v1-design.md  ← v1 spec (approved)
 │   ├── 2026-06-16-wp-site-connector-v1-plan.md    ← v1 plan
@@ -63,11 +73,14 @@ Apps/WP Site Connector/
 └── tests/
     ├── test_connect.py
     ├── test_forget.py
+    ├── test_gutenberg.py
     ├── test_health.py
     ├── test_list_content.py
     ├── test_list_sites.py
+    ├── test_media.py
     ├── test_models.py
     ├── test_panels.py
+    ├── test_posts.py
     ├── test_skeleton.py
     ├── test_storage.py
     └── test_wp_client.py

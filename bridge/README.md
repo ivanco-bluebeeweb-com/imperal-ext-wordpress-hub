@@ -10,9 +10,11 @@ Password can work around that — a companion plugin is required.
 |---|---|---|
 | Imperal SEO Bridge | `imperal-seo-bridge/` | Rank Math SEO fields (posts, pages, CPTs, terms) |
 | Imperal Builder Bridge | `imperal-builder-bridge/` | Elementor and Bricks page-builder element trees, with guarded single-field point edits |
+| Imperal Media Bridge | `imperal-media-bridge/` | Sideload a public image URL into the media library and optionally set it as a post's featured image |
 
-See `imperal-builder-bridge/README.md` for the builder bridge. The rest of
-this file covers the SEO bridge.
+See `imperal-builder-bridge/README.md` for the builder bridge and
+`imperal-media-bridge/README.md` for the media bridge. The rest of this file
+covers the SEO bridge.
 
 # Imperal SEO Bridge
 

@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.12",
   "app_id": "wp-site-connector",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "name": "WP Site Connector",
   "description": "Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
   "icon": "icon.svg",
@@ -14632,16 +14632,17 @@
       "params_schema": {
         "$defs": {
           "PostBlockInput": {
-            "description": "One content block, already decided by the caller — no document parsing here.\n\ntype == \"heading\" renders <h{level}>; anything else renders a paragraph.",
+            "description": "One content block, already decided by the caller — no document parsing here.\n\ntype == \"heading\" renders <h{level}>; type == \"image\" renders a Gutenberg\nimage block from a media library attachment (id + url, both from a prior\nupload_media call); anything else renders a paragraph.",
             "properties": {
               "type": {
                 "default": "paragraph",
-                "description": "'paragraph' or 'heading'",
+                "description": "'paragraph', 'heading', or 'image'",
                 "title": "Type",
                 "type": "string"
               },
               "text": {
-                "description": "Block text",
+                "default": "",
+                "description": "Block text (paragraph/heading); alt text for 'image'",
                 "title": "Text",
                 "type": "string"
               },
@@ -14652,11 +14653,47 @@
                 "minimum": 1,
                 "title": "Level",
                 "type": "integer"
+              },
+              "media_id": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Attachment id from upload_media, used only when type is 'image'",
+                "title": "Media Id"
+              },
+              "media_url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Attachment URL from upload_media, used only when type is 'image'",
+                "title": "Media Url"
+              },
+              "caption": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional caption, used only when type is 'image'",
+                "title": "Caption"
               }
             },
-            "required": [
-              "text"
-            ],
             "title": "PostBlockInput",
             "type": "object"
           }
@@ -14732,6 +14769,27 @@
             "default": null,
             "description": "Optional category name (posts only); resolved to an existing term, never created",
             "title": "Category"
+          },
+          "tags": {
+            "description": "Optional tag names (posts only); resolved to existing terms, never created — names not found are reported back, not silently dropped",
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "featured_media_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Attachment id from a prior upload_media call, set as the post's featured image",
+            "title": "Featured Media Id"
           },
           "date": {
             "anyOf": [
@@ -14908,6 +14966,18 @@
             "default": true,
             "title": "Category Resolved",
             "type": "boolean"
+          },
+          "tags_not_found": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags Not Found",
+            "type": "array"
+          },
+          "featured_media_set": {
+            "default": false,
+            "title": "Featured Media Set",
+            "type": "boolean"
           }
         },
         "required": [
@@ -14936,16 +15006,17 @@
       "params_schema": {
         "$defs": {
           "PostBlockInput": {
-            "description": "One content block, already decided by the caller — no document parsing here.\n\ntype == \"heading\" renders <h{level}>; anything else renders a paragraph.",
+            "description": "One content block, already decided by the caller — no document parsing here.\n\ntype == \"heading\" renders <h{level}>; type == \"image\" renders a Gutenberg\nimage block from a media library attachment (id + url, both from a prior\nupload_media call); anything else renders a paragraph.",
             "properties": {
               "type": {
                 "default": "paragraph",
-                "description": "'paragraph' or 'heading'",
+                "description": "'paragraph', 'heading', or 'image'",
                 "title": "Type",
                 "type": "string"
               },
               "text": {
-                "description": "Block text",
+                "default": "",
+                "description": "Block text (paragraph/heading); alt text for 'image'",
                 "title": "Text",
                 "type": "string"
               },
@@ -14956,11 +15027,47 @@
                 "minimum": 1,
                 "title": "Level",
                 "type": "integer"
+              },
+              "media_id": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Attachment id from upload_media, used only when type is 'image'",
+                "title": "Media Id"
+              },
+              "media_url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Attachment URL from upload_media, used only when type is 'image'",
+                "title": "Media Url"
+              },
+              "caption": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional caption, used only when type is 'image'",
+                "title": "Caption"
               }
             },
-            "required": [
-              "text"
-            ],
             "title": "PostBlockInput",
             "type": "object"
           }
@@ -15065,6 +15172,35 @@
             "default": null,
             "description": "New category name (posts only); resolved to an existing term, never created",
             "title": "Category"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Replace tag names (posts only); resolved to existing terms, never created; omit to keep existing tags",
+            "title": "Tags"
+          },
+          "featured_media_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Attachment id from a prior upload_media call, set as the post's featured image",
+            "title": "Featured Media Id"
           },
           "date": {
             "anyOf": [
@@ -15189,6 +15325,18 @@
             "default": true,
             "title": "Category Resolved",
             "type": "boolean"
+          },
+          "tags_not_found": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags Not Found",
+            "type": "array"
+          },
+          "featured_media_set": {
+            "default": false,
+            "title": "Featured Media Set",
+            "type": "boolean"
           }
         },
         "required": [
@@ -15200,6 +15348,317 @@
         "x-sdl": "entity"
       },
       "event": "wp-site-connector.update_post",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "upload_media",
+      "description": "Add a publicly reachable https:// image URL to a connected WordPress site's media library, and optionally set it as a post's featured image. WordPress fetches the image itself (via the Imperal Media Bridge plugin) — Imperal never downloads or re-uploads the image bytes. Use the returned attachment id/url as featured_media_id, or in an 'image' content block, on create_post/update_post.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.media_upload"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "source_url": {
+            "description": "Public https:// URL of the image to add to the media library",
+            "title": "Source Url",
+            "type": "string"
+          },
+          "post_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional post/page id to attach the uploaded image to",
+            "title": "Post Id"
+          },
+          "alt_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional alt text to set on the new attachment",
+            "title": "Alt Text"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional caption to set on the new attachment",
+            "title": "Caption"
+          },
+          "set_featured": {
+            "default": false,
+            "description": "Set this image as the featured image of post_id (requires post_id)",
+            "title": "Set Featured",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "site_id",
+          "source_url"
+        ],
+        "title": "UploadMediaParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of upload_media: the new media library attachment.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Height"
+          },
+          "attached_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Attached To"
+          },
+          "featured_set": {
+            "default": false,
+            "title": "Featured Set",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "MediaUploadResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.upload_media",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "check_media_support",
+      "description": "Check whether a connected WordPress site can add hosted images to its media library via upload_media — whether the Imperal Media Bridge plugin is installed and whether the connected user can upload files.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of check_media_support: is the Media Bridge present, can this user upload.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "bridge_version": {
+            "default": "",
+            "title": "Bridge Version",
+            "type": "string"
+          },
+          "can_upload": {
+            "default": false,
+            "title": "Can Upload",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "MediaSupport",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
       "background": false,
       "long_running": false,
       "scopes": [],

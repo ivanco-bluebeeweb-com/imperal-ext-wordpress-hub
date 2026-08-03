@@ -812,11 +812,16 @@ class SeoMeta(sdl.Entity):
 class PostBlockInput(BaseModel):
     """One content block, already decided by the caller — no document parsing here.
 
-    type == "heading" renders <h{level}>; anything else renders a paragraph.
+    type == "heading" renders <h{level}>; type == "image" renders a Gutenberg
+    image block from a media library attachment (id + url, both from a prior
+    upload_media call); anything else renders a paragraph.
     """
-    type: str = Field(default="paragraph", description="'paragraph' or 'heading'")
-    text: str = Field(description="Block text")
+    type: str = Field(default="paragraph", description="'paragraph', 'heading', or 'image'")
+    text: str = Field(default="", description="Block text (paragraph/heading); alt text for 'image'")
     level: int = Field(default=2, ge=1, le=6, description="Heading level, used only when type is 'heading'")
+    media_id: int | None = Field(default=None, description="Attachment id from upload_media, used only when type is 'image'")
+    media_url: str | None = Field(default=None, description="Attachment URL from upload_media, used only when type is 'image'")
+    caption: str | None = Field(default=None, description="Optional caption, used only when type is 'image'")
 
 
 class CreatePostParams(BaseModel):
@@ -830,6 +835,8 @@ class CreatePostParams(BaseModel):
         description="Content as an ordered list of {type, text, level} blocks, rendered into Gutenberg block markup")
     excerpt: str | None = Field(default=None, description="Optional excerpt")
     category: str | None = Field(default=None, description="Optional category name (posts only); resolved to an existing term, never created")
+    tags: list[str] = Field(default_factory=list, description="Optional tag names (posts only); resolved to existing terms, never created — names not found are reported back, not silently dropped")
+    featured_media_id: int | None = Field(default=None, description="Attachment id from a prior upload_media call, set as the post's featured image")
     date: str | None = Field(default=None, description="Optional publish/schedule date as YYYY-MM-DD or full ISO 8601; required when status='future'")
     lang: str | None = Field(default=None, description="Optional Polylang language code, e.g. 'en', 'ro' — requires Polylang on the site")
     meta_title: str | None = Field(default=None, description="Optional Rank Math SEO title, set in the same call")
@@ -849,6 +856,8 @@ class UpdatePostParams(BaseModel):
         description="Replace the content with these ordered {type, text, level} blocks; omit to keep existing content")
     excerpt: str | None = Field(default=None, description="New excerpt; omit to keep it")
     category: str | None = Field(default=None, description="New category name (posts only); resolved to an existing term, never created")
+    tags: list[str] | None = Field(default=None, description="Replace tag names (posts only); resolved to existing terms, never created; omit to keep existing tags")
+    featured_media_id: int | None = Field(default=None, description="Attachment id from a prior upload_media call, set as the post's featured image")
     date: str | None = Field(default=None, description="New publish/schedule date as YYYY-MM-DD or full ISO 8601")
 
 
@@ -859,3 +868,31 @@ class PostResult(sdl.Entity):
     slug: str = ""
     date: str | None = None
     category_resolved: bool = True
+    tags_not_found: list[str] = Field(default_factory=list)
+    featured_media_set: bool = False
+
+
+# ─────────── media upload (sideload via Imperal Media Bridge) ───────────
+
+class UploadMediaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    source_url: str = Field(description="Public https:// URL of the image to add to the media library")
+    post_id: int | None = Field(default=None, description="Optional post/page id to attach the uploaded image to")
+    alt_text: str | None = Field(default=None, description="Optional alt text to set on the new attachment")
+    caption: str | None = Field(default=None, description="Optional caption to set on the new attachment")
+    set_featured: bool = Field(default=False, description="Set this image as the featured image of post_id (requires post_id)")
+
+
+class MediaUploadResult(sdl.Entity):
+    """Outcome of upload_media: the new media library attachment."""
+    url: str = ""
+    width: int | None = None
+    height: int | None = None
+    attached_to: int | None = None
+    featured_set: bool = False
+
+
+class MediaSupport(sdl.Entity):
+    """Outcome of check_media_support: is the Media Bridge present, can this user upload."""
+    bridge_version: str = ""
+    can_upload: bool = False
