@@ -253,3 +253,75 @@ async def test_center_connect_view_overrides_site_id():
     node = await panels.center(ctx, view="connect", site_id="x-com")
     s = str(node)
     assert "app_password" in s
+
+
+# ── category / tag management block ────────────────────────────────────────
+# Requirement: "a UI I control that reaches every detail without talking in
+# chat." Categories/tags were previously chat-only (create_post_category etc
+# had no panel surface at all) even though the read-only taxonomy table
+# already showed them. These tests pin the write side down as real ui.Form
+# controls reachable straight from the Taxonomies tab.
+
+async def _tax_panel_ctx():
+    ctx = MockContext()
+    await storage.save_site_record(ctx, {"id": "blog-com", "name": "Blog",
+                                         "url": "https://blog.com", "username": "admin",
+                                         "status": "connected"})
+    await storage.set_credential(ctx, "blog-com", "pw")
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/types", {}, 200)
+    ctx.http.mock_get(
+        "https://blog.com/wp-json/wp/v2/taxonomies",
+        {
+            "category": {"name": "Categories", "rest_base": "categories"},
+            "post_tag": {"name": "Tags", "rest_base": "tags"},
+        },
+        200,
+    )
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/posts", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/pages", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/media", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/comments", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/users", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wc/v3/orders", {"code": "rest_no_route"}, 404)
+    ctx.http.mock_get(
+        "https://blog.com/wp-json/wp/v2/categories",
+        [{"id": 5, "name": "Security News", "count": 3, "slug": "security-news"}],
+        200,
+    )
+    ctx.http.mock_get(
+        "https://blog.com/wp-json/wp/v2/tags",
+        [{"id": 9, "name": "chisinau", "count": 1, "slug": "chisinau"}],
+        200,
+    )
+    return ctx
+
+
+async def test_taxonomies_tab_categories_has_create_rename_delete_forms():
+    ctx = await _tax_panel_ctx()
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="tax", tax_tab="tax:category")
+    s = str(node)
+    assert "Security News" in s  # existing category still listed read-only
+    assert "create_post_category" in s
+    assert "update_post_category" in s
+    assert "delete_post_category" in s
+
+
+async def test_taxonomies_tab_tags_has_create_rename_delete_forms():
+    ctx = await _tax_panel_ctx()
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="tax", tax_tab="tax:post_tag")
+    s = str(node)
+    assert "chisinau" in s
+    assert "create_post_tag" in s
+    assert "update_post_tag" in s
+    assert "delete_post_tag" in s
+
+
+async def test_taxonomy_manage_block_create_only_when_no_terms_yet():
+    node = panels._taxonomy_manage_block([], "blog-com", "category")
+    s = str(node)
+    assert "create_post_category" in s
+    # No terms yet -- nothing to rename or delete.
+    assert "update_post_category" not in s
+    assert "delete_post_category" not in s

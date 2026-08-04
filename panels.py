@@ -246,6 +246,76 @@ def _render_content_table(items, tab):
     return ui.DataTable(columns=cols, rows=rows)
 
 
+# ── Category / tag management (create · rename · delete) ─────────────────────
+# Categories/tags are read-only in the taxonomy table above (DataTable has no
+# per-row actions); this block is the write side, one real ui.Form per verb,
+# submitting straight to the taxonomy tools -- no chat round-trip needed.
+
+_TAX_TOOLS = {
+    "category": {"create": "create_post_category", "update": "update_post_category",
+                 "delete": "delete_post_category", "label": "category"},
+    "post_tag": {"create": "create_post_tag", "update": "update_post_tag",
+                 "delete": "delete_post_tag", "label": "tag"},
+}
+
+
+def _taxonomy_manage_block(items: list, site_id: str, tax_slug: str) -> ui.UINode:
+    tools = _TAX_TOOLS[tax_slug]
+    label = tools["label"]
+    term_options = [{"value": str(it.get("id", "")), "label": it.get("name", "")} for it in items]
+
+    create_children = [
+        ui.Input(param_name="name", placeholder=f"New {label} name"),
+    ]
+    if tax_slug == "category":
+        parent_options = [{"value": "0", "label": "(top level)"}] + term_options
+        create_children.append(
+            ui.Select(param_name="parent_id", options=parent_options, value="0",
+                      placeholder="Parent category")
+        )
+        create_children.append(
+            ui.Input(param_name="description", placeholder="Description (optional)")
+        )
+    create_form = ui.Form(
+        action=tools["create"], submit_label=f"Create {label}",
+        defaults={"site_id": site_id},
+        children=create_children,
+    )
+
+    if not term_options:
+        return ui.Card(title=f"New {label}", content=create_form)
+
+    rename_children = [
+        ui.Select(param_name="term_id", options=term_options, placeholder=f"Choose a {label}"),
+        ui.Input(param_name="name", placeholder="New name"),
+    ]
+    if tax_slug == "category":
+        rename_children.append(
+            ui.Select(param_name="parent_id",
+                      options=[{"value": "0", "label": "(top level)"}] + term_options,
+                      placeholder="New parent (optional)")
+        )
+    rename_form = ui.Form(
+        action=tools["update"], submit_label=f"Rename {label}",
+        defaults={"site_id": site_id},
+        children=rename_children,
+    )
+
+    delete_form = ui.Form(
+        action=tools["delete"], submit_label=f"Delete {label}",
+        defaults={"site_id": site_id},
+        children=[
+            ui.Select(param_name="term_id", options=term_options, placeholder=f"Choose a {label}"),
+        ],
+    )
+
+    return ui.Stack(direction="v", gap=3, children=[
+        ui.Card(title=f"New {label}", content=create_form),
+        ui.Card(title=f"Rename {label}", content=rename_form),
+        ui.Card(title=f"Delete {label}", content=delete_form),
+    ])
+
+
 # ── Site detail ───────────────────────────────────────────────────────────────
 
 async def _render_detail(ctx, site_id,
@@ -667,10 +737,16 @@ async def _render_detail(ctx, site_id,
         tax_active = tax_tab if tax_tab else first_tax
         tax_btns = [_item_btn(m["name"], f"tax:{s}", tax_active, "tax_tab")
                     for s, m in tax_meta.items()]
+        tax_slug = tax_active[len("tax:"):]
         active_content = ui.Stack(gap=3, children=[
             ui.Stack(direction="h", gap=1, wrap=True, children=tax_btns),
             _render_content_table(content_map.get(tax_active), tax_active),
         ])
+        if tax_slug in ("category", "post_tag"):
+            active_content = ui.Stack(gap=3, children=[
+                active_content,
+                _taxonomy_manage_block(content_map.get(tax_active) or [], site_id, tax_slug),
+            ])
 
     else:  # standard (default)
         active_content = ui.Stack(gap=3, children=[
