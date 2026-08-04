@@ -2715,6 +2715,142 @@
       "owner_chat_tool": "wp-site-connector"
     },
     {
+      "name": "install_plugin",
+      "description": "Install a WordPress plugin via WP-CLI, from a WordPress.org slug (e.g. 'imperal-media-bridge') or a direct https:// .zip URL, and optionally activate it immediately. Requires SSH access configured with add_ssh. Use this to install Imperal's own companion bridge plugins (Media Bridge, Builder Bridge, SEO Bridge) or any third-party plugin the site needs.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.install_plugin"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "source": {
+            "description": "WordPress.org plugin slug (e.g. 'imperal-media-bridge') or a direct https:// .zip URL (e.g. a GitHub release asset). Never a shell command.",
+            "title": "Source",
+            "type": "string"
+          },
+          "activate": {
+            "default": true,
+            "description": "Activate the plugin immediately after install",
+            "title": "Activate",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "site_id",
+          "source"
+        ],
+        "title": "InstallPluginParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Result of installing a plugin over WP-CLI.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "activated": {
+            "default": false,
+            "title": "Activated",
+            "type": "boolean"
+          },
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PluginInstallResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.install_plugin",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
       "name": "list_custom_posts",
       "description": "List items of a custom post type on a connected WordPress site. Use post_type= with the REST base slug (e.g. 'products', 'events', 'portfolio'). Check the site's panel to see available post types.",
       "action_type": "read",
