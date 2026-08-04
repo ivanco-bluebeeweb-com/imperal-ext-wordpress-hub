@@ -2,9 +2,9 @@ from imperal_sdk import Extension, ChatExtension
 
 ext = Extension(
     "wp-site-connector",
-    version="1.7.0",
-    display_name="WP Site Connector",
-    description="Connect WordPress sites; create and update posts/pages with Gutenberg content, tags, featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
+    version="1.8.0",
+    display_name="WordPress Hub",
+    description="Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
     icon="icon.svg",
     actions_explicit=True,
     capabilities=["wp:read", "wp:write"],

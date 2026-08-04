@@ -146,6 +146,45 @@ async def find_term_ids(ctx, base_url: str, username: str, app_password: str,
     return resolved, missing
 
 
+async def list_terms(ctx, base_url: str, username: str, app_password: str,
+                      taxonomy_base: str, *, parent: int | None = None,
+                      search: str | None = None, per_page: int = 100, page: int = 1):
+    """List terms in one taxonomy ('categories' or 'tags'). Returns the raw HTTPResponse."""
+    params: dict = {"per_page": per_page, "page": page}
+    if parent is not None:
+        params["parent"] = parent
+    if search:
+        params["search"] = search
+    return await wp_get(ctx, base_url, f"/wp-json/wp/v2/{taxonomy_base}",
+                        username=username, app_password=app_password, params=params)
+
+
+async def create_term(ctx, base_url: str, username: str, app_password: str,
+                       taxonomy_base: str, *, name: str, description: str = "",
+                       parent: int | None = None):
+    """Create one term in a taxonomy. ``parent`` only applies to hierarchical
+    taxonomies (categories) — WordPress ignores it for flat ones (tags)."""
+    payload: dict = {"name": name, "description": description}
+    if parent is not None:
+        payload["parent"] = parent
+    return await wp_post(ctx, base_url, f"/wp-json/wp/v2/{taxonomy_base}",
+                         username=username, app_password=app_password, json=payload)
+
+
+async def update_term(ctx, base_url: str, username: str, app_password: str,
+                       taxonomy_base: str, term_id: int, **fields):
+    """Update selected fields of an existing term. Only keys present in ``fields`` are sent."""
+    return await wp_request(ctx, "post", base_url, f"/wp-json/wp/v2/{taxonomy_base}/{term_id}",
+                            username=username, app_password=app_password, json=fields)
+
+
+async def delete_term(ctx, base_url: str, username: str, app_password: str,
+                       taxonomy_base: str, term_id: int):
+    """Permanently delete a term — WordPress requires force=true since terms have no trash."""
+    return await wp_request(ctx, "delete", base_url, f"/wp-json/wp/v2/{taxonomy_base}/{term_id}",
+                            username=username, app_password=app_password, params={"force": "true"})
+
+
 async def create_post(ctx, base_url: str, username: str, app_password: str, *,
                       post_type: str = "posts", title: str, content: str,
                       status: str = "draft", slug: str | None = None,

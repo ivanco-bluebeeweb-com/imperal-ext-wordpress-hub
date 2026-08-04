@@ -1109,7 +1109,7 @@ cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add ambient si
 - Test: `Apps/WP Site Connector/src/tests/test_panels.py`
 
 **Interfaces:**
-- Produces three `@ext.panel` handlers: `dashboard` (`slot="left"` — site list + "Connect site" button), `detail` (`slot="center"` — header + `ui.Tabs` Posts/Pages/Media + health card; returns `ui.Empty()` when no `site_id`), `connect_form` (`slot="center", center_overlay=True` — `ui.Form` with `ui.Input(type="url")`, `ui.Input` username, `ui.Password`, `ui.Tooltip` on every label, submit → `connect_site`).
+- Produces three `@ext.panel` handlers: `dashboard` (`slot="left"` — site list + "Connect site" button), `detail` (`slot="center", center_overlay=True` — header + `ui.Tabs` Posts/Pages/Media + health card; returns `ui.Empty()` when no `site_id`), `connect_form` (`slot="center", center_overlay=True` — `ui.Form` with `ui.Input(type="url")`, `ui.Input` username, `ui.Password`, `ui.Tooltip` on every label, submit → `connect_site`).
 - Consumes: Task 4 `list_site_records`; the `ui.*` primitives (confirm names/props in `_digests/05-sdk-b.md`); `connect_site` / `detail` panel ids for `ui.Call`.
 
 - [ ] **Step 1: Write the failing test** (structural invariants — panels must never return `None`, form must contain a Password field)
@@ -1184,7 +1184,7 @@ async def dashboard(ctx):
     ])
 
 
-@ext.panel("detail", slot="center")
+@ext.panel("detail", slot="center", center_overlay=True)
 async def detail(ctx, site_id=None, active_tab="posts"):
     if not site_id:
         return ui.Empty()

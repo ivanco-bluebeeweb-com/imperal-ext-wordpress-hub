@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WP Site Connector — Panel UI Mockup</title>
+<style>
+  :root{
+    --bg:#0a0a0c;--surface:#141417;--surface-2:#1b1b1f;--surface-3:#212127;
+    --border:#27272b;--border-soft:#202024;
+    --text:#ededef;--text-dim:#8a8a91;--text-dimmer:#5e5e66;
+    --accent:#5b8bff;--accent-grad:linear-gradient(135deg,#5b8bff,#6366f1);
+    --green:#34d399;--green-bg:rgba(52,211,153,.12);--green-border:rgba(52,211,153,.3);
+    --red:#fb7185;--red-bg:rgba(251,113,133,.12);--red-border:rgba(251,113,133,.3);
+    --blue:#60a5fa;--blue-bg:rgba(96,165,250,.12);--blue-border:rgba(96,165,250,.3);
+    --radius:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;line-height:1.45;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+  .icon{stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ─── TOP BAR ─── */
+  .topbar{height:52px;border-bottom:1px solid var(--border-soft);background:#0c0c0e;flex:none;display:flex;align-items:center;padding:0 20px;gap:24px}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}
+  .brand .logo{width:22px;height:22px;display:grid;place-items:center;background:var(--accent-grad);border-radius:6px;font-size:11px}
+  .tb-links{display:flex;gap:18px;font-size:13.5px}
+  .tb-links span{color:var(--text-dim);cursor:pointer}
+  .tb-links span.active{color:var(--text);font-weight:500}
+  .tb-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+  .dot-g{width:7px;height:7px;border-radius:50%;background:var(--green)}
+  .stat-pill{display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:12.5px}
+  .tb-time{font-size:12.5px;color:var(--text-dim)}
+  .av{width:26px;height:26px;border-radius:50%;background:var(--accent-grad);display:grid;place-items:center;font-size:11px;font-weight:600}
+
+  /* ─── LAYOUT ─── */
+  .layout{display:flex;flex:1;overflow:hidden}
+
+  /* ─── APP SIDEBAR ─── */
+  .app-sidebar{width:52px;border-right:1px solid var(--border-soft);background:#0c0c0e;display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:6px;flex:none}
+  .app-icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;cursor:pointer;color:var(--text-dimmer);transition:.12s}
+  .app-icon:hover{background:var(--surface-2);color:var(--text-dim)}
+  .app-icon.active{background:linear-gradient(150deg,#1c1f35,#141629);border:1px solid rgba(91,139,255,.4);color:var(--accent)}
+  .app-icon svg{width:18px;height:18px}
+  .sidebar-sep{width:28px;height:1px;background:var(--border);margin:4px 0}
+  .add-icon{width:32px;height:32px;border-radius:8px;border:1px dashed var(--border);display:grid;place-items:center;cursor:pointer;color:var(--text-dimmer);margin-top:auto;margin-bottom:4px}
+  .add-icon:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* ─── CENTER PANEL ─── */
+  .center-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border-soft)}
+  .slot-chrome{height:40px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;padding:0 16px;gap:8px;flex:none;background:var(--surface)}
+  .slot-chrome svg{width:14px;height:14px;color:var(--text-dimmer)}
+  .slot-chrome-title{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim)}
+  .panel-content{flex:1;overflow-y:auto;padding:20px 22px 32px;position:relative}
+  .panel-content::-webkit-scrollbar{width:5px}
+  .panel-content::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:3px}
+
+  /* ─── RIGHT CHAT SIDEBAR ─── */
+  .chat-sidebar{width:380px;flex:none;display:flex;flex-direction:column;overflow:hidden;background:#0e0e11}
+  .chat-tabs{display:flex;border-bottom:1px solid var(--border-soft);padding:0 4px;height:44px;align-items:flex-end;flex:none}
+  .chat-tab{padding:0 14px 11px;font-size:13.5px;font-weight:500;color:var(--text-dimmer);cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:7px}
+  .chat-tab.active{color:var(--text);border-bottom-color:var(--accent)}
+  .chat-tab svg{width:14px;height:14px}
+  .chat-tab .tab-dot{width:18px;height:18px;border-radius:50%;background:var(--accent-grad);display:grid;place-items:center;font-size:9px;font-weight:700}
+  .chat-messages{flex:1;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:12px}
+  .chat-messages::-webkit-scrollbar{width:4px}
+  .chat-messages::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:2px}
+  .msg{display:flex;flex-direction:column;gap:4px;max-width:88%}
+  .msg.user{align-self:flex-end;align-items:flex-end}
+  .msg.bot{align-self:flex-start}
+  .msg-bubble{padding:10px 13px;border-radius:12px;font-size:13.5px;line-height:1.5}
+  .msg.user .msg-bubble{background:var(--accent-grad);color:#fff;border-bottom-right-radius:4px}
+  .msg.bot .msg-bubble{background:var(--surface-2);color:var(--text);border-bottom-left-radius:4px;border:1px solid var(--border)}
+  .msg-time{font-size:11px;color:var(--text-dimmer);padding:0 4px}
+  .fn-call{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text-dim);margin-bottom:2px}
+  .fn-call-head{display:flex;align-items:center;gap:6px;font-weight:600;color:var(--accent);margin-bottom:6px;font-size:11.5px}
+  .fn-call-head svg{width:13px;height:13px}
+  .fn-result{margin-top:6px;font-size:12px;color:var(--text-dim);line-height:1.5}
+  .fn-result strong{color:var(--text)}
+  .fn-result ul{padding-left:14px;margin-top:4px}
+  .fn-result li{margin-bottom:2px}
+  .inline-badge{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:1px 7px;border-radius:5px;vertical-align:middle}
+  .inline-badge.g{color:var(--green);background:var(--green-bg);border:1px solid var(--green-border)}
+  .inline-badge.b{color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-border)}
+  .chat-input-area{padding:12px 14px;border-top:1px solid var(--border-soft);flex:none}
+  .chat-input-row{display:flex;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px 12px}
+  .chat-input{flex:1;background:none;border:none;color:var(--text);font-size:13.5px;outline:none;font-family:inherit}
+  .chat-input::placeholder{color:var(--text-dimmer)}
+  .send-btn{width:30px;height:30px;border-radius:8px;background:var(--accent-grad);border:none;display:grid;place-items:center;cursor:pointer;flex:none}
+  .send-btn svg{width:14px;height:14px;stroke:#fff}
+
+  /* ─── OVERVIEW ─── */
+  .overview-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .sites-count{font-size:22px;font-weight:700;color:var(--text);letter-spacing:-.3px}
+  .btn-connect{display:inline-flex;align-items:center;gap:6px;background:var(--accent-grad);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:600;padding:8px 16px;cursor:pointer}
+  .btn-connect:hover{filter:brightness(1.07)}
+
+  .filter-bar{display:flex;gap:10px;margin-bottom:18px;align-items:center}
+  .search-wrap{position:relative;flex:1}
+  .search-wrap svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:13px;height:13px;color:var(--text-dimmer);pointer-events:none}
+  .search-input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 10px 8px 30px;font-size:13px;color:var(--text);outline:none}
+  .search-input::placeholder{color:var(--text-dimmer)}
+  .search-input:focus{border-color:#37373d}
+
+  /* Select dropdown */
+  .select-wrap{position:relative;flex:none}
+  .select-wrap svg{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:13px;height:13px;color:var(--text-dimmer);pointer-events:none}
+  .filter-select{appearance:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 32px 8px 12px;font-size:13px;color:var(--text);outline:none;cursor:pointer;font-family:inherit}
+  .filter-select:focus{border-color:#37373d}
+
+  /* 3-column grid */
+  .sites-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+
+  .site-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 14px 14px 22px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:8px;transition:.12s;cursor:pointer;min-height:64px}
+  .site-card:hover{border-color:#44444d;background:var(--surface-2)}
+  .site-card-top{display:flex;align-items:center;gap:9px}
+  .site-card-domain{font-size:14px;font-weight:650;color:var(--text)}
+
+  /* ── pulsing status lamps ── */
+  .lamp{width:8px;height:8px;border-radius:50%;flex:none}
+  .lamp.connected{
+    background:#34d399;
+    box-shadow:0 0 4px 1px rgba(52,211,153,.45);
+    animation:pulse-green 4.5s ease-in-out infinite;
+  }
+  .lamp.error{
+    background:#ff1a1a;
+    box-shadow:0 0 8px 2px rgba(255,26,26,.75);
+    animation:pulse-red .75s ease-in-out infinite;
+  }
+  @keyframes pulse-green{
+    0%,100%{box-shadow:0 0 3px 1px rgba(52,211,153,.3);opacity:.85}
+    50%     {box-shadow:0 0 8px 3px rgba(52,211,153,.6);opacity:1}
+  }
+  @keyframes pulse-red{
+    0%,100%{background:#cc0000;box-shadow:0 0 4px 1px rgba(255,26,26,.5);opacity:.7}
+    50%     {background:#ff1a1a;box-shadow:0 0 16px 6px rgba(255,26,26,1);opacity:1}
+  }
+  /* card header row */
+  .site-card-header{position:relative;display:flex;align-items:center;justify-content:flex-start;width:100%}
+  .site-card-header-left{display:flex;align-items:center;gap:9px}
+  .site-card-btns{position:absolute;right:0;top:50%;transform:translateY(-50%);display:flex;gap:6px;align-items:center}
+
+  /* three-dots menu */
+  .card-menu-wrap{position:relative;flex:none}
+  .btn-dots{width:32px;height:32px;background:#1c1c20;border:1px solid #303036;border-radius:9px;display:grid;place-items:center;cursor:pointer;color:#9090a0;flex:none}
+  .btn-dots:hover{background:#222227;border-color:#3a3a40;color:var(--text-dim)}
+  .btn-dots svg{width:14px;height:14px}
+  .card-popover{position:absolute;top:30px;right:0;width:150px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:5px;box-shadow:0 12px 32px -8px rgba(0,0,0,.85);display:none;z-index:30}
+  .card-popover.open{display:block}
+  .card-popover button{width:100%;text-align:left;background:none;border:none;color:var(--text-dim);font-size:13px;padding:8px 11px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:8px}
+  .card-popover button:hover{background:var(--surface-2);color:var(--text)}
+  .card-popover button.danger{color:var(--red)}
+  .card-popover button.danger:hover{background:rgba(251,113,133,.1)}
+  .card-popover button svg{width:13px;height:13px}
+  .pop-sep{height:1px;background:var(--border-soft);margin:4px 0}
+
+  /* card actions row */
+  .card-actions{display:flex;align-items:center;gap:6px;margin-top:2px}
+  .btn-view{display:inline-flex;align-items:center;gap:7px;background:#1c1c20;border:1px solid #303036;color:var(--text);border-radius:10px;font-size:13px;font-weight:600;padding:8px 16px;cursor:pointer;letter-spacing:.01em}
+  .btn-view:hover{background:#222227;border-color:#3a3a40}
+  .btn-view svg{width:13px;height:13px;color:#9090a0}
+  .btn-sq{width:32px;height:32px;background:#1c1c20;border:1px solid #303036;border-radius:9px;display:grid;place-items:center;cursor:pointer;color:#9090a0;flex:none}
+  .btn-sq:hover{background:#222227;border-color:#3a3a40;color:var(--text-dim)}
+  .btn-sq svg{width:14px;height:14px}
+  /* alias for old names */
+  .btn-refresh{width:32px;height:32px;background:#1c1c20;border:1px solid #303036;border-radius:9px;display:grid;place-items:center;cursor:pointer;color:#9090a0;flex:none}
+  .btn-refresh:hover{background:#222227;border-color:#3a3a40;color:var(--text-dim)}
+  .btn-refresh svg{width:14px;height:14px}
+
+  /* ─── DETAIL ─── */
+  .detail-back{display:inline-flex;align-items:center;gap:6px;color:var(--text-dim);font-size:13px;cursor:pointer;margin-bottom:14px}
+  .detail-back:hover{color:var(--text)}
+  .detail-back svg{width:14px;height:14px}
+  /* detail header */
+  .detail-header{display:flex;align-items:center;justify-content:flex-start;margin-bottom:16px;gap:10px}
+  .page-title{font-size:20px;font-weight:700;letter-spacing:-.3px}
+  .stats-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:13px 14px;display:flex;flex-direction:column;gap:0;transition:.12s}
+  .stat-card.clickable{cursor:pointer}
+  .stat-card.clickable:hover{border-color:#44444d;background:var(--surface-2)}
+  .stat-value{font-size:20px;font-weight:700;line-height:1.1}
+  .stat-value.green{color:var(--green)}
+  .stat-value.red{color:var(--red)}
+  .stat-value.blue{color:var(--blue)}
+  .stat-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dimmer);margin-top:5px}
+  .stat-card-footer{margin-top:10px}
+
+  /* detail tabs */
+  .dtab-bar{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-top:4px}
+  .dtab-btn{padding:9px 14px;background:none;border:none;color:var(--text-dim);font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .dtab-btn.active{color:var(--text);border-bottom-color:var(--accent)}
+  .dtab-content{display:none;padding-top:14px}
+  .dtab-content.active{display:block}
+
+  /* collections toolbar */
+  .collections-toolbar{display:flex;align-items:center;margin-bottom:12px}
+  .type-select-wrap{position:relative}
+  .type-select-wrap svg{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:12px;height:12px;color:var(--text-dimmer);pointer-events:none}
+  .type-select{appearance:none;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 30px 7px 11px;font-size:12.5px;color:var(--text);outline:none;cursor:pointer;font-family:inherit}
+
+  /* security grid */
+  .sec-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
+  .sec-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px}
+  .sec-card-top{display:flex;align-items:center;justify-content:space-between}
+  .sec-icon{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:15px;flex:none}
+  .sec-icon.ok{background:var(--green-bg);border:1px solid var(--green-border)}
+  .sec-icon.warn{background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3)}
+  .sec-icon.danger{background:var(--red-bg);border:1px solid var(--red-border)}
+  .sec-badge{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px}
+  .sec-badge.ok{color:var(--green);background:var(--green-bg);border:1px solid var(--green-border)}
+  .sec-badge.warn{color:var(--amber);background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3)}
+  .sec-badge.danger{color:var(--red);background:var(--red-bg);border:1px solid var(--red-border)}
+  .sec-label{font-size:12.5px;font-weight:650;color:var(--text)}
+  .sec-desc{font-size:11.5px;color:var(--text-dim);line-height:1.4}
+  .data-table{width:100%;border-collapse:collapse}
+  .data-table th{text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dimmer);padding:9px 10px;border-bottom:1px solid var(--border)}
+  .data-table td{font-size:13px;color:var(--text-dim);padding:10px 10px;border-bottom:1px solid var(--border-soft)}
+  .data-table tr:last-child td{border-bottom:none}
+  .data-table tr:hover td{background:var(--surface-2)}
+  .data-table td:first-child{color:var(--text)}
+  .status-pill{font-size:11px;font-weight:600;padding:2px 7px;border-radius:5px;background:var(--surface-3);color:var(--text-dimmer);border:1px solid var(--border)}
+  .status-pill.publish{color:var(--green);background:var(--green-bg);border-color:var(--green-border)}
+
+  /* ─── CONNECT OVERLAY ─── */
+  .overlay-backdrop{position:absolute;inset:0;background:rgba(10,10,12,.75);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:20}
+  .connect-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px;width:420px;max-width:90%;box-shadow:0 24px 64px -16px rgba(0,0,0,.9)}
+  .connect-card h2{font-size:17px;font-weight:700;margin-bottom:4px}
+  .connect-card .sub{font-size:13px;color:var(--text-dim);margin-bottom:20px}
+  .form-field{margin-bottom:14px}
+  .form-label{font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:5px;display:block}
+  .form-input{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;font-size:13px;color:var(--text);outline:none;font-family:inherit}
+  .form-input::placeholder{color:var(--text-dimmer)}
+  .form-input:focus{border-color:var(--accent)}
+  .form-hint{font-size:11px;color:var(--text-dimmer);margin-top:4px}
+  .form-actions{display:flex;gap:8px;margin-top:20px}
+  .btn-cancel{flex:1;background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);border-radius:9px;font-size:13px;font-weight:600;padding:9px;cursor:pointer}
+  .btn-cancel:hover{color:var(--text)}
+  .btn-submit{flex:2;background:var(--accent-grad);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:600;padding:9px;cursor:pointer}
+  .btn-submit:hover{filter:brightness(1.08)}
+
+  /* states */
+  .state{display:none}
+  .state.active{display:block}
+  .overlay-state{display:none}
+  .overlay-state.active{display:flex}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="brand"><span class="logo">◆</span> Imperal OS</div>
+  <div class="tb-links">
+    <span>Webbee</span>
+    <span>AI Cloud Agents</span>
+    <span class="active">Marketplace</span>
+  </div>
+  <div class="tb-right">
+    <div class="dot-g"></div>
+    <div class="stat-pill">
+      <svg class="icon" viewBox="0 0 24 24" style="width:12px;height:12px;color:var(--text-dimmer)"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      <span style="font-size:12px;color:var(--text-dim)">3,313</span>
+    </div>
+    <div class="tb-time">09:41 UTC</div>
+    <div class="av">V</div>
+  </div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- App sidebar -->
+  <div class="app-sidebar">
+    <div class="app-icon" title="Webbee">
+      <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+    </div>
+    <div class="sidebar-sep"></div>
+    <div class="app-icon active" title="WP Site Connector">
+      <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+    </div>
+    <div class="app-icon" title="Email">
+      <svg class="icon" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 7 10-7"/></svg>
+    </div>
+    <div class="app-icon" title="Spotify">
+      <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14.5s2-1.5 4-1.5 4 1.5 4 1.5M7.5 11.5s2.5-1.5 4.5-1.5 4.5 1.5 4.5 1.5M7 8.5s3-2 5-2 5 2 5 2"/></svg>
+    </div>
+    <div class="app-icon" title="Tasks">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3"/></svg>
+    </div>
+    <div class="add-icon" title="Add app">
+      <svg class="icon" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M12 5v14M5 12h14"/></svg>
+    </div>
+  </div>
+
+  <!-- Center panel -->
+  <div class="center-panel" style="position:relative">
+    <div class="slot-chrome">
+      <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <div class="slot-chrome-title">WP Sites</div>
+    </div>
+
+    <div class="panel-content">
+
+      <!-- ── OVERVIEW ── -->
+      <div class="state active" id="state-overview">
+
+        <div class="overview-header">
+          <div class="sites-count">3 sites connected</div>
+          <button class="btn-connect" onclick="showConnect()">Connect new site</button>
+        </div>
+
+        <div class="filter-bar">
+          <div class="search-wrap">
+            <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input class="search-input" placeholder="Search sites…">
+          </div>
+          <div class="select-wrap">
+            <select class="filter-select">
+              <option>All</option>
+              <option>Connected</option>
+              <option>Error</option>
+            </select>
+            <svg class="icon" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+        </div>
+
+        <div class="sites-grid">
+
+          <div class="site-card" onclick="showDetail('test3.ksrenovationgroup.com','https://test3.ksrenovationgroup.com','connected')">
+            <div class="site-card-header">
+              <div class="site-card-header-left">
+                <div class="lamp connected"></div>
+                <div class="site-card-domain">test3.ksrenovationgroup.com</div>
+              </div>
+              <div class="site-card-btns">
+                <button class="btn-refresh" title="Refresh" onclick="event.stopPropagation()"><svg class="icon" viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></button>
+                <div class="card-menu-wrap">
+                  <button class="btn-dots" onclick="toggleCardMenu(event,this)"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+                  <div class="card-popover">
+                    <button><svg class="icon" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg> Share</button>
+                    <div class="pop-sep"></div>
+                    <button class="danger"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg> Remove site</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="site-card" onclick="showDetail('demo.webbee.io','https://demo.webbee.io','connected')">
+            <div class="site-card-header">
+              <div class="site-card-header-left">
+                <div class="lamp connected"></div>
+                <div class="site-card-domain">demo.webbee.io</div>
+              </div>
+              <div class="site-card-btns">
+                <button class="btn-refresh" title="Refresh" onclick="event.stopPropagation()"><svg class="icon" viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></button>
+                <div class="card-menu-wrap">
+                  <button class="btn-dots" onclick="toggleCardMenu(event,this)"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+                  <div class="card-popover">
+                    <button><svg class="icon" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg> Share</button>
+                    <div class="pop-sep"></div>
+                    <button class="danger"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg> Remove site</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="site-card" onclick="showDetail('legacy.example.com','https://legacy.example.com','error')">
+            <div class="site-card-header">
+              <div class="site-card-header-left">
+                <div class="lamp error"></div>
+                <div class="site-card-domain">legacy.example.com</div>
+              </div>
+              <div class="site-card-btns">
+                <button class="btn-refresh" title="Refresh" onclick="event.stopPropagation()"><svg class="icon" viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></button>
+                <div class="card-menu-wrap">
+                  <button class="btn-dots" onclick="toggleCardMenu(event,this)"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+                  <div class="card-popover">
+                    <button><svg class="icon" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg> Share</button>
+                    <div class="pop-sep"></div>
+                    <button class="danger"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg> Remove site</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="site-card" style="border-style:dashed;border-color:var(--border);background:transparent;justify-content:center;align-items:center;cursor:pointer;min-height:110px" onclick="showConnect()">
+            <div style="text-align:center">
+              <div style="width:28px;height:28px;border-radius:7px;border:1px dashed var(--border);display:grid;place-items:center;margin:0 auto 7px;color:var(--text-dimmer)">
+                <svg class="icon" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>
+              </div>
+              <div style="font-size:12.5px;color:var(--text-dimmer)">Connect new site</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ── DETAIL ── -->
+      <div class="state" id="state-detail">
+        <div class="detail-back" onclick="showOverview()">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+          All sites
+        </div>
+
+        <!-- title + actions -->
+        <div class="detail-header">
+          <div class="page-title" id="detail-title">legacy.example.com</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button class="btn-refresh" title="Refresh">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+            </button>
+            <div class="card-menu-wrap">
+              <button class="btn-dots" onclick="toggleCardMenu(event,this)">
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+              </button>
+              <div class="card-popover">
+                <button><svg class="icon" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg> Share</button>
+                <div class="pop-sep"></div>
+                <button class="danger"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg> Remove site</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- tabs -->
+        <div class="dtab-bar">
+          <button class="dtab-btn active" data-dtab="summary">Summary</button>
+          <button class="dtab-btn" data-dtab="security">Security</button>
+          <button class="dtab-btn" data-dtab="collections">Collections</button>
+          <button class="dtab-btn" data-dtab="media">Media</button>
+        </div>
+
+        <!-- ── Summary ── -->
+        <div class="dtab-content active" id="dtab-summary">
+          <div class="stats-row" style="margin-top:14px">
+            <div class="stat-card clickable" onclick="switchDtab('security')">
+              <div class="stat-value green" id="s-reach">Yes</div>
+              <div class="stat-label">Reachable</div>
+
+            </div>
+            <div class="stat-card clickable" onclick="switchDtab('security')">
+              <div class="stat-value green" id="s-auth">OK</div>
+              <div class="stat-label">Auth</div>
+
+            </div>
+            <div class="stat-card clickable" onclick="switchDtab('security')">
+              <div class="stat-value green" id="s-ssl">HTTPS</div>
+              <div class="stat-label">SSL</div>
+
+            </div>
+          </div>
+          <div class="stats-row">
+            <div class="stat-card clickable" onclick="switchDtab('collections','posts')">
+              <div class="stat-value blue">24</div>
+              <div class="stat-label">Posts</div>
+
+            </div>
+            <div class="stat-card clickable" onclick="switchDtab('collections','pages')">
+              <div class="stat-value blue">8</div>
+              <div class="stat-label">Pages</div>
+
+            </div>
+            <div class="stat-card clickable" onclick="switchDtab('media')">
+              <div class="stat-value blue">103</div>
+              <div class="stat-label">Media</div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Security ── -->
+        <div class="dtab-content" id="dtab-security">
+          <div class="sec-grid" style="margin-top:14px">
+            <div class="sec-card">
+              <div class="sec-card-top"><div class="sec-icon ok">🔒</div><span class="sec-badge ok">OK</span></div>
+              <div class="sec-label">SSL Certificate</div>
+              <div class="sec-desc">Valid · expires 2027-03-15 · TLS 1.3</div>
+            </div>
+            <div class="sec-card">
+              <div class="sec-card-top"><div class="sec-icon warn">⚠️</div><span class="sec-badge warn">Update</span></div>
+              <div class="sec-label">WordPress Version</div>
+              <div class="sec-desc">Running 6.4.2 — update available: 6.5.4</div>
+            </div>
+            <div class="sec-card">
+              <div class="sec-card-top"><div class="sec-icon ok">🐘</div><span class="sec-badge ok">OK</span></div>
+              <div class="sec-label">PHP Version</div>
+              <div class="sec-desc">8.2.7 — supported, no known vulnerabilities</div>
+            </div>
+            <div class="sec-card">
+              <div class="sec-card-top"><div class="sec-icon danger">🚨</div><span class="sec-badge danger">Risk</span></div>
+              <div class="sec-label">Admin Username</div>
+              <div class="sec-desc">"admin" detected — predictable, increases brute-force risk</div>
+            </div>
+            <div class="sec-card">
+              <div class="sec-card-top"><div class="sec-icon warn">⚠️</div><span class="sec-badge warn">Warn</span></div>
+              <div class="sec-label">Login URL</div>
+              <div class="sec-desc">Default /wp-admin exposed — consider hiding with a plugin</div>
+            </div>
+            <div class="sec-card">
+              <div class="sec-card-top"><div class="sec-icon danger">🔓</div><span class="sec-badge danger">Off</span></div>
+              <div class="sec-label">Two-Factor Auth</div>
+              <div class="sec-desc">Not configured for any admin user</div>
+            </div>
+            <div class="sec-card">
+              <div class="sec-card-top"><div class="sec-icon warn">⚠️</div><span class="sec-badge warn">12</span></div>
+              <div class="sec-label">Failed Logins</div>
+              <div class="sec-desc">12 failed attempts in the last 24 hours</div>
+            </div>
+            <div class="sec-card">
+              <div class="sec-card-top"><div class="sec-icon ok">✅</div><span class="sec-badge ok">Off</span></div>
+              <div class="sec-label">File Editor</div>
+              <div class="sec-desc">Theme and plugin editor disabled in wp-config.php</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Collections ── -->
+        <div class="dtab-content" id="dtab-collections">
+          <div class="collections-toolbar" style="margin-top:14px">
+            <div class="type-select-wrap">
+              <select class="type-select" id="collections-type" onchange="switchCollection(this.value)">
+                <option value="posts">Blog Posts</option>
+                <option value="pages">Pages</option>
+              </select>
+              <svg class="icon" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+          </div>
+          <div id="coll-posts">
+            <table class="data-table">
+              <thead><tr><th>Title</th><th>Status</th><th>Date</th></tr></thead>
+              <tbody>
+                <tr><td>Kitchen Renovation Tips 2026</td><td><span class="status-pill publish">publish</span></td><td>2026-06-14</td></tr>
+                <tr><td>Bathroom Remodel: Before &amp; After</td><td><span class="status-pill publish">publish</span></td><td>2026-06-10</td></tr>
+                <tr><td>Spring Renovation Checklist</td><td><span class="status-pill publish">publish</span></td><td>2026-05-28</td></tr>
+                <tr><td>New Service: Deck Building</td><td><span class="status-pill">draft</span></td><td>2026-05-20</td></tr>
+                <tr><td>Top 10 Flooring Materials</td><td><span class="status-pill publish">publish</span></td><td>2026-05-12</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="coll-pages" style="display:none">
+            <table class="data-table">
+              <thead><tr><th>Title</th><th>Status</th><th>Date</th></tr></thead>
+              <tbody>
+                <tr><td>About Us</td><td><span class="status-pill publish">publish</span></td><td>2025-11-01</td></tr>
+                <tr><td>Services</td><td><span class="status-pill publish">publish</span></td><td>2025-11-01</td></tr>
+                <tr><td>Contact</td><td><span class="status-pill publish">publish</span></td><td>2025-11-01</td></tr>
+                <tr><td>Portfolio</td><td><span class="status-pill publish">publish</span></td><td>2026-01-15</td></tr>
+                <tr><td>Privacy Policy</td><td><span class="status-pill publish">publish</span></td><td>2026-01-15</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── Media ── -->
+        <div class="dtab-content" id="dtab-media">
+          <table class="data-table" style="margin-top:14px">
+            <thead><tr><th>Title</th><th>Type</th></tr></thead>
+            <tbody>
+              <tr><td>kitchen-hero-2026</td><td>image/jpeg</td></tr>
+              <tr><td>bathroom-before</td><td>image/jpeg</td></tr>
+              <tr><td>bathroom-after</td><td>image/jpeg</td></tr>
+              <tr><td>spring-checklist-cover</td><td>image/png</td></tr>
+              <tr><td>deck-sample-video</td><td>video/mp4</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /panel-content -->
+
+    <!-- Connect overlay -->
+    <div class="overlay-state overlay-backdrop" id="overlay-connect">
+      <div class="connect-card">
+        <h2>Connect a WordPress site</h2>
+        <div class="sub">Enter your site URL and Application Password to get started.</div>
+        <div class="form-field">
+          <label class="form-label">Site URL</label>
+          <input class="form-input" placeholder="https://example.com">
+          <div class="form-hint">Full address including https://</div>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Username</label>
+          <input class="form-input" placeholder="admin">
+          <div class="form-hint">WordPress username that created the Application Password</div>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Application Password</label>
+          <input class="form-input" type="password" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx">
+          <div class="form-hint">Users → Profile → Application Passwords in WP admin</div>
+        </div>
+        <div class="form-actions">
+          <button class="btn-cancel" onclick="hideConnect()">Cancel</button>
+          <button class="btn-submit">Connect</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /center-panel -->
+
+  <!-- RIGHT CHAT SIDEBAR -->
+  <div class="chat-sidebar">
+    <div class="chat-tabs">
+      <div class="chat-tab">
+        <div class="tab-dot">A</div>
+        Assistant
+      </div>
+      <div class="chat-tab active">
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        WP Sites
+      </div>
+    </div>
+
+    <div class="chat-messages">
+
+      <div class="msg user">
+        <div class="msg-bubble">как дела у test3.ksrenovationgroup.com?</div>
+        <div class="msg-time">22:48</div>
+      </div>
+
+      <div class="msg bot" style="max-width:100%">
+        <div class="fn-call">
+          <div class="fn-call-head">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Function call — get_site_health
+          </div>
+          <div class="fn-result">
+            <strong>test3.ksrenovationgroup.com</strong><br>
+            Reachable <span class="inline-badge g">✓</span> &nbsp;
+            Auth <span class="inline-badge g">OK</span> &nbsp;
+            SSL <span class="inline-badge g">HTTPS</span><br>
+            <span style="color:var(--text-dimmer);font-size:11.5px;margin-top:4px;display:block">24 posts · 8 pages · 103 media</span>
+          </div>
+        </div>
+        <div class="msg-bubble" style="max-width:100%">
+          Сайт работает нормально — доступен, авторизация ок, SSL активен.<br><br>
+          <span style="color:var(--text-dimmer);font-size:13px">24 поста · 8 страниц · 103 медиафайла</span>
+        </div>
+        <div class="msg-time">22:48</div>
+      </div>
+
+      <div class="msg user">
+        <div class="msg-bubble">покажи последние посты</div>
+        <div class="msg-time">22:49</div>
+      </div>
+
+      <div class="msg bot" style="max-width:100%">
+        <div class="fn-call">
+          <div class="fn-call-head">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Function call — list_posts
+          </div>
+          <div class="fn-result">
+            <ul>
+              <li><strong>Kitchen Renovation Tips 2026</strong> — publish</li>
+              <li><strong>Bathroom Remodel: Before &amp; After</strong> — publish</li>
+              <li><strong>Spring Renovation Checklist</strong> — publish</li>
+              <li><strong>New Service: Deck Building</strong> — <span style="color:var(--amber)">draft</span></li>
+              <li><strong>Top 10 Flooring Materials</strong> — publish</li>
+            </ul>
+          </div>
+        </div>
+        <div class="msg-bubble">
+          Вот последние 5 постов. Обрати внимание: <em>New Service: Deck Building</em> ещё в черновиках — возможно нужно опубликовать.
+        </div>
+        <div class="msg-time">22:49</div>
+      </div>
+
+    </div>
+
+    <div class="chat-input-area">
+      <div class="chat-input-row">
+        <input class="chat-input" placeholder="Message Webbee…">
+        <button class="send-btn">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function showOverview(){
+  document.getElementById('state-overview').classList.add('active');
+  document.getElementById('state-detail').classList.remove('active');
+}
+function showDetail(domain, url, status){
+  document.getElementById('state-overview').classList.remove('active');
+  document.getElementById('state-detail').classList.add('active');
+  document.getElementById('detail-title').textContent = domain;
+  const ok = status === 'connected';
+  const cl = ok ? 'green' : 'red';
+  document.getElementById('s-reach').textContent = ok ? 'Yes' : 'No';
+  document.getElementById('s-reach').className = 'stat-value ' + cl;
+  document.getElementById('s-auth').textContent = ok ? 'OK' : 'Failed';
+  document.getElementById('s-auth').className = 'stat-value ' + cl;
+  document.getElementById('s-ssl').textContent = ok ? 'HTTPS' : 'HTTP';
+  document.getElementById('s-ssl').className = 'stat-value ' + cl;
+  // reset to Summary tab
+  document.querySelectorAll('.dtab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.dtab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector('.dtab-btn[data-dtab="summary"]').classList.add('active');
+  document.getElementById('dtab-summary').classList.add('active');
+}
+function showConnect(){
+  document.getElementById('overlay-connect').classList.add('active');
+}
+function hideConnect(){
+  document.getElementById('overlay-connect').classList.remove('active');
+}
+document.getElementById('overlay-connect').addEventListener('click', e => {
+  if(e.target === e.currentTarget) hideConnect();
+});
+function toggleCardMenu(e, btn){
+  e.stopPropagation();
+  const pop = btn.parentElement.querySelector('.card-popover');
+  const willOpen = !pop.classList.contains('open');
+  document.querySelectorAll('.card-popover.open').forEach(p => p.classList.remove('open'));
+  if(willOpen) pop.classList.add('open');
+}
+document.addEventListener('click', () => {
+  document.querySelectorAll('.card-popover.open').forEach(p => p.classList.remove('open'));
+});
+document.querySelectorAll('.dtab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.dtab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.dtab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('dtab-' + btn.dataset.dtab).classList.add('active');
+  });
+});
+function switchCollection(val){
+  document.getElementById('coll-posts').style.display = val === 'posts' ? '' : 'none';
+  document.getElementById('coll-pages').style.display = val === 'pages' ? '' : 'none';
+}
+function switchDtab(tab, collectionType){
+  document.querySelectorAll('.dtab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.dtab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector('.dtab-btn[data-dtab="' + tab + '"]').classList.add('active');
+  document.getElementById('dtab-' + tab).classList.add('active');
+  if(collectionType){
+    const sel = document.getElementById('collections-type');
+    sel.value = collectionType;
+    switchCollection(collectionType);
+  }
+}
+</script>
+</body>
+</html>

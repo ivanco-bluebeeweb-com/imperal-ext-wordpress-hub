@@ -391,6 +391,68 @@ class ListCustomPostsParams(BaseModel):
     search: str | None = Field(default=None, description="Optional search term")
 
 
+# ─────────── native WordPress taxonomies (categories/tags for posts) ───────────
+# Separate from ProductCategory/CreateProductCategoryParams above, which are
+# WooCommerce-only (/wc/v3/products/categories, flat, product-count based).
+# These hit the native /wp/v2/categories and /wp/v2/tags taxonomies that
+# create_post/update_post already resolve names against, but never create.
+# Categories and tags get their own distinct tool names/params (not one
+# generic "taxonomy" enum) so the shape of each call matches what it actually
+# supports — parent/child nesting is real for categories, meaningless for tags.
+
+class ListPostCategoriesParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    parent_id: int | None = Field(default=None, ge=0, description="Only list children of this category id; 0 lists top-level categories; omit to list all")
+    search: str | None = Field(default=None, description="Optional name search")
+    limit: int = Field(default=50, ge=1, le=100, description="Maximum categories to return")
+    page: int = Field(default=1, ge=1, description="Result page, starting at 1")
+
+
+class CreatePostCategoryParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    name: str = Field(min_length=1, max_length=200, description="Category name")
+    parent_id: int = Field(default=0, ge=0, description="Optional parent category id; 0 creates a top-level category")
+    description: str = Field(default="", description="Optional category description")
+
+
+class UpdatePostCategoryParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    term_id: int = Field(gt=0, description="Existing category id, from list_post_categories")
+    name: str | None = Field(default=None, min_length=1, max_length=200, description="New name; omit to keep it")
+    parent_id: int | None = Field(default=None, ge=0, description="New parent category id; 0 moves it to top-level; omit to keep it")
+    description: str | None = Field(default=None, description="New description; empty string clears it")
+
+
+class DeletePostCategoryParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    term_id: int = Field(gt=0, description="Existing category id to permanently delete")
+
+
+class ListPostTagsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    search: str | None = Field(default=None, description="Optional name search")
+    limit: int = Field(default=50, ge=1, le=100, description="Maximum tags to return")
+    page: int = Field(default=1, ge=1, description="Result page, starting at 1")
+
+
+class CreatePostTagParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    name: str = Field(min_length=1, max_length=200, description="Tag name")
+    description: str = Field(default="", description="Optional tag description")
+
+
+class UpdatePostTagParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    term_id: int = Field(gt=0, description="Existing tag id, from list_post_tags")
+    name: str | None = Field(default=None, min_length=1, max_length=200, description="New name; omit to keep it")
+    description: str | None = Field(default=None, description="New description; empty string clears it")
+
+
+class DeletePostTagParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    term_id: int = Field(gt=0, description="Existing tag id to permanently delete")
+
+
 class GetSeoMetaParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     post_id: int | None = Field(default=None, description="Numeric id of the post or page. Give this OR slug.")
@@ -530,6 +592,19 @@ class Product(sdl.Entity):
 class ProductCategory(sdl.Entity):
     parent_id: int = 0
     product_count: int = 0
+
+
+class PostTerm(sdl.Entity):
+    """One native WordPress category or tag term (post taxonomy, not WooCommerce)."""
+    taxonomy: str = ""  # 'category' or 'post_tag'
+    parent_id: int = 0
+    count: int = 0
+    slug: str = ""
+
+
+class TermDeleteResult(sdl.Entity):
+    """Confirmation record for a deleted category/tag term."""
+    deleted: bool = False
 
 
 class ProductVariation(sdl.Entity):

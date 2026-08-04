@@ -47,7 +47,17 @@ untested — accepted risk per design decision.
 
 ---
 
-### 2. Filter bar — `overview` handler in `panels.py`
+### 2. Header — site count
+
+```python
+ui.Text(f"{total} site{'s' if total != 1 else ''} connected", variant="heading")
+```
+
+Matches the mockup's large bold count (22px weight-700). Currently rendered as `variant='body'` (default) — replace with `variant='heading'`.
+
+---
+
+### 3. Filter bar — `overview` handler in `panels.py`
 
 Replace the three status buttons with a stretched search input and a reactive select dropdown:
 
@@ -118,7 +128,7 @@ to `"overview"` in a prior commit. Update both to `refresh_panels=["overview"]`.
 
 | File | Change |
 |---|---|
-| `panels.py` | `_site_card`: 3 cols, card `on_click`, footer with Refresh + menu. `overview`: filter bar with `ui.Input` + `ui.Select`. |
+| `panels.py` | `_site_card`: 3 cols, card `on_click`, footer with Refresh + menu. `overview`: header count → `variant="heading"`, filter bar with `ui.Input` + `ui.Select`. |
 | `handlers_read.py` | Add `refresh_site` function. |
 | `handlers_connect.py` | Fix `refresh_panels=["dashboard"]` → `["overview"]` in `connect_site` and `forget_site`. |
 | `tests/test_panels.py` | Update grid-column assertions. Add footer assertions (Refresh button, menu). |

@@ -1,7 +1,55 @@
-# Current Work — WP Site Connector
+# Current Work — WordPress Hub (formerly "WP Site Connector")
 
 > Update this file at the END of every work session.
 > One entry per session. Most recent at top.
+
+---
+
+## 2026-08-04 — Native category/tag taxonomy management + rename to WordPress Hub (v1.8.0)
+
+**Status:** ✅ implemented and verified (300/300 Python tests pass; `imperal validate` clean: 0 errors, 0 warnings; `imperal build` succeeds — 4 tools)
+
+**Why:** user directive (verbatim priority): the app must have functions to create
+categories, create tags, and manage everything nested about them — a tree structure,
+parent/child, all readable/editable/applyable. Also renamed the app display_name from
+"WP Site Connector" to "WordPress Hub" per the same directive. Confirmed featured
+image + inline image insertion were ALREADY implemented (v1.7.0, `create_post`/
+`update_post`'s `featured_media_id` and `PostBlockInput(type="image")`) — no gap there.
+
+**Key distinction preserved:** this is a SEPARATE taxonomy from
+`handlers_woocommerce_catalog.py`'s `ProductCategory`/`create_product_category`
+(WooCommerce-only, `/wc/v3/products/categories`, flat, product-count based). The new
+module manages the NATIVE WordPress `/wp/v2/categories` (hierarchical, parent/child) and
+`/wp/v2/tags` (flat) taxonomies — the same ones `create_post`/`update_post` already
+*resolve* names against via `find_category_id`/`find_term_ids`, but until now could never
+create or manage.
+
+**What was done:**
+- `wp_client.py`: added generic `list_terms`/`create_term`/`update_term`/`delete_term`
+  helpers, parametrized by `taxonomy_base` ('categories' or 'tags') to avoid duplicating
+  the same HTTP-call shape for both taxonomies.
+- `models.py`: `ListPostCategoriesParams`, `CreatePostCategoryParams` (with `parent_id`),
+  `UpdatePostCategoryParams`, `DeletePostCategoryParams`, and the tag equivalents
+  (`ListPostTagsParams`, `CreatePostTagParams`, `UpdatePostTagParams`, `DeletePostTagParams`)
+  — kept as distinct models per taxonomy (not one generic "taxonomy" enum param) since
+  parent/child nesting is real for categories and meaningless for tags. New entities
+  `PostTerm` (taxonomy/parent_id/count/slug) and `TermDeleteResult`.
+- New module `handlers_taxonomy.py` (6 new @chat.function tools): `list_post_categories`
+  (filterable by `parent_id` to walk the tree), `create_post_category`, `update_post_category`,
+  `delete_post_category`; `list_post_tags`, `create_post_tag`, `update_post_tag`,
+  `delete_post_tag`. Registered in `main.py`'s `_LOCAL` module-purge tuple and import list.
+- `app.py`: `display_name` → "WordPress Hub", version bumped 1.7.0 → 1.8.0, description
+  updated to mention hierarchical categories/tags.
+- New `tests/test_taxonomy.py` (12 tests) covering list/create/update/delete for both
+  taxonomies, parent nesting, and error paths (404 on delete).
+
+**Verified:** `imperal validate .` → 0 errors, 0 warnings, 1 info (no `@ext.on_install`,
+pre-existing and non-blocking). `imperal build .` → 4 tools. Full test suite 300/300 pass.
+
+**Still open (per team backlog):** propagate the "WordPress Hub" rename to the panel-facing
+Marketplace listing (`developer.update_app_info`) and to Notion's Apps DB; and the
+cross-app pipeline wiring (Content Strategy Hub → Article Writer wrapper → Media Studio
+Hub → WordPress Hub) is a separate, not-yet-started task.
 
 ---
 
