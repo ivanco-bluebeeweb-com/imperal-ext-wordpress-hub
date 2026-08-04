@@ -3,8 +3,8 @@
   "sdk_version": "5.9.12",
   "app_id": "wp-site-connector",
   "version": "1.8.0",
-  "name": "WordPress Hub",
-  "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
+  "name": "WP Site Connector",
+  "description": "Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
   "icon": "icon.svg",
   "actions_explicit": true,
   "system": false,
@@ -16966,12 +16966,6 @@
   "schedules": [],
   "required_scopes": [],
   "icon_size_bytes": 4608,
-  "exposed": [
-    {
-      "name": "list_connected_sites",
-      "action_type": "read"
-    }
-  ],
   "lifecycle": {
     "health_check": {
       "interval_sec": 60

@@ -1,7 +1,7 @@
 import asyncio
 
 from imperal_sdk import ActionResult, sdl
-from app import chat
+from app import chat, ext
 from models import (_NoParams, Site, ListContentParams, ListMediaParams,
                     Post, Page, MediaItem, SiteIdParams, SiteHealth, RefreshAllResult,
                     ListCommentsParams, ListCustomPostsParams, Comment, WPUser, Plugin,
@@ -24,6 +24,25 @@ async def list_sites(ctx, params: _NoParams) -> ActionResult:
         for r in rows
     ]
     return ActionResult.success(sdl.EntityList[Site](items=sites), summary=f"{len(sites)} site(s) connected")
+
+
+@ext.expose("list_connected_sites", action_type="read")
+async def expose_list_connected_sites(ctx, **kwargs):
+    """Inter-extension IPC surface (ctx.extensions.call) for other Marketing
+    Suite hubs -- Brand Strategy Hub and Content Strategy Hub read this to
+    populate their 'Quick Add' lists with real connected sites, no chat
+    round-trip and no manual site_id typing needed on either side.
+
+    Returns plain dicts (not an ActionResult -- this is direct extension-to-
+    extension data, never surfaced to the LLM or the user directly):
+    [{"site_id", "name", "url", "status"}, ...]
+    """
+    rows = await storage.list_site_records(ctx)
+    return [
+        {"site_id": r["id"], "name": r.get("name", r["id"]),
+         "url": r.get("url", ""), "status": r.get("status", "connected")}
+        for r in rows
+    ]
 
 
 async def _authed(ctx, site_id):
