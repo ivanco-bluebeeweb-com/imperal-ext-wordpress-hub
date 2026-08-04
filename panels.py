@@ -259,7 +259,7 @@ _TAX_TOOLS = {
 }
 
 
-def _taxonomy_manage_block(items: list, site_id: str, tax_slug: str) -> ui.UINode:
+def _taxonomy_manage_block(items: list, site_id: str, tax_slug: str):
     tools = _TAX_TOOLS[tax_slug]
     label = tools["label"]
     term_options = [{"value": str(it.get("id", "")), "label": it.get("name", "")} for it in items]
