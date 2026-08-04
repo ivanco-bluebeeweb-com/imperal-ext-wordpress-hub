@@ -5,7 +5,7 @@ from app import chat, ext
 from models import (_NoParams, Site, ListContentParams, ListMediaParams,
                     Post, Page, MediaItem, SiteIdParams, SiteHealth, RefreshAllResult,
                     ListCommentsParams, ListCustomPostsParams, Comment, WPUser, Plugin,
-                    PurgeCacheParams, CacheActionResult,
+                    PurgeCacheParams, CacheActionResult, InstallPluginParams, PluginInstallResult,
                     ServerInfo, UpdateMediaAltParams, MediaAltResult)
 import wp_cli
 from wp_client import wp_get, wp_post, wp_error_message, wp_error_code, wp_title, now_iso
@@ -541,6 +541,53 @@ async def purge_cache(ctx, params: PurgeCacheParams) -> ActionResult:
             scope=scope, cache_plugin="litespeed-cache", output=(output or "").strip(),
         ),
         summary=f"Purged litespeed-cache cache ({scope}).",
+    )
+
+
+@chat.function(
+    "install_plugin",
+    description=("Install a WordPress plugin via WP-CLI, from a WordPress.org slug "
+                 "(e.g. 'imperal-media-bridge') or a direct https:// .zip URL, and optionally "
+                 "activate it immediately. Requires SSH access configured with add_ssh. Use this "
+                 "to install Imperal's own companion bridge plugins (Media Bridge, Builder Bridge, "
+                 "SEO Bridge) or any third-party plugin the site needs."),
+    action_type="write",
+    data_model=PluginInstallResult,
+    effects=["wp.install_plugin"],
+    event="wp-site-connector.install_plugin",
+)
+async def install_plugin(ctx, params: InstallPluginParams) -> ActionResult:
+    """Install (and optionally activate) a plugin over SSH via `wp plugin install`."""
+    source = (params.source or "").strip()
+    if not source:
+        return ActionResult.error("source is required — a WordPress.org slug or a .zip URL.", retryable=False)
+
+    cred = await storage.get_ssh_cred(ctx, params.site_id)
+    if not cred:
+        return ActionResult.error(
+            "SSH is not configured for this site. Add SSH access first.", retryable=False
+        )
+
+    try:
+        result, cli_error = await wp_cli.install_plugin(cred, source, params.activate)
+    except Exception as error:
+        await ctx.log(f"install_plugin: {error}", level="error")
+        return ActionResult.error("Could not install the plugin over SSH.", retryable=True)
+    if cli_error:
+        await ctx.log(f"install_plugin: rejected — {cli_error}", level="warning")
+        return ActionResult.error(cli_error, retryable=False)
+
+    output = (result or {}).get("raw", "") if result else ""
+    await ctx.log(
+        f"install_plugin: executed — source={source} activate={params.activate} site_id={params.site_id}",
+        level="info",
+    )
+    return ActionResult.success(
+        PluginInstallResult(
+            id=params.site_id, title=f"install {source}", kind="wp_plugin_install",
+            source=source, activated=params.activate, output=output.strip(),
+        ),
+        summary=f"Installed plugin '{source}'" + (" and activated it." if params.activate else "."),
     )
 
 

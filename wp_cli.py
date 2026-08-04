@@ -142,6 +142,34 @@ async def purge_litespeed_cache(cred: dict, scope: str) -> tuple[str | None, str
         return await _run(host, port, user, key_path, command)
 
 
+async def install_plugin(cred: dict, source: str, activate: bool) -> tuple[dict | None, str | None]:
+    """Install a plugin via WP-CLI from a WordPress.org slug or a direct .zip URL.
+
+    Scoped to `wp plugin install` only — no other WP-CLI namespace reaches the
+    shell from this path. `source` is quoted as a single shell argument so it
+    cannot inject extra flags or commands.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    if not source or any(ch in source for ch in ("'", '"', ";", "|", "&", "$", "`", "\n")):
+        return None, "Invalid plugin source — use a WordPress.org slug or a plain https:// .zip URL."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    activate_flag = " --activate" if activate else ""
+    command = (
+        f"wp plugin install '{source}'{activate_flag} --format=json "
+        f"--path={wp_path} --allow-root"
+    )
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command, timeout=60)
+    if output is None:
+        return None, error or "SSH connection failed"
+    return {"raw": output}, None
+
+
 async def get_server_info(cred: dict) -> dict:
     """Run WP-CLI diagnostic commands and return results."""
     if not cred.get("key"):

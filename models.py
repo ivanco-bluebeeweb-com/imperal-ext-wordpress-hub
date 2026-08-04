@@ -551,6 +551,22 @@ class CacheActionResult(sdl.Entity):
     output: str = ""
 
 
+class InstallPluginParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    source: str = Field(
+        description="WordPress.org plugin slug (e.g. 'imperal-media-bridge') or a direct https:// .zip URL "
+                    "(e.g. a GitHub release asset). Never a shell command."
+    )
+    activate: bool = Field(default=True, description="Activate the plugin immediately after install")
+
+
+class PluginInstallResult(sdl.Entity):
+    """Result of installing a plugin over WP-CLI."""
+    source: str = ""
+    activated: bool = False
+    output: str = ""
+
+
 class Order(sdl.Entity):
     total: str = ""
     currency: str = ""
