@@ -83,6 +83,7 @@ def _term_payload(**over):
         "focus_keyword": "",
         "canonical_url": "",
         "robots": [],
+        "rich_snippet": "",
         "rank_math_active": True,
     }
     payload.update(over)
@@ -219,6 +220,19 @@ async def test_update_term_writes_title_and_description():
     body = seen[-1][1]
     assert body.get("meta_title") == "New title"
     assert body.get("meta_description") == "New description"
+
+
+async def test_update_term_writes_rich_snippet():
+    ctx = await _ctx()
+    ctx.http.mock_post(TERM, _term_payload(rich_snippet="CollectionPage",
+                                           updated=["rich_snippet"]), 200)
+    seen = _spy_post(ctx)
+    r = await hs.update_term_seo_meta(ctx, UpdateTermSeoMetaParams(
+        site_id="x-com", term_id=11, rich_snippet="CollectionPage"))
+    assert r.status == "success"
+    assert r.data.rich_snippet == "CollectionPage"
+    body = seen[-1][1]
+    assert body.get("rich_snippet") == "CollectionPage"
 
 
 async def test_update_term_omits_fields_not_given():

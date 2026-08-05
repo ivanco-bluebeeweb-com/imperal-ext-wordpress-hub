@@ -474,6 +474,58 @@ seed_post( 70, 'noop', 'post' );
 $err = imperal_seo_bridge_update_meta( new WP_REST_Request( array( 'id' => 70 ) ) );
 ok( is_wp_error( $err ) && 400 === $err->get_status(), 'update with no SEO fields is an explicit error' );
 
+echo "\nrich snippet (schema type)\n";
+reset_state();
+seed_post( 80, 'schema-post', 'post' );
+$payload = imperal_seo_bridge_get_meta( new WP_REST_Request( array( 'id' => 80 ) ) );
+eq( $payload['rich_snippet'], '', 'missing rich_snippet reads as empty string, not an error' );
+
+$payload = imperal_seo_bridge_update_meta(
+	new WP_REST_Request( array( 'id' => 80, 'rich_snippet' => 'Article' ) )
+);
+eq( $payload['rich_snippet'], 'Article', 'writes rich_snippet' );
+eq( $payload['updated'], array( 'rich_snippet' ), 'reports rich_snippet as the changed field' );
+eq( $GLOBALS['_meta'][80]['rank_math_rich_snippet'], 'Article', 'stored under the real rank_math_rich_snippet key' );
+
+// Rank Math's own "no schema" state.
+$payload = imperal_seo_bridge_update_meta(
+	new WP_REST_Request( array( 'id' => 80, 'rich_snippet' => 'off' ) )
+);
+eq( $payload['rich_snippet'], 'off', "'off' (Rank Math's disabled state) is stored as a normal value, not treated as empty" );
+
+// Partial update must not disturb rich_snippet, and vice versa.
+$payload = imperal_seo_bridge_update_meta(
+	new WP_REST_Request( array( 'id' => 80, 'rich_snippet' => 'Product' ) )
+);
+$payload = imperal_seo_bridge_update_meta(
+	new WP_REST_Request( array( 'id' => 80, 'meta_title' => 'Unrelated change' ) )
+);
+eq( $payload['rich_snippet'], 'Product', 'updating another field leaves rich_snippet intact' );
+
+// HTML is stripped on write, same as title/description.
+$payload = imperal_seo_bridge_update_meta(
+	new WP_REST_Request( array( 'id' => 80, 'rich_snippet' => '<script>x</script>Book' ) )
+);
+eq( $payload['rich_snippet'], 'xBook', 'html stripped on write, same treatment as title/description' );
+
+// Empty string clears the row like every other string field.
+$payload = imperal_seo_bridge_update_meta(
+	new WP_REST_Request( array( 'id' => 80, 'rich_snippet' => '' ) )
+);
+eq( $payload['rich_snippet'], '', 'empty value clears rich_snippet' );
+ok( ! isset( $GLOBALS['_meta'][80]['rank_math_rich_snippet'] ), 'cleared rich_snippet row is deleted, not stored blank' );
+
+// Terms get the same field under the same key, isolated from post meta.
+reset_state();
+seed_post( 81, 'schema-post-2', 'post' );
+$GLOBALS['_terms'][9] = new WP_Term( 9, 'schema-term', 'category', 'Schema Term' );
+$GLOBALS['_term_caps'][9] = true;
+$term_payload = imperal_seo_bridge_update_term_meta_route(
+	new WP_REST_Request( array( 'id' => 9, 'rich_snippet' => 'FAQPage' ) )
+);
+eq( $term_payload['rich_snippet'], 'FAQPage', 'writes rich_snippet on a TERM' );
+eq( $GLOBALS['_meta'][9]['rank_math_rich_snippet'] ?? null, null, 'term write does not leak into post meta store' );
+
 echo "\nstatus endpoint\n";
 $status = imperal_seo_bridge_status();
 eq( $status['bridge'], true, 'reports bridge present' );

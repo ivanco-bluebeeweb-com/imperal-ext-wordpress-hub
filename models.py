@@ -470,6 +470,7 @@ class UpdateSeoMetaParams(BaseModel):
     canonical_url: str | None = Field(default=None, description="Optional canonical URL. Omit to leave unchanged; empty string clears it.")
     robots: list[str] | None = Field(default=None, description="Optional robots directives, e.g. ['noindex','nofollow']. Allowed: index, noindex, nofollow, noarchive, noimageindex, nosnippet. Omit to leave unchanged.")
     focus_keyword: str | None = Field(default=None, description="Optional Rank Math focus keyword. Omit to leave unchanged.")
+    rich_snippet: str | None = Field(default=None, description="Optional Rank Math schema/rich-snippet type, e.g. 'Article', 'Product', 'Recipe', or 'off' to disable schema for this item. Rank Math accepts an open-ended set of schema.org type names here (including PRO schema templates and custom schema), so this is free text, not a fixed list — pass exactly what should appear in Rank Math's Schema type dropdown. Omit to leave unchanged; empty string clears it.")
 
 
 class GetTermSeoMetaParams(BaseModel):
@@ -489,6 +490,7 @@ class UpdateTermSeoMetaParams(BaseModel):
     canonical_url: str | None = Field(default=None, description="Optional canonical URL. Omit to leave unchanged; empty string clears it.")
     robots: list[str] | None = Field(default=None, description="Optional robots directives, e.g. ['noindex','nofollow']. Allowed: index, noindex, nofollow, noarchive, noimageindex, nosnippet. Omit to leave unchanged.")
     focus_keyword: str | None = Field(default=None, description="Optional Rank Math focus keyword. Omit to leave unchanged.")
+    rich_snippet: str | None = Field(default=None, description="Optional Rank Math schema/rich-snippet type for the term archive, e.g. 'Article', 'CollectionPage', or 'off'. Free text — Rank Math accepts an open-ended set of schema.org type names. Omit to leave unchanged; empty string clears it.")
 
 
 # SDL entities. sdl.Entity already provides: id, title, kind, subtitle, description, status, url.
@@ -882,6 +884,7 @@ class SeoMeta(sdl.Entity):
     focus_keyword: str = ""
     canonical_url: str = ""
     robots: list[str] = Field(default_factory=list)
+    rich_snippet: str = ""
     seo_plugin: str = ""
     source: str = ""
     updated_fields: list[str] = Field(default_factory=list)

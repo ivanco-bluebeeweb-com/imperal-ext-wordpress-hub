@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Imperal SEO Bridge
  * Plugin URI:        https://panel.imperal.io
- * Description:       Exposes Rank Math SEO fields (title, description, focus keyword, robots, canonical) to the WordPress REST API so Imperal / Webbee can read and edit them for posts, pages, custom post types and taxonomy terms (categories, tags).
- * Version:           1.1.0
+ * Description:       Exposes Rank Math SEO fields (title, description, focus keyword, robots, canonical, schema/rich-snippet type) to the WordPress REST API so Imperal / Webbee can read and edit them for posts, pages, custom post types and taxonomy terms (categories, tags).
+ * Version:           1.2.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -60,7 +60,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_SEO_BRIDGE_VERSION', '1.1.0' );
+define( 'IMPERAL_SEO_BRIDGE_VERSION', '1.2.0' );
 define( 'IMPERAL_SEO_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -74,6 +74,12 @@ function imperal_seo_bridge_string_fields() {
 		'rank_math_description'   => 'text',
 		'rank_math_focus_keyword' => 'text',
 		'rank_math_canonical_url' => 'url',
+		// Schema/rich-snippet type, e.g. 'Article', 'Product', 'off' when disabled.
+		// Rank Math (and its PRO schema templates / custom schema module) accept an
+		// open-ended set of schema.org type names here, not a small fixed list, so
+		// this is treated as free text and sanitised the same way as title/description
+		// rather than validated against an invented enum.
+		'rank_math_rich_snippet'  => 'text',
 	);
 }
 
@@ -346,6 +352,7 @@ function imperal_seo_bridge_payload( $post ) {
 		'meta_description' => (string) get_post_meta( $post->ID, 'rank_math_description', true ),
 		'focus_keyword'    => (string) get_post_meta( $post->ID, 'rank_math_focus_keyword', true ),
 		'canonical_url'    => (string) get_post_meta( $post->ID, 'rank_math_canonical_url', true ),
+		'rich_snippet'     => (string) get_post_meta( $post->ID, 'rank_math_rich_snippet', true ),
 		'robots'           => imperal_seo_bridge_get_robots( $post->ID ),
 	);
 }
@@ -441,6 +448,7 @@ function imperal_seo_bridge_term_payload( $term ) {
 		'meta_description' => (string) get_term_meta( $term->term_id, 'rank_math_description', true ),
 		'focus_keyword'    => (string) get_term_meta( $term->term_id, 'rank_math_focus_keyword', true ),
 		'canonical_url'    => (string) get_term_meta( $term->term_id, 'rank_math_canonical_url', true ),
+		'rich_snippet'     => (string) get_term_meta( $term->term_id, 'rank_math_rich_snippet', true ),
 		'robots'           => imperal_seo_bridge_get_term_robots( $term->term_id ),
 	);
 }
@@ -580,6 +588,7 @@ function imperal_seo_bridge_update_term_meta_route( $request ) {
 		'meta_description' => array( 'rank_math_description', 'text' ),
 		'focus_keyword'    => array( 'rank_math_focus_keyword', 'text' ),
 		'canonical_url'    => array( 'rank_math_canonical_url', 'url' ),
+		'rich_snippet'     => array( 'rank_math_rich_snippet', 'text' ),
 	);
 
 	$changed = array();
@@ -726,6 +735,7 @@ function imperal_seo_bridge_update_meta( $request ) {
 		'meta_description' => array( 'rank_math_description', 'text' ),
 		'focus_keyword'    => array( 'rank_math_focus_keyword', 'text' ),
 		'canonical_url'    => array( 'rank_math_canonical_url', 'url' ),
+		'rich_snippet'     => array( 'rank_math_rich_snippet', 'text' ),
 	);
 
 	$changed = array();

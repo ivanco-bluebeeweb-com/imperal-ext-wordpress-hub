@@ -51,6 +51,7 @@ def _bridge_payload(**over):
         "focus_keyword": "about",
         "canonical_url": "",
         "robots": ["index"],
+        "rich_snippet": "",
         "rank_math_active": True,
     }
     payload.update(over)
@@ -118,6 +119,21 @@ async def test_get_returns_robots_and_canonical():
     r = await hs.get_seo_meta(ctx, GetSeoMetaParams(site_id="x-com", post_id=42))
     assert r.data.robots == ["noindex", "nofollow"]
     assert r.data.canonical_url == "https://x.com/canonical"
+
+
+async def test_get_reads_rich_snippet_from_bridge():
+    ctx = await _ctx()
+    ctx.http.mock_get(BRIDGE, _bridge_payload(rich_snippet="Article"), 200)
+    r = await hs.get_seo_meta(ctx, GetSeoMetaParams(site_id="x-com", post_id=42))
+    assert r.data.rich_snippet == "Article"
+
+
+async def test_missing_rich_snippet_reads_as_empty_not_error():
+    ctx = await _ctx()
+    ctx.http.mock_get(BRIDGE, _bridge_payload(), 200)
+    r = await hs.get_seo_meta(ctx, GetSeoMetaParams(site_id="x-com", post_id=42))
+    assert r.status == "success"
+    assert r.data.rich_snippet == ""
 
 
 async def test_get_reports_source_so_fidelity_is_never_guessed():
@@ -320,6 +336,40 @@ async def test_valid_robots_accepted():
         site_id="x-com", post_id=42, robots=["noindex"]))
     assert r.status == "success"
     assert r.data.robots == ["noindex"]
+
+
+async def test_update_writes_rich_snippet():
+    ctx = await _ctx()
+    ctx.http.mock_post(BRIDGE, _bridge_payload(rich_snippet="Product",
+                                               updated_fields=["rich_snippet"]), 200)
+    r = await hs.update_seo_meta(ctx, UpdateSeoMetaParams(
+        site_id="x-com", post_id=42, rich_snippet="Product"))
+    assert r.status == "success"
+    assert r.data.rich_snippet == "Product"
+    assert r.data.updated_fields == ["rich_snippet"]
+
+
+async def test_update_rich_snippet_off_is_a_normal_value_not_an_error():
+    """Rank Math's own 'schema disabled' state — must round-trip as a plain
+    string, never mistaken for 'nothing to update'."""
+    ctx = await _ctx()
+    ctx.http.mock_post(BRIDGE, _bridge_payload(rich_snippet="off",
+                                               updated_fields=["rich_snippet"]), 200)
+    r = await hs.update_seo_meta(ctx, UpdateSeoMetaParams(
+        site_id="x-com", post_id=42, rich_snippet="off"))
+    assert r.status == "success"
+    assert r.data.rich_snippet == "off"
+
+
+async def test_rich_snippet_unsupported_on_core_meta_fallback_tier():
+    """The older WP Publisher bridge only registers title/description/focus_keyword
+    — rich_snippet must fail loudly there instead of silently no-opping."""
+    ctx = await _ctx()
+    ctx.http.mock_post(BRIDGE, {"code": "rest_no_route"}, 404)
+    r = await hs.update_seo_meta(ctx, UpdateSeoMetaParams(
+        site_id="x-com", post_id=42, rich_snippet="Article"))
+    assert r.status == "error"
+    assert r.error_code == "SEO_BRIDGE_MISSING"
 
 
 async def test_empty_string_clears_a_field_but_none_leaves_it_alone():

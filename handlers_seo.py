@@ -48,6 +48,7 @@ KEY_DESCRIPTION = "rank_math_description"
 KEY_FOCUS = "rank_math_focus_keyword"
 KEY_CANONICAL = "rank_math_canonical_url"
 KEY_ROBOTS = "rank_math_robots"
+KEY_RICH_SNIPPET = "rank_math_rich_snippet"
 
 _INSTALL_HINT = (
     "Install the Imperal SEO Bridge plugin on the site (bridge/imperal-seo-bridge "
@@ -184,6 +185,7 @@ def _entity_from_bridge(payload, site_url=""):
         focus_keyword=payload.get("focus_keyword", "") or "",
         canonical_url=payload.get("canonical_url", "") or "",
         robots=[str(r) for r in robots],
+        rich_snippet=payload.get("rich_snippet", "") or "",
         seo_plugin=_bridge_plugin(payload),
         source="bridge",
     )
@@ -380,11 +382,13 @@ async def update_seo_meta(ctx, params: UpdateSeoMetaParams) -> ActionResult:
                 f"Allowed: {', '.join(ROBOTS_CHOICES)}.",
                 retryable=False, code="SEO_INVALID_ROBOTS")
         fields["robots"] = params.robots
+    if params.rich_snippet is not None:
+        fields["rich_snippet"] = params.rich_snippet
 
     if not fields:
         return ActionResult.error(
             "Nothing to update — pass meta_title and/or meta_description "
-            "(or focus_keyword, canonical_url, robots).",
+            "(or focus_keyword, canonical_url, robots, rich_snippet).",
             retryable=False, code="SEO_NO_FIELDS")
 
     auth, err = await _authed(ctx, params.site_id)
@@ -421,8 +425,10 @@ async def update_seo_meta(ctx, params: UpdateSeoMetaParams) -> ActionResult:
     if r.status_code != 404:
         return _http_failure(r.status_code, r.body)
 
-    # Tier 2 — stock REST meta. Only the string fields the other bridge registers.
-    unsupported = [k for k in ("robots", "canonical_url") if k in fields]
+    # Tier 2 — stock REST meta. Only the string fields the other bridge registers
+    # (title/description/focus_keyword) — robots, canonical_url and rich_snippet
+    # are absent from that older plugin's schema entirely.
+    unsupported = [k for k in ("robots", "canonical_url", "rich_snippet") if k in fields]
     if unsupported:
         return ActionResult.error(
             f"Cannot set {', '.join(unsupported)} without the Imperal SEO Bridge plugin. " + _INSTALL_HINT,
@@ -604,11 +610,13 @@ async def update_term_seo_meta(ctx, params: UpdateTermSeoMetaParams) -> ActionRe
                 f"Allowed: {', '.join(ROBOTS_CHOICES)}.",
                 retryable=False, code="SEO_INVALID_ROBOTS")
         fields["robots"] = params.robots
+    if params.rich_snippet is not None:
+        fields["rich_snippet"] = params.rich_snippet
 
     if not fields:
         return ActionResult.error(
             "Nothing to update — pass meta_title and/or meta_description "
-            "(or focus_keyword, canonical_url, robots).",
+            "(or focus_keyword, canonical_url, robots, rich_snippet).",
             retryable=False, code="SEO_NO_FIELDS")
 
     auth, err = await _authed(ctx, params.site_id)
