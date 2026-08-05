@@ -77,13 +77,62 @@ def _http_failure(status_code, body):
     return ActionResult.error(message, retryable=retry, code=code)
 
 
+async def sideload_image(ctx, base_url, username, pw, *, source_url: str,
+                          post_id: int | None = None, alt_text: str | None = None,
+                          caption: str | None = None, set_featured: bool = False):
+    """Sideload one external image into a site's media library.
+
+    Shared by `upload_media` (direct chat/tool call) and `create_post`/
+    `update_post`'s `external_images` pipeline-linking path -- ONE HTTP call
+    shape, so a bridge response-mapping fix never has to be made twice.
+    Returns (MediaUploadResult, None) on success or (None, ActionResult.error)
+    on failure -- callers decide whether a failure aborts the whole post or
+    is just collected as a warning.
+    """
+    body = {"source_url": source_url}
+    if post_id:
+        body["post_id"] = post_id
+    if alt_text:
+        body["alt_text"] = alt_text
+    if caption:
+        body["caption"] = caption
+    if set_featured:
+        body["set_featured"] = True
+
+    try:
+        r = await wp_post(ctx, base_url, BRIDGE_SIDELOAD_PATH, username=username, app_password=pw,
+                          json=body, timeout=60)
+    except Exception as e:
+        await ctx.log(f"sideload_image request failed: {e}", level="error")
+        return None, ActionResult.error("Could not reach the site — try again.",
+                                        retryable=True, code="WP_UNREACHABLE")
+
+    if r.status_code not in (200, 201) or not isinstance(r.body, dict):
+        return None, _http_failure(r.status_code, r.body)
+
+    payload = r.body
+    attachment_id = int(payload.get("attachment_id", 0) or 0)
+    result = MediaUploadResult(
+        id=str(attachment_id), title=alt_text or source_url, kind="wp_media_upload",
+        url=str(payload.get("url", "") or ""),
+        width=payload.get("width"),
+        height=payload.get("height"),
+        attached_to=payload.get("attached_to"),
+        featured_set=bool(payload.get("featured_set", False)),
+    )
+    return result, None
+
+
 @chat.function(
     "upload_media",
     description=("Add a publicly reachable https:// image URL to a connected WordPress site's "
                  "media library, and optionally set it as a post's featured image. WordPress "
                  "fetches the image itself (via the Imperal Media Bridge plugin) — Imperal never "
                  "downloads or re-uploads the image bytes. Use the returned attachment id/url as "
-                 "featured_media_id, or in an 'image' content block, on create_post/update_post."),
+                 "featured_media_id, or in an 'image' content block, on create_post/update_post. "
+                 "For images already generated as a Media Hub package, prefer passing "
+                 "external_images directly on create_post/update_post instead of calling this "
+                 "per image."),
     action_type="write",
     data_model=MediaUploadResult,
     effects=["wp.media_upload"],
@@ -101,38 +150,14 @@ async def upload_media(ctx, params: UploadMediaParams) -> ActionResult:
         return err
     base_url, username, pw = auth
 
-    body = {"source_url": params.source_url}
-    if params.post_id:
-        body["post_id"] = params.post_id
-    if params.alt_text:
-        body["alt_text"] = params.alt_text
-    if params.caption:
-        body["caption"] = params.caption
-    if params.set_featured:
-        body["set_featured"] = True
-
-    try:
-        r = await wp_post(ctx, base_url, BRIDGE_SIDELOAD_PATH, username=username, app_password=pw,
-                          json=body, timeout=60)
-    except Exception as e:
-        await ctx.log(f"upload_media request failed: {e}", level="error")
-        return ActionResult.error("Could not reach the site — try again.",
-                                  retryable=True, code="WP_UNREACHABLE")
-
-    if r.status_code not in (200, 201) or not isinstance(r.body, dict):
-        return _http_failure(r.status_code, r.body)
-
-    payload = r.body
-    attachment_id = int(payload.get("attachment_id", 0) or 0)
-    result = MediaUploadResult(
-        id=str(attachment_id), title=params.alt_text or params.source_url, kind="wp_media_upload",
-        url=str(payload.get("url", "") or ""),
-        width=payload.get("width"),
-        height=payload.get("height"),
-        attached_to=payload.get("attached_to"),
-        featured_set=bool(payload.get("featured_set", False)),
+    result, err = await sideload_image(
+        ctx, base_url, username, pw, source_url=params.source_url, post_id=params.post_id,
+        alt_text=params.alt_text, caption=params.caption, set_featured=params.set_featured,
     )
-    bits = [f"Uploaded media #{attachment_id}"]
+    if err:
+        return err
+
+    bits = [f"Uploaded media #{result.id}"]
     if result.attached_to:
         bits.append(f"attached to post #{result.attached_to}")
     if result.featured_set:

@@ -123,6 +123,12 @@ def blocks_to_content(blocks) -> str:
     render); type == "faq" renders a visible Q&A list plus FAQPage JSON-LD
     schema (skipped if faq_items is empty); anything else (including the
     default "paragraph") renders a plain paragraph block.
+
+    NOTE on image_role: a block whose image_role names an external_images
+    entry gets its media_id/media_url filled in by the caller (see
+    handlers_posts.resolve_external_images) BEFORE this function runs -- this
+    function only ever renders whatever media_id/media_url already sit on
+    the block, regardless of how they got there.
     """
     rendered = []
     for block in blocks or []:

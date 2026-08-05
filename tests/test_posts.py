@@ -431,3 +431,78 @@ async def test_create_post_renders_image_block_into_content():
     assert "wp-image-55" in content
     assert "cat.jpg" in content
     assert "A very good cat" in content
+
+
+# ─────────── external_images: the Media Hub -> post pipeline bridge ───────────
+
+SIDELOAD = "https://x.com/wp-json/imperal/v1/media/sideload"
+
+
+async def test_create_post_wires_up_media_hub_package_via_external_images():
+    """The exact shape a Media Hub get_media_package call already returns
+    (role/image_url/alt_text/caption) goes straight into external_images --
+    no separate upload_media call, no manual attachment-id bookkeeping."""
+    ctx = await _ctx()
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
+
+    def _sideload_response(role_to_id):
+        async def handler(url, *, json=None, **kwargs):
+            role = json.get("alt_text", "")
+            aid = role_to_id.get(role, 1)
+            return type("R", (), {"status_code": 201, "body": {
+                "attachment_id": aid, "url": f"https://x.com/wp-content/uploads/{aid}.jpg",
+                "width": 800, "height": 600, "attached_to": None, "featured_set": False,
+            }})()
+        return handler
+
+    ctx.http.post = _sideload_response({
+        "Featured alt": 101, "Inline one alt": 102,
+    })
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello",
+        slug="hello", meta_title="Hello — SEO Title", category="News",
+        excerpt="A short standalone summary of the article.",
+        # NOTE: no featured_media_id -- it comes from external_images instead
+        external_images=[
+            {"role": "featured", "source_url": "https://cdn.example/featured.png",
+             "alt_text": "Featured alt"},
+            {"role": "inline_1", "source_url": "https://cdn.example/inline1.png",
+             "alt_text": "Inline one alt", "caption": "Cap 1"},
+        ],
+        blocks=[
+            PostBlockInput(type="paragraph", text="Intro"),
+            PostBlockInput(type="image", image_role="inline_1"),
+        ],
+    ))
+    assert result.status == "success"
+    assert result.data.featured_media_set is True
+
+
+async def test_create_post_reports_unmatched_external_image_role_as_warning():
+    """An external image whose role matches no block must not vanish silently
+    -- the caller (and the user) need to know it was uploaded but not placed."""
+    ctx = await _ctx()
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
+
+    async def handler(url, *, json=None, **kwargs):
+        return type("R", (), {"status_code": 201, "body": {
+            "attachment_id": 55, "url": "https://x.com/wp-content/uploads/55.jpg",
+            "width": 800, "height": 600, "attached_to": None, "featured_set": False,
+        }})()
+
+    ctx.http.post = handler
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello", **SEO_OK,
+        external_images=[
+            {"role": "inline_1", "source_url": "https://cdn.example/orphan.png"},
+        ],
+        blocks=[PostBlockInput(type="paragraph", text="Intro")],
+    ))
+    assert result.status == "success"
+    assert "inline_1" in result.summary
+    assert "not inserted" in result.summary
+

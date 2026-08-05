@@ -980,8 +980,31 @@ class PostBlockInput(BaseModel):
     level: int = Field(default=2, ge=1, le=6, description="Heading level, used only when type is 'heading'")
     media_id: int | None = Field(default=None, description="Attachment id from upload_media, used only when type is 'image'")
     media_url: str | None = Field(default=None, description="Attachment URL from upload_media, used only when type is 'image'")
+    image_role: str | None = Field(
+        default=None,
+        description="Used only when type is 'image', as an ALTERNATIVE to media_id/media_url: a role "
+                    "name (e.g. 'inline_1') matching one entry in this call's external_images -- lets "
+                    "you place a Media Hub package asset inline without a separate upload_media call "
+                    "and without knowing its attachment id in advance.")
     caption: str | None = Field(default=None, description="Optional caption, used only when type is 'image'")
     faq_items: list[FaqItemInput] = Field(default_factory=list, description="Question/answer pairs, used only when type is 'faq' -- rendered as visible content AND FAQPage JSON-LD schema")
+
+
+class ExternalImageInput(BaseModel):
+    """One not-yet-uploaded external image, keyed by role -- the exact shape
+    a Media Hub `get_media_package`/`generate_media_package` asset already
+    has (role, image_url, alt_text, caption). Passing these on create_post/
+    update_post sideloads each one into this site's media library and wires
+    it up automatically: role == "featured" sets featured_media_id, any
+    other role is resolved against a block whose image_role matches. This is
+    the one-call bridge between an image-generation package and a published
+    post -- no manual upload_media + attachment-id bookkeeping needed.
+    """
+    role: str = Field(description="'featured' or an inline role like 'inline_1' -- must match either "
+                                   "this call's featured slot or a block's image_role")
+    source_url: str = Field(description="Public https:// URL of the image, e.g. a Media Hub asset's image_url")
+    alt_text: str = Field(default="", description="Alt text for the new media library attachment")
+    caption: str = Field(default="", description="Optional caption for the new media library attachment")
 
 
 class CreatePostParams(BaseModel):
@@ -996,7 +1019,17 @@ class CreatePostParams(BaseModel):
     excerpt: str | None = Field(default=None, description="Excerpt -- REQUIRED when post_type='post': a short standalone summary Rank Math and social shares fall back to")
     category: str | None = Field(default=None, description="Category name -- REQUIRED when post_type='post'. Resolved to an existing term by name; if none matches, a new category with this name is created automatically so the post is never left uncategorised")
     tags: list[str] = Field(default_factory=list, description="Optional tag names (posts only); resolved to existing terms, never created — names not found are reported back, not silently dropped")
-    featured_media_id: int | None = Field(default=None, description="Attachment id from a prior upload_media call -- REQUIRED when post_type='post': every article needs a featured image, set in the same call")
+    featured_media_id: int | None = Field(default=None, description="Attachment id from a prior upload_media call -- REQUIRED when post_type='post' UNLESS external_images includes a 'featured' role entry: every article needs a featured image, set in the same call")
+    external_images: list[ExternalImageInput] = Field(
+        default_factory=list,
+        description="Images not yet in this site's media library, e.g. straight from a Media Hub "
+                    "package's get_media_package/generate_media_package output (role, image_url as "
+                    "source_url, alt_text, caption). Each one is sideloaded into the media library in "
+                    "this same call: role=='featured' becomes the post's featured image (no need to "
+                    "also pass featured_media_id), any other role is matched against a block whose "
+                    "image_role equals that role. This is the one-call path from 'images exist as a "
+                    "generated package' to 'images are live in the published post' -- no manual "
+                    "per-image upload_media + attachment-id bookkeeping.")
     date: str | None = Field(default=None, description="Optional publish/schedule date as YYYY-MM-DD or full ISO 8601; required when status='future'")
     lang: str | None = Field(default=None, description="Optional Polylang language code, e.g. 'en', 'ro' — requires Polylang on the site")
     meta_title: str | None = Field(default=None, description="Rank Math SEO title -- REQUIRED when post_type='post'")
@@ -1019,6 +1052,13 @@ class UpdatePostParams(BaseModel):
     category: str | None = Field(default=None, description="New category name (posts only); resolved to an existing term, never created")
     tags: list[str] | None = Field(default=None, description="Replace tag names (posts only); resolved to existing terms, never created; omit to keep existing tags")
     featured_media_id: int | None = Field(default=None, description="Attachment id from a prior upload_media call, set as the post's featured image")
+    external_images: list[ExternalImageInput] = Field(
+        default_factory=list,
+        description="Images not yet in this site's media library, e.g. straight from a Media Hub "
+                    "package's get_media_package output (role, image_url as source_url, alt_text, "
+                    "caption). Sideloaded in this same call: role=='featured' becomes the post's "
+                    "featured image, any other role is matched against a block (in the new blocks, "
+                    "if provided) whose image_role equals that role.")
     date: str | None = Field(default=None, description="New publish/schedule date as YYYY-MM-DD or full ISO 8601")
     meta_title: str | None = Field(default=None, description="New Rank Math SEO title, set in the same call; omit to leave unchanged")
     meta_description: str | None = Field(default=None, description="New Rank Math meta description, set in the same call; omit to leave unchanged")

@@ -16,6 +16,7 @@ from imperal_sdk import ActionResult
 
 from app import chat
 import gutenberg
+import handlers_media
 import handlers_seo
 import storage
 from models import CreatePostParams, PostResult, UpdatePostParams, UpdateSeoMetaParams
@@ -29,6 +30,78 @@ from wp_client import (
     wp_error_message,
     wp_title,
 )
+
+
+async def resolve_external_images(ctx, base_url, username, pw, *, external_images, blocks,
+                                   featured_media_id):
+    """Sideload every external_images entry and wire it up by role.
+
+    THIS is the pipeline glue between an image-generation package (Media Hub's
+    get_media_package/generate_media_package -- role, image_url, alt_text,
+    caption) and a published post's actual content: without it, connecting
+    the two required a human (or Webbee) to call upload_media once per asset
+    and hand-copy each returned attachment id into the right block -- a step
+    that is easy to forget and impossible to enforce for every user.
+
+    role == "featured" fills in featured_media_id (only if the caller didn't
+    already pass one explicitly -- an explicit featured_media_id always
+    wins). Any other role is matched against blocks whose image_role equals
+    that role; a matched block's media_id/media_url are filled in place so
+    gutenberg.blocks_to_content renders it normally. Roles present in
+    external_images but matching no block, and blocks with an image_role
+    matching no entry, are reported back as warnings -- silently dropping an
+    image would leave a package half-inserted with no visible signal.
+
+    Returns (blocks, featured_media_id, warnings). One sideload failure is
+    reported as a warning and that image is skipped -- it must not abort the
+    whole post, since the article text and every other image are still good.
+    """
+    warnings: list[str] = []
+    if not external_images:
+        return blocks, featured_media_id, warnings
+
+    resolved_blocks = list(blocks or [])
+    by_role: dict[str, object] = {}
+    for img in external_images:
+        result, err = await handlers_media.sideload_image(
+            ctx, base_url, username, pw, source_url=img.source_url,
+            alt_text=img.alt_text, caption=img.caption or None,
+        )
+        if err is not None:
+            warnings.append(f"external image '{img.role}' could not be added: {err.error}")
+            continue
+        by_role[img.role] = result
+
+    if "featured" in by_role and featured_media_id is None:
+        featured_media_id = int(by_role.pop("featured").id)
+    elif "featured" in by_role:
+        by_role.pop("featured")  # explicit featured_media_id wins; don't also insert it inline
+        warnings.append(
+            "external image with role='featured' was uploaded but not set as the featured "
+            "image because featured_media_id was already given explicitly")
+
+    matched_roles: set[str] = set()
+    for block in resolved_blocks:
+        role = getattr(block, "image_role", None) if not isinstance(block, dict) else block.get("image_role")
+        if not role or role not in by_role:
+            continue
+        asset = by_role[role]
+        matched_roles.add(role)
+        if isinstance(block, dict):
+            block["media_id"] = int(asset.id)
+            block["media_url"] = asset.url
+        else:
+            block.media_id = int(asset.id)
+            block.media_url = asset.url
+
+    for role in by_role:
+        if role not in matched_roles:
+            warnings.append(
+                f"external image '{role}' was added to the media library but no block has "
+                f"image_role='{role}' -- it was not inserted into the content")
+
+    return resolved_blocks, featured_media_id, warnings
+
 
 # Regular blog posts are the content pipeline's main output -- for THIS post
 # type, slug / meta_title / category are not nice-to-haves a caller might
@@ -111,8 +184,10 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
             missing.append("category")
         if not params.excerpt or not params.excerpt.strip():
             missing.append("excerpt")
-        if not params.featured_media_id:
-            missing.append("featured_media_id")
+        if not params.featured_media_id and not any(
+            img.role == "featured" for img in params.external_images
+        ):
+            missing.append("featured_media_id (or an external_images entry with role='featured')")
         if missing:
             return ActionResult.error(
                 "create_post for a 'post' requires " + ", ".join(missing) +
@@ -128,7 +203,11 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
     base_url, username, pw = auth
 
     rest_base = _rest_base(post_type)
-    content = gutenberg.blocks_to_content(params.blocks)
+    blocks, featured_media_id, image_warnings = await resolve_external_images(
+        ctx, base_url, username, pw, external_images=params.external_images,
+        blocks=params.blocks, featured_media_id=params.featured_media_id,
+    )
+    content = gutenberg.blocks_to_content(blocks)
 
     category_id = None
     category_resolved = True
@@ -157,7 +236,7 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
         resp = await wp_create_post(
             ctx, base_url, username, pw, post_type=rest_base, title=params.title,
             content=content, status=params.status, slug=params.slug,
-            category_id=category_id, tag_ids=tag_ids, featured_media=params.featured_media_id,
+            category_id=category_id, tag_ids=tag_ids, featured_media=featured_media_id,
             lang=params.lang, date=params.date, excerpt=params.excerpt,
         )
     except Exception as e:
@@ -174,7 +253,7 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
                                   retryable=False, code="WP_RESPONSE_UNEXPECTED")
 
     post = resp.body
-    warnings = []
+    warnings = list(image_warnings)
     if params.category and category_created:
         warnings.append(f"category '{params.category}' didn't exist yet — created it")
     elif params.category and not category_resolved:
@@ -199,7 +278,7 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
             warnings.append(f"post was created, but SEO fields were not saved: {seo_result.error}")
 
     result = _post_result(post, post_type=post_type, category_resolved=category_resolved,
-                          tags_not_found=tags_not_found, featured_media_set=bool(params.featured_media_id))
+                          tags_not_found=tags_not_found, featured_media_set=bool(featured_media_id))
     summary = f"Created {post_type} '{result.title}' ({params.status})"
     if warnings:
         summary += " — " + "; ".join(warnings)
@@ -228,6 +307,24 @@ async def update_post(ctx, params: UpdatePostParams) -> ActionResult:
     post_type = params.post_type.strip() or "post"
     rest_base = _rest_base(post_type)
 
+    featured_media_id = params.featured_media_id
+    blocks = params.blocks
+    image_warnings: list[str] = []
+    if params.external_images:
+        # params.blocks is None when the caller only wants to change images/
+        # metadata and keep the existing content untouched -- resolving
+        # against an empty list keeps that same "don't touch content"
+        # meaning: only a 'featured' role can still apply (it never touches
+        # blocks), any inline role warns as unmatched instead of silently
+        # requiring blocks to exist.
+        blocks_had_input = params.blocks is not None
+        resolved_blocks, featured_media_id, image_warnings = await resolve_external_images(
+            ctx, base_url, username, pw, external_images=params.external_images,
+            blocks=params.blocks if blocks_had_input else [],
+            featured_media_id=featured_media_id,
+        )
+        blocks = resolved_blocks if blocks_had_input else None
+
     fields = {}
     if params.title is not None:
         fields["title"] = params.title
@@ -235,8 +332,8 @@ async def update_post(ctx, params: UpdatePostParams) -> ActionResult:
         fields["status"] = params.status
     if params.slug is not None:
         fields["slug"] = params.slug
-    if params.blocks is not None:
-        fields["content"] = gutenberg.blocks_to_content(params.blocks)
+    if blocks is not None:
+        fields["content"] = gutenberg.blocks_to_content(blocks)
     if params.excerpt is not None:
         fields["excerpt"] = params.excerpt
     if params.date is not None:
@@ -260,8 +357,8 @@ async def update_post(ctx, params: UpdatePostParams) -> ActionResult:
             tag_ids, tags_not_found = await find_term_ids(ctx, base_url, username, pw, "tags", params.tags)
             fields["tags"] = tag_ids
 
-    if params.featured_media_id is not None:
-        fields["featured_media"] = params.featured_media_id
+    if featured_media_id is not None:
+        fields["featured_media"] = featured_media_id
 
     seo_fields = {}
     if params.meta_title is not None:
@@ -296,7 +393,7 @@ async def update_post(ctx, params: UpdatePostParams) -> ActionResult:
             return ActionResult.error("WordPress returned an unexpected response.",
                                       retryable=False, code="WP_RESPONSE_UNEXPECTED")
 
-    warnings = []
+    warnings = list(image_warnings)
     if seo_fields:
         seo_result = await handlers_seo.update_seo_meta(ctx, UpdateSeoMetaParams(
             site_id=params.site_id, post_id=params.post_id, post_type=post_type, **seo_fields,
@@ -306,14 +403,14 @@ async def update_post(ctx, params: UpdatePostParams) -> ActionResult:
 
     if resp is not None:
         result = _post_result(resp.body, post_type=post_type, category_resolved=category_resolved,
-                              tags_not_found=tags_not_found, featured_media_set=params.featured_media_id is not None)
+                              tags_not_found=tags_not_found, featured_media_set=featured_media_id is not None)
     else:
         # Nothing but SEO fields changed -- no post-fields write happened,
         # so report back using the caller-known id instead of a fetched body.
         result = PostResult(id=str(params.post_id), title="", kind=f"wp_{post_type}",
                             url="", link="", post_type=post_type, slug=params.slug or "",
                             status=params.status, category_resolved=category_resolved,
-                            tags_not_found=tags_not_found, featured_media_set=params.featured_media_id is not None)
+                            tags_not_found=tags_not_found, featured_media_set=featured_media_id is not None)
     summary = f"Updated {post_type} '{result.title}'" if result.title else f"Updated {post_type} #{params.post_id}"
     if params.category and not category_resolved:
         summary += f" — category '{params.category}' was not found, left unchanged"
