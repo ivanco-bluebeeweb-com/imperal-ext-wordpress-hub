@@ -920,17 +920,17 @@ class CreatePostParams(BaseModel):
     title: str = Field(min_length=1, max_length=300, description="Post/page title")
     post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug")
     status: str = Field(default="draft", description="Initial status: draft, publish, pending, private, or future")
-    slug: str | None = Field(default=None, description="Optional URL slug; WordPress derives one from the title if omitted")
+    slug: str | None = Field(default=None, description="URL slug -- REQUIRED when post_type='post': a clean, human-readable slug for the article. Optional for pages/custom types, where WordPress derives one from the title if omitted")
     blocks: list[PostBlockInput] = Field(
         default_factory=list,
         description="Content as an ordered list of {type, text, level} blocks, rendered into Gutenberg block markup")
     excerpt: str | None = Field(default=None, description="Optional excerpt")
-    category: str | None = Field(default=None, description="Optional category name (posts only); resolved to an existing term, never created")
+    category: str | None = Field(default=None, description="Category name -- REQUIRED when post_type='post'. Resolved to an existing term by name; if none matches, a new category with this name is created automatically so the post is never left uncategorised")
     tags: list[str] = Field(default_factory=list, description="Optional tag names (posts only); resolved to existing terms, never created — names not found are reported back, not silently dropped")
     featured_media_id: int | None = Field(default=None, description="Attachment id from a prior upload_media call, set as the post's featured image")
     date: str | None = Field(default=None, description="Optional publish/schedule date as YYYY-MM-DD or full ISO 8601; required when status='future'")
     lang: str | None = Field(default=None, description="Optional Polylang language code, e.g. 'en', 'ro' — requires Polylang on the site")
-    meta_title: str | None = Field(default=None, description="Optional Rank Math SEO title, set in the same call")
+    meta_title: str | None = Field(default=None, description="Rank Math SEO title -- REQUIRED when post_type='post'")
     meta_description: str | None = Field(default=None, description="Optional Rank Math SEO meta description, set in the same call")
     focus_keyword: str | None = Field(default=None, description="Optional Rank Math focus keyword, set in the same call")
 

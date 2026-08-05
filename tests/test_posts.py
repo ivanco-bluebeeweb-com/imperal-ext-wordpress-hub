@@ -3,6 +3,11 @@
 Ported capability from WP Publisher's publish_draft. Content is passed as
 explicit {type, text, level} blocks — no document parsing is exercised or
 expected here, by design.
+
+slug / meta_title / category are mandatory for post_type='post' (the
+content pipeline's main output) — most tests below pass all three so they
+exercise the rest of create_post's behaviour; the dedicated
+test_create_post_requires_seo_fields_for_posts test covers the gate itself.
 """
 
 from imperal_sdk.testing import MockContext
@@ -17,6 +22,11 @@ PAGES = "https://x.com/wp-json/wp/v2/pages"
 CATEGORIES = "https://x.com/wp-json/wp/v2/categories"
 TAGS = "https://x.com/wp-json/wp/v2/tags"
 SEO_BRIDGE = "https://x.com/wp-json/imperal/v1/seo"
+
+# Shared "already satisfies the mandatory SEO fields" kwargs so every test
+# below that isn't specifically about the requirement gate doesn't have to
+# repeat slug/meta_title/category by hand.
+SEO_OK = dict(slug="hello", meta_title="Hello — SEO Title", category="News")
 
 
 async def _ctx():
@@ -38,11 +48,51 @@ def _wp_post(pid=42, **over):
     return data
 
 
+# ─────────── mandatory SEO fields for post_type='post' ───────────
+
+async def test_create_post_requires_seo_fields_for_posts():
+    ctx = await _ctx()
+    result = await hp.create_post(ctx, CreatePostParams(site_id="x-com", title="Hello"))
+    assert result.status == "error"
+    assert result.error_code == "POST_SEO_FIELDS_REQUIRED"
+    assert "slug" in result.error
+    assert "meta_title" in result.error
+    assert "category" in result.error
+
+
+async def test_create_post_requires_seo_fields_reports_only_missing_ones():
+    ctx = await _ctx()
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello", slug="hello", meta_title="Hello",
+    ))
+    assert result.status == "error"
+    assert result.error_code == "POST_SEO_FIELDS_REQUIRED"
+    assert "category" in result.error
+    assert "requires category" in result.error
+
+
+async def test_create_post_seo_fields_not_required_for_pages():
+    ctx = await _ctx()
+    ctx.http.mock_post(PAGES, _wp_post(pid=9), 201)
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="About", post_type="page",
+    ))
+    assert result.status == "success"
+    assert result.data.post_type == "page"
+
+
+# ─────────── happy path ───────────
+
 async def test_create_post_happy_path_renders_blocks_and_defaults_draft():
     ctx = await _ctx()
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
     ctx.http.mock_post(POSTS, _wp_post(), 201)
+    ctx.http.mock_post(SEO_BRIDGE, {
+        "id": 42, "type": "post", "meta_title": SEO_OK["meta_title"], "meta_description": "",
+        "canonical_url": "", "robots": [], "focus_keyword": "", "rank_math_active": True,
+    }, 200)
     result = await hp.create_post(ctx, CreatePostParams(
-        site_id="x-com", title="Hello",
+        site_id="x-com", title="Hello", **SEO_OK,
         blocks=[
             PostBlockInput(type="heading", text="Intro", level=2),
             PostBlockInput(type="paragraph", text="Body text"),
@@ -59,22 +109,23 @@ async def test_create_post_resolves_category_by_name():
     ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
     ctx.http.mock_post(POSTS, _wp_post(), 201)
     result = await hp.create_post(ctx, CreatePostParams(
-        site_id="x-com", title="Hello", category="News",
+        site_id="x-com", title="Hello", slug="hello", meta_title="Hello", category="News",
     ))
     assert result.status == "success"
     assert result.data.category_resolved is True
 
 
-async def test_create_post_warns_when_category_not_found():
+async def test_create_post_creates_category_when_not_found():
     ctx = await _ctx()
     ctx.http.mock_get(CATEGORIES, [], 200)
+    ctx.http.mock_post(CATEGORIES, {"id": 55, "name": "Brand New"}, 201)
     ctx.http.mock_post(POSTS, _wp_post(), 201)
     result = await hp.create_post(ctx, CreatePostParams(
-        site_id="x-com", title="Hello", category="Nonexistent",
+        site_id="x-com", title="Hello", slug="hello", meta_title="Hello", category="Brand New",
     ))
     assert result.status == "success"
-    assert result.data.category_resolved is False
-    assert "not found" in result.summary
+    assert result.data.category_resolved is True
+    assert "created it" in result.summary
 
 
 async def test_create_post_uses_pages_base_for_page_type():
@@ -90,7 +141,7 @@ async def test_create_post_uses_pages_base_for_page_type():
 async def test_create_post_scheduled_requires_date():
     ctx = await _ctx()
     result = await hp.create_post(ctx, CreatePostParams(
-        site_id="x-com", title="Hello", status="future",
+        site_id="x-com", title="Hello", status="future", **SEO_OK,
     ))
     assert result.status == "error"
     assert result.error_code == "POST_SCHEDULE_DATE_MISSING"
@@ -98,13 +149,14 @@ async def test_create_post_scheduled_requires_date():
 
 async def test_create_post_writes_seo_fields_via_update_seo_meta():
     ctx = await _ctx()
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
     ctx.http.mock_post(POSTS, _wp_post(), 201)
     ctx.http.mock_post(SEO_BRIDGE, {
         "id": 42, "type": "post", "meta_title": "SEO Title", "meta_description": "",
         "canonical_url": "", "robots": [], "focus_keyword": "", "rank_math_active": True,
     }, 200)
     result = await hp.create_post(ctx, CreatePostParams(
-        site_id="x-com", title="Hello", meta_title="SEO Title",
+        site_id="x-com", title="Hello", slug="hello", meta_title="SEO Title", category="News",
     ))
     assert result.status == "success"
     assert "post was created, but SEO" not in result.summary
@@ -112,10 +164,11 @@ async def test_create_post_writes_seo_fields_via_update_seo_meta():
 
 async def test_create_post_reports_seo_failure_as_warning_not_error():
     ctx = await _ctx()
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
     ctx.http.mock_post(POSTS, _wp_post(), 201)
     ctx.http.mock_post(SEO_BRIDGE, {"code": "imperal_seo_forbidden", "message": "nope"}, 403)
     result = await hp.create_post(ctx, CreatePostParams(
-        site_id="x-com", title="Hello", meta_title="SEO Title",
+        site_id="x-com", title="Hello", slug="hello", meta_title="SEO Title", category="News",
     ))
     # Bridge failed -> core-meta fallback also has no route registered in this
     # mock, so the write is expected to fail; the post itself still succeeds.
@@ -125,15 +178,16 @@ async def test_create_post_reports_seo_failure_as_warning_not_error():
 
 async def test_create_post_reports_http_failure():
     ctx = await _ctx()
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
     ctx.http.mock_post(POSTS, {"code": "rest_cannot_create"}, 403)
-    result = await hp.create_post(ctx, CreatePostParams(site_id="x-com", title="Hello"))
+    result = await hp.create_post(ctx, CreatePostParams(site_id="x-com", title="Hello", **SEO_OK))
     assert result.status == "error"
     assert result.retryable is False
 
 
 async def test_create_post_requires_connected_site():
     ctx = MockContext()
-    result = await hp.create_post(ctx, CreatePostParams(site_id="missing", title="Hello"))
+    result = await hp.create_post(ctx, CreatePostParams(site_id="missing", title="Hello", **SEO_OK))
     assert result.status == "error"
     assert result.error_code == "SITE_NOT_CONNECTED"
 
@@ -198,6 +252,7 @@ async def test_update_post_renders_new_blocks_into_content():
 
 async def test_create_post_resolves_tags_by_name():
     ctx = await _ctx()
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
     ctx.http.mock_get(TAGS, [{"id": 3, "name": "Guides"}, {"id": 4, "name": "News"}], 200)
     seen = []
     real_post = ctx.http.post
@@ -209,7 +264,7 @@ async def test_create_post_resolves_tags_by_name():
     ctx.http.post = spy
     ctx.http.mock_post(POSTS, _wp_post(), 201)
     result = await hp.create_post(ctx, CreatePostParams(
-        site_id="x-com", title="Hello", tags=["Guides", "News"],
+        site_id="x-com", title="Hello", tags=["Guides", "News"], **SEO_OK,
     ))
     assert result.status == "success"
     assert result.data.tags_not_found == []
@@ -219,10 +274,11 @@ async def test_create_post_resolves_tags_by_name():
 
 async def test_create_post_reports_tags_not_found_without_failing():
     ctx = await _ctx()
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
     ctx.http.mock_get(TAGS, [{"id": 3, "name": "Guides"}], 200)
     ctx.http.mock_post(POSTS, _wp_post(), 201)
     result = await hp.create_post(ctx, CreatePostParams(
-        site_id="x-com", title="Hello", tags=["Guides", "Nonexistent"],
+        site_id="x-com", title="Hello", tags=["Guides", "Nonexistent"], **SEO_OK,
     ))
     assert result.status == "success"
     assert result.data.tags_not_found == ["Nonexistent"]
@@ -272,6 +328,7 @@ async def test_update_post_clears_tags_with_empty_list():
 
 async def test_create_post_sets_featured_media():
     ctx = await _ctx()
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
     seen = []
     real_post = ctx.http.post
 
@@ -282,7 +339,7 @@ async def test_create_post_sets_featured_media():
     ctx.http.post = spy
     ctx.http.mock_post(POSTS, _wp_post(), 201)
     result = await hp.create_post(ctx, CreatePostParams(
-        site_id="x-com", title="Hello", featured_media_id=99,
+        site_id="x-com", title="Hello", featured_media_id=99, **SEO_OK,
     ))
     assert result.status == "success"
     assert result.data.featured_media_set is True
@@ -314,6 +371,7 @@ async def test_update_post_sets_featured_media():
 
 async def test_create_post_renders_image_block_into_content():
     ctx = await _ctx()
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
     seen = []
     real_post = ctx.http.post
 
@@ -324,7 +382,7 @@ async def test_create_post_renders_image_block_into_content():
     ctx.http.post = spy
     ctx.http.mock_post(POSTS, _wp_post(), 201)
     result = await hp.create_post(ctx, CreatePostParams(
-        site_id="x-com", title="Hello",
+        site_id="x-com", title="Hello", **SEO_OK,
         blocks=[
             PostBlockInput(type="paragraph", text="Intro"),
             PostBlockInput(type="image", text="A cat", media_id=55,

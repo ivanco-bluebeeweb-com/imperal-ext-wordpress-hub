@@ -21,6 +21,7 @@ import storage
 from models import CreatePostParams, PostResult, UpdatePostParams, UpdateSeoMetaParams
 from wp_client import (
     create_post as wp_create_post,
+    create_term,
     find_category_id,
     find_term_ids,
     update_post as wp_update_post,
@@ -28,6 +29,13 @@ from wp_client import (
     wp_error_message,
     wp_title,
 )
+
+# Regular blog posts are the content pipeline's main output -- for THIS post
+# type, slug / meta_title / category are not nice-to-haves a caller might
+# forget to pass: they are mandatory, checked here, so a post can never leave
+# create_post without them. Pages and custom post types keep the old,
+# permissive behaviour (they have very different, non-SEO-article needs).
+_SEO_REQUIRED_POST_TYPE = "post"
 
 _POST_TYPE_BASES = {"post": "posts", "page": "pages"}
 
@@ -83,19 +91,52 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
             "A scheduled post needs a date — pass date (YYYY-MM-DD or full ISO 8601) with status='future'.",
             retryable=False, code="POST_SCHEDULE_DATE_MISSING")
 
+    post_type = params.post_type.strip() or "post"
+
+    # SEO-critical fields are mandatory for regular posts -- the content
+    # pipeline's whole point is publishing findable, correctly-tagged
+    # articles, so a post can't leave create_post missing its slug,
+    # meta_title, or category (existing or newly created).
+    if post_type == _SEO_REQUIRED_POST_TYPE:
+        missing = []
+        if not params.slug or not params.slug.strip():
+            missing.append("slug")
+        if not params.meta_title or not params.meta_title.strip():
+            missing.append("meta_title")
+        if not params.category or not params.category.strip():
+            missing.append("category")
+        if missing:
+            return ActionResult.error(
+                "create_post for a 'post' requires " + ", ".join(missing) +
+                " — pass a URL slug, an SEO meta_title, and an existing-or-new "
+                "category name. This keeps every published article correctly "
+                "findable instead of relying on a follow-up fix.",
+                retryable=False, code="POST_SEO_FIELDS_REQUIRED")
+
     auth, err = await _authed(ctx, params.site_id)
     if err:
         return err
     base_url, username, pw = auth
 
-    post_type = params.post_type.strip() or "post"
     rest_base = _rest_base(post_type)
     content = gutenberg.blocks_to_content(params.blocks)
 
     category_id = None
     category_resolved = True
+    category_created = False
     if params.category:
         category_id = await find_category_id(ctx, base_url, username, pw, params.category, lang=params.lang)
+        if category_id is None:
+            # Don't just warn and publish uncategorised -- create the
+            # category so the post always ends up correctly filed.
+            try:
+                create_resp = await create_term(ctx, base_url, username, pw, "categories",
+                                                name=params.category.strip())
+                if create_resp.status_code < 400 and isinstance(create_resp.body, dict):
+                    category_id = create_resp.body.get("id")
+                    category_created = category_id is not None
+            except Exception as e:
+                await ctx.log(f"create_post: category auto-create failed: {e}", level="error")
         category_resolved = category_id is not None
 
     tag_ids = []
@@ -125,8 +166,10 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
 
     post = resp.body
     warnings = []
-    if params.category and not category_resolved:
-        warnings.append(f"category '{params.category}' was not found — the post was created without one")
+    if params.category and category_created:
+        warnings.append(f"category '{params.category}' didn't exist yet — created it")
+    elif params.category and not category_resolved:
+        warnings.append(f"category '{params.category}' could not be found or created — the post was created without one")
     if tags_not_found:
         warnings.append(f"tag(s) not found and skipped: {', '.join(tags_not_found)}")
 
