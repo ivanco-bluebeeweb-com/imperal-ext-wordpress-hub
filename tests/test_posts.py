@@ -26,7 +26,8 @@ SEO_BRIDGE = "https://x.com/wp-json/imperal/v1/seo"
 # Shared "already satisfies the mandatory SEO fields" kwargs so every test
 # below that isn't specifically about the requirement gate doesn't have to
 # repeat slug/meta_title/category by hand.
-SEO_OK = dict(slug="hello", meta_title="Hello — SEO Title", category="News")
+SEO_OK = dict(slug="hello", meta_title="Hello — SEO Title", category="News",
+              excerpt="A short standalone summary of the article.", featured_media_id=99)
 
 
 async def _ctx():
@@ -110,6 +111,7 @@ async def test_create_post_resolves_category_by_name():
     ctx.http.mock_post(POSTS, _wp_post(), 201)
     result = await hp.create_post(ctx, CreatePostParams(
         site_id="x-com", title="Hello", slug="hello", meta_title="Hello", category="News",
+        excerpt="A short standalone summary.", featured_media_id=99,
     ))
     assert result.status == "success"
     assert result.data.category_resolved is True
@@ -122,6 +124,7 @@ async def test_create_post_creates_category_when_not_found():
     ctx.http.mock_post(POSTS, _wp_post(), 201)
     result = await hp.create_post(ctx, CreatePostParams(
         site_id="x-com", title="Hello", slug="hello", meta_title="Hello", category="Brand New",
+        excerpt="A short standalone summary.", featured_media_id=99,
     ))
     assert result.status == "success"
     assert result.data.category_resolved is True
@@ -157,9 +160,38 @@ async def test_create_post_writes_seo_fields_via_update_seo_meta():
     }, 200)
     result = await hp.create_post(ctx, CreatePostParams(
         site_id="x-com", title="Hello", slug="hello", meta_title="SEO Title", category="News",
+        excerpt="A short standalone summary.", featured_media_id=99,
     ))
     assert result.status == "success"
     assert "post was created, but SEO" not in result.summary
+
+
+async def test_create_post_writes_canonical_url_via_update_seo_meta():
+    ctx = await _ctx()
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    ctx.http.mock_post(SEO_BRIDGE, {
+        "id": 42, "type": "post", "meta_title": "SEO Title", "meta_description": "",
+        "canonical_url": "https://x.com/canonical-target", "robots": [], "focus_keyword": "",
+        "rank_math_active": True,
+    }, 200)
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello", slug="hello", meta_title="SEO Title", category="News",
+        excerpt="A short standalone summary.", featured_media_id=99,
+        canonical_url="https://x.com/canonical-target",
+    ))
+    assert result.status == "success"
+    seo_calls = [c for c in seen if c[0] == SEO_BRIDGE]
+    assert seo_calls, "expected a write to the SEO bridge"
+    assert seo_calls[0][1]["json"]["canonical_url"] == "https://x.com/canonical-target"
 
 
 async def test_create_post_reports_seo_failure_as_warning_not_error():
@@ -169,6 +201,7 @@ async def test_create_post_reports_seo_failure_as_warning_not_error():
     ctx.http.mock_post(SEO_BRIDGE, {"code": "imperal_seo_forbidden", "message": "nope"}, 403)
     result = await hp.create_post(ctx, CreatePostParams(
         site_id="x-com", title="Hello", slug="hello", meta_title="SEO Title", category="News",
+        excerpt="A short standalone summary.", featured_media_id=99,
     ))
     # Bridge failed -> core-meta fallback also has no route registered in this
     # mock, so the write is expected to fail; the post itself still succeeds.
@@ -338,8 +371,9 @@ async def test_create_post_sets_featured_media():
 
     ctx.http.post = spy
     ctx.http.mock_post(POSTS, _wp_post(), 201)
+    seo_no_media = {k: v for k, v in SEO_OK.items() if k != "featured_media_id"}
     result = await hp.create_post(ctx, CreatePostParams(
-        site_id="x-com", title="Hello", featured_media_id=99, **SEO_OK,
+        site_id="x-com", title="Hello", featured_media_id=99, **seo_no_media,
     ))
     assert result.status == "success"
     assert result.data.featured_media_set is True

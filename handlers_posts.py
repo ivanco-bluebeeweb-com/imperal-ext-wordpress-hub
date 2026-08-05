@@ -75,9 +75,13 @@ def _post_result(item: dict, *, post_type: str, category_resolved: bool = True,
     "create_post",
     description=(
         "Create a WordPress post or page with Gutenberg content, optional category, "
-        "Polylang language, and Rank Math SEO fields. Content is given as an ordered "
-        "list of {type, text, level} blocks — 'heading' or 'paragraph' — which this "
-        "tool renders into Gutenberg block markup. Defaults to a draft."
+        "Polylang language, and Rank Math SEO fields (including canonical_url). "
+        "Content is given as an ordered list of {type, text, level} blocks — "
+        "'heading', 'paragraph', 'image', or 'faq' (renders a visible Q&A section "
+        "plus FAQPage JSON-LD schema, works on any site regardless of SEO plugin) "
+        "— which this tool renders into Gutenberg block markup. For post_type='post' "
+        "slug, meta_title, category, excerpt, and featured_media_id are mandatory. "
+        "Defaults to a draft."
     ),
     action_type="write",
     data_model=PostResult,
@@ -94,9 +98,9 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
     post_type = params.post_type.strip() or "post"
 
     # SEO-critical fields are mandatory for regular posts -- the content
-    # pipeline's whole point is publishing findable, correctly-tagged
-    # articles, so a post can't leave create_post missing its slug,
-    # meta_title, or category (existing or newly created).
+    # pipeline's whole point is publishing findable, correctly-tagged,
+    # properly-summarised articles, so a post can't leave create_post
+    # missing any of these (category can be existing or newly created).
     if post_type == _SEO_REQUIRED_POST_TYPE:
         missing = []
         if not params.slug or not params.slug.strip():
@@ -105,12 +109,17 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
             missing.append("meta_title")
         if not params.category or not params.category.strip():
             missing.append("category")
+        if not params.excerpt or not params.excerpt.strip():
+            missing.append("excerpt")
+        if not params.featured_media_id:
+            missing.append("featured_media_id")
         if missing:
             return ActionResult.error(
                 "create_post for a 'post' requires " + ", ".join(missing) +
-                " — pass a URL slug, an SEO meta_title, and an existing-or-new "
-                "category name. This keeps every published article correctly "
-                "findable instead of relying on a follow-up fix.",
+                " — pass a URL slug, an SEO meta_title, an existing-or-new "
+                "category name, a standalone excerpt, and a featured image "
+                "attachment id. This keeps every published article correctly "
+                "findable and complete instead of relying on a follow-up fix.",
                 retryable=False, code="POST_SEO_FIELDS_REQUIRED")
 
     auth, err = await _authed(ctx, params.site_id)
@@ -180,6 +189,8 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
         seo_fields["meta_description"] = params.meta_description
     if params.focus_keyword is not None:
         seo_fields["focus_keyword"] = params.focus_keyword
+    if params.canonical_url is not None:
+        seo_fields["canonical_url"] = params.canonical_url
     if seo_fields:
         seo_result = await handlers_seo.update_seo_meta(ctx, UpdateSeoMetaParams(
             site_id=params.site_id, post_id=post.get("id"), post_type=post_type, **seo_fields,
@@ -252,30 +263,60 @@ async def update_post(ctx, params: UpdatePostParams) -> ActionResult:
     if params.featured_media_id is not None:
         fields["featured_media"] = params.featured_media_id
 
-    if not fields and params.category is None:
+    seo_fields = {}
+    if params.meta_title is not None:
+        seo_fields["meta_title"] = params.meta_title
+    if params.meta_description is not None:
+        seo_fields["meta_description"] = params.meta_description
+    if params.focus_keyword is not None:
+        seo_fields["focus_keyword"] = params.focus_keyword
+    if params.canonical_url is not None:
+        seo_fields["canonical_url"] = params.canonical_url
+
+    if not fields and params.category is None and not seo_fields:
         return ActionResult.error(
             "Nothing to update — pass at least one field to change.",
             retryable=False, code="POST_NO_FIELDS")
 
-    try:
-        resp = await wp_update_post(ctx, base_url, username, pw, post_id=params.post_id,
-                                    post_type=rest_base, **fields)
-    except Exception as e:
-        await ctx.log(f"update_post request failed: {e}", level="error")
-        return ActionResult.error("Could not reach the site — try again.",
-                                  retryable=True, code="WP_UNREACHABLE")
+    resp = None
+    if fields or params.category is not None:
+        try:
+            resp = await wp_update_post(ctx, base_url, username, pw, post_id=params.post_id,
+                                        post_type=rest_base, **fields)
+        except Exception as e:
+            await ctx.log(f"update_post request failed: {e}", level="error")
+            return ActionResult.error("Could not reach the site — try again.",
+                                      retryable=True, code="WP_UNREACHABLE")
 
-    if resp.status_code >= 400:
-        return ActionResult.error(wp_error_message(resp.status_code),
-                                  retryable=resp.status_code >= 500 or resp.status_code == 429,
-                                  code=wp_error_code(resp.status_code))
-    if not isinstance(resp.body, dict):
-        return ActionResult.error("WordPress returned an unexpected response.",
-                                  retryable=False, code="WP_RESPONSE_UNEXPECTED")
+        if resp.status_code >= 400:
+            return ActionResult.error(wp_error_message(resp.status_code),
+                                      retryable=resp.status_code >= 500 or resp.status_code == 429,
+                                      code=wp_error_code(resp.status_code))
+        if not isinstance(resp.body, dict):
+            return ActionResult.error("WordPress returned an unexpected response.",
+                                      retryable=False, code="WP_RESPONSE_UNEXPECTED")
 
-    result = _post_result(resp.body, post_type=post_type, category_resolved=category_resolved,
-                          tags_not_found=tags_not_found, featured_media_set=params.featured_media_id is not None)
-    summary = f"Updated {post_type} '{result.title}'"
+    warnings = []
+    if seo_fields:
+        seo_result = await handlers_seo.update_seo_meta(ctx, UpdateSeoMetaParams(
+            site_id=params.site_id, post_id=params.post_id, post_type=post_type, **seo_fields,
+        ))
+        if seo_result.status != "success":
+            warnings.append(f"SEO fields were not saved: {seo_result.error}")
+
+    if resp is not None:
+        result = _post_result(resp.body, post_type=post_type, category_resolved=category_resolved,
+                              tags_not_found=tags_not_found, featured_media_set=params.featured_media_id is not None)
+    else:
+        # Nothing but SEO fields changed -- no post-fields write happened,
+        # so report back using the caller-known id instead of a fetched body.
+        result = PostResult(id=str(params.post_id), title="", kind=f"wp_{post_type}",
+                            url="", link="", post_type=post_type, slug=params.slug or "",
+                            status=params.status, category_resolved=category_resolved,
+                            tags_not_found=tags_not_found, featured_media_set=params.featured_media_id is not None)
+    summary = f"Updated {post_type} '{result.title}'" if result.title else f"Updated {post_type} #{params.post_id}"
     if params.category and not category_resolved:
         summary += f" — category '{params.category}' was not found, left unchanged"
+    if warnings:
+        summary += " — " + "; ".join(warnings)
     return ActionResult.success(result, summary=summary)

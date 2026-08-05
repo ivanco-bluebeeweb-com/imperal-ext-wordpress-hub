@@ -45,6 +45,63 @@ async def expose_list_connected_sites(ctx, **kwargs):
     ]
 
 
+@ext.expose("list_posts_full", action_type="read")
+async def expose_list_posts_full(ctx, site_id: str = "", limit: int = 200, **kwargs):
+    """Inter-extension IPC surface for the Content Strategy Hub's mandatory
+    pre-strategy content audit + keyword-cannibalization check. A chat tool
+    cannot give Content Strategy Hub what it needs here -- it needs every
+    existing post's title/slug/link/excerpt/content/categories in one call,
+    not a paginated summary meant for a human to read.
+
+    Returns plain dicts (never surfaced to the LLM/user directly):
+    [{"id", "title", "slug", "link", "excerpt", "content", "date",
+      "categories", "lang"}, ...]
+    lang is best-effort: only populated when the Imperal SEO Bridge (or a
+    Polylang REST exposure) reports it; empty string otherwise, never guessed.
+    """
+    record = await storage.get_site_record(ctx, site_id)
+    if not record:
+        return []
+    pw = await storage.get_credential(ctx, site_id)
+    if not pw:
+        return []
+    base_url, username = record["url"], record["username"]
+    out = []
+    page_num = 1
+    remaining = max(1, min(limit, 500))
+    while remaining > 0:
+        per_page = min(remaining, 100)
+        try:
+            r = await wp_get(ctx, base_url, "/wp-json/wp/v2/posts", username=username,
+                              app_password=pw, params={"per_page": per_page, "page": page_num,
+                                                        "_fields": "id,slug,link,date,title,excerpt,content,categories,lang"})
+        except Exception as e:
+            await ctx.log(f"list_posts_full http error: {e}", level="error")
+            break
+        if r.status_code != 200:
+            break
+        rows = r.body if isinstance(r.body, list) else []
+        if not rows:
+            break
+        for p in rows:
+            out.append({
+                "id": p.get("id"),
+                "title": wp_title(p),
+                "slug": p.get("slug", ""),
+                "link": p.get("link", ""),
+                "excerpt": (p.get("excerpt") or {}).get("rendered", ""),
+                "content": (p.get("content") or {}).get("rendered", ""),
+                "date": p.get("date"),
+                "categories": p.get("categories", []),
+                "lang": p.get("lang", ""),
+            })
+        remaining -= len(rows)
+        page_num += 1
+        if len(rows) < per_page:
+            break
+    return out
+
+
 async def _authed(ctx, site_id):
     record = await storage.get_site_record(ctx, site_id)
     if not record:

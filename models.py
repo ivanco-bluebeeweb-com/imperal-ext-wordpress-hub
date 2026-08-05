@@ -898,21 +898,87 @@ class SeoMeta(sdl.Entity):
     taxonomies: list[str] = Field(default_factory=list)
 
 
+# ─────────── link extraction (internal/external + anchor text) ───────────
+
+class ExtractLinksParams(BaseModel):
+    content_html: str | None = Field(
+        default=None,
+        description="The article's HTML content to scan directly (e.g. straight from "
+                    "Article Writer's export_article_text before the post even exists). "
+                    "Give this OR post_id.")
+    site_id: str | None = Field(
+        default=None,
+        description="Site id from a previous list_sites call — required with post_id, "
+                    "optional with content_html (used only to tell internal vs external apart)")
+    post_id: int | None = Field(
+        default=None, description="Numeric id of an existing post/page to read live from the site. Give this OR content_html.")
+    post_type: str | None = Field(
+        default=None, description="REST base of the post_id target, e.g. 'posts' or 'pages'. Defaults to 'posts'.")
+
+
+class LinkInfo(sdl.Entity):
+    """One <a href> found in an article's content."""
+    href: str = ""
+    anchor_text: str = ""
+    link_type: str = ""  # internal | external | anchor | other
+    weak_anchor: bool = False
+    rel: str = ""
+    missing_rel_policy: bool = False
+
+
+class LinkReport(sdl.Entity):
+    """Full link audit for one article's content."""
+    total_links: int = 0
+    internal_count: int = 0
+    external_count: int = 0
+    weak_anchor_count: int = 0
+    links: list[LinkInfo] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+# ─────────── post-publish sitemap inclusion check ───────────
+
+class CheckSitemapParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    url: str = Field(description="The published post/page URL to look for in the site's XML sitemap")
+
+
+class SitemapCheckResult(sdl.Entity):
+    """Whether one published URL was found in the site's XML sitemap."""
+    url: str = ""
+    found: bool = False
+    sitemap_index_url: str = ""
+    checked_sitemap_url: str = ""
+    sitemaps_checked: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 # ─────────── post/page publishing ───────────
+
+class FaqItemInput(BaseModel):
+    """One question/answer pair inside a 'faq' block."""
+    question: str = Field(min_length=1, description="The FAQ question, exactly as it should be shown and marked up")
+    answer: str = Field(min_length=1, description="The plain-text answer (no HTML needed — it is escaped and wrapped automatically)")
+
 
 class PostBlockInput(BaseModel):
     """One content block, already decided by the caller — no document parsing here.
 
     type == "heading" renders <h{level}>; type == "image" renders a Gutenberg
     image block from a media library attachment (id + url, both from a prior
-    upload_media call); anything else renders a paragraph.
+    upload_media call); type == "faq" renders a visible Q&A list PLUS a
+    FAQPage JSON-LD <script> block (schema.org) covering every item in
+    faq_items -- this works on any WordPress site regardless of which SEO
+    plugin is installed, since it is standard schema.org markup rather than
+    a plugin-proprietary block; anything else renders a paragraph.
     """
-    type: str = Field(default="paragraph", description="'paragraph', 'heading', or 'image'")
-    text: str = Field(default="", description="Block text (paragraph/heading); alt text for 'image'")
+    type: str = Field(default="paragraph", description="'paragraph', 'heading', 'image', or 'faq'")
+    text: str = Field(default="", description="Block text (paragraph/heading); alt text for 'image'; optional intro text for 'faq'")
     level: int = Field(default=2, ge=1, le=6, description="Heading level, used only when type is 'heading'")
     media_id: int | None = Field(default=None, description="Attachment id from upload_media, used only when type is 'image'")
     media_url: str | None = Field(default=None, description="Attachment URL from upload_media, used only when type is 'image'")
     caption: str | None = Field(default=None, description="Optional caption, used only when type is 'image'")
+    faq_items: list[FaqItemInput] = Field(default_factory=list, description="Question/answer pairs, used only when type is 'faq' -- rendered as visible content AND FAQPage JSON-LD schema")
 
 
 class CreatePostParams(BaseModel):
@@ -924,15 +990,16 @@ class CreatePostParams(BaseModel):
     blocks: list[PostBlockInput] = Field(
         default_factory=list,
         description="Content as an ordered list of {type, text, level} blocks, rendered into Gutenberg block markup")
-    excerpt: str | None = Field(default=None, description="Optional excerpt")
+    excerpt: str | None = Field(default=None, description="Excerpt -- REQUIRED when post_type='post': a short standalone summary Rank Math and social shares fall back to")
     category: str | None = Field(default=None, description="Category name -- REQUIRED when post_type='post'. Resolved to an existing term by name; if none matches, a new category with this name is created automatically so the post is never left uncategorised")
     tags: list[str] = Field(default_factory=list, description="Optional tag names (posts only); resolved to existing terms, never created — names not found are reported back, not silently dropped")
-    featured_media_id: int | None = Field(default=None, description="Attachment id from a prior upload_media call, set as the post's featured image")
+    featured_media_id: int | None = Field(default=None, description="Attachment id from a prior upload_media call -- REQUIRED when post_type='post': every article needs a featured image, set in the same call")
     date: str | None = Field(default=None, description="Optional publish/schedule date as YYYY-MM-DD or full ISO 8601; required when status='future'")
     lang: str | None = Field(default=None, description="Optional Polylang language code, e.g. 'en', 'ro' — requires Polylang on the site")
     meta_title: str | None = Field(default=None, description="Rank Math SEO title -- REQUIRED when post_type='post'")
     meta_description: str | None = Field(default=None, description="Optional Rank Math SEO meta description, set in the same call")
     focus_keyword: str | None = Field(default=None, description="Optional Rank Math focus keyword, set in the same call")
+    canonical_url: str | None = Field(default=None, description="Optional Rank Math canonical URL, set in the same call — use when this article duplicates or supersedes another URL")
 
 
 class UpdatePostParams(BaseModel):
@@ -950,6 +1017,10 @@ class UpdatePostParams(BaseModel):
     tags: list[str] | None = Field(default=None, description="Replace tag names (posts only); resolved to existing terms, never created; omit to keep existing tags")
     featured_media_id: int | None = Field(default=None, description="Attachment id from a prior upload_media call, set as the post's featured image")
     date: str | None = Field(default=None, description="New publish/schedule date as YYYY-MM-DD or full ISO 8601")
+    meta_title: str | None = Field(default=None, description="New Rank Math SEO title, set in the same call; omit to leave unchanged")
+    meta_description: str | None = Field(default=None, description="New Rank Math meta description, set in the same call; omit to leave unchanged")
+    focus_keyword: str | None = Field(default=None, description="New Rank Math focus keyword, set in the same call; omit to leave unchanged")
+    canonical_url: str | None = Field(default=None, description="New Rank Math canonical URL, set in the same call; omit to leave unchanged")
 
 
 class PostResult(sdl.Entity):

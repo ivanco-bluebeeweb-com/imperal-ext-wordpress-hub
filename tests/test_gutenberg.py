@@ -4,7 +4,9 @@ Deliberately document-agnostic: every test passes blocks the CALLER already
 decided on (no document parsing, no heuristics exercised here).
 """
 
-from models import PostBlockInput
+import json
+
+from models import FaqItemInput, PostBlockInput
 import gutenberg
 
 
@@ -72,3 +74,66 @@ def test_blocks_to_content_accepts_plain_dicts_too():
     blocks = [{"type": "image", "media_id": 3, "media_url": "https://x.com/a.jpg", "text": "alt"}]
     content = gutenberg.blocks_to_content(blocks)
     assert "wp-image-3" in content
+
+
+# ─────────── faq_block: FAQPage JSON-LD + visible Q&A ───────────
+
+def test_faq_block_renders_visible_qa_and_jsonld():
+    items = [
+        {"question": "What is X?", "answer": "X is Y."},
+        {"question": "How much does it cost?", "answer": "It depends."},
+    ]
+    out = gutenberg.faq_block(items)
+    assert "What is X?" in out
+    assert "X is Y." in out
+    assert "How much does it cost?" in out
+    assert 'application/ld+json' in out
+    # extract the JSON-LD payload and validate it's real, well-formed FAQPage schema
+    start = out.index("<script type=\"application/ld+json\">") + len("<script type=\"application/ld+json\">")
+    end = out.index("</script>", start)
+    payload = json.loads(out[start:end])
+    assert payload["@type"] == "FAQPage"
+    assert len(payload["mainEntity"]) == 2
+    assert payload["mainEntity"][0]["@type"] == "Question"
+    assert payload["mainEntity"][0]["name"] == "What is X?"
+    assert payload["mainEntity"][0]["acceptedAnswer"]["@type"] == "Answer"
+    assert payload["mainEntity"][0]["acceptedAnswer"]["text"] == "X is Y."
+
+
+def test_faq_block_accepts_faqiteminput_models():
+    items = [FaqItemInput(question="Q1", answer="A1")]
+    out = gutenberg.faq_block(items)
+    assert "Q1" in out and "A1" in out
+
+
+def test_faq_block_escapes_html_in_question_and_answer():
+    items = [{"question": "A & B?", "answer": "<script>bad</script>"}]
+    out = gutenberg.faq_block(items)
+    assert "<script>bad</script>" not in out.split("application/ld+json")[0]  # not raw in visible html
+    assert "&amp;" in out
+
+
+def test_faq_block_skips_incomplete_items():
+    items = [{"question": "", "answer": "orphan answer"}, {"question": "Real Q", "answer": "Real A"}]
+    out = gutenberg.faq_block(items)
+    assert "orphan answer" not in out
+    assert "Real Q" in out
+
+
+def test_faq_block_empty_items_renders_nothing():
+    assert gutenberg.faq_block([]) == ""
+
+
+def test_faq_block_with_intro_text():
+    out = gutenberg.faq_block([{"question": "Q", "answer": "A"}], intro_text="Common questions:")
+    assert "Common questions:" in out
+
+
+def test_blocks_to_content_renders_faq_block_from_model():
+    blocks = [
+        PostBlockInput(type="heading", text="FAQ", level=2),
+        PostBlockInput(type="faq", faq_items=[FaqItemInput(question="Q1", answer="A1")]),
+    ]
+    content = gutenberg.blocks_to_content(blocks)
+    assert "Q1" in content
+    assert "FAQPage" in content

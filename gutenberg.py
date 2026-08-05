@@ -9,6 +9,7 @@ Anything about interpreting an input file stays out of scope here.
 from __future__ import annotations
 
 import html
+import json
 
 
 def paragraph_block(text: str) -> str:
@@ -43,35 +44,97 @@ def image_block(media_id: int, media_url: str, alt: str = "", caption: str | Non
     return figure
 
 
-def _block_fields(block) -> tuple[str, str, int, int | None, str | None, str | None]:
-    """Read {type, text, level, media_id, media_url, caption} off a dict or pydantic model."""
+def faq_block(items, intro_text: str = "") -> str:
+    """Render a visible Q&A list PLUS a FAQPage JSON-LD <script> block.
+
+    Deliberately NOT the Rank Math proprietary `wp:rank-math/faq-block` --
+    that markup is undocumented and site-specific (depends on exact plugin
+    version). Standard schema.org JSON-LD works identically on every
+    WordPress site regardless of which SEO plugin (or none) is installed,
+    and is exactly what Google's rich-result parser reads. ``items`` is a
+    list of {question, answer} dicts or PostBlockInput-style objects.
+    """
+    def _fields(item):
+        if isinstance(item, dict):
+            return item.get("question") or "", item.get("answer") or ""
+        return getattr(item, "question", "") or "", getattr(item, "answer", "") or ""
+
+    pairs = [(_fields(i)[0].strip(), _fields(i)[1].strip()) for i in (items or [])]
+    pairs = [(q, a) for q, a in pairs if q and a]
+    if not pairs:
+        return ""
+
+    visible = []
+    if intro_text and intro_text.strip():
+        visible.append(f"<p>{html.escape(intro_text.strip())}</p>")
+    for q, a in pairs:
+        visible.append(
+            f"<h3 class=\"wp-block-heading\">{html.escape(q)}</h3>"
+            f"<p>{html.escape(a)}</p>"
+        )
+    visible_html = (
+        '<!-- wp:html -->'
+        f'<div class="imperal-faq">{"".join(visible)}</div>'
+        '<!-- /wp:html -->'
+    )
+
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": q,
+                "acceptedAnswer": {"@type": "Answer", "text": a},
+            }
+            for q, a in pairs
+        ],
+    }
+    schema_html = (
+        '<!-- wp:html -->'
+        f'<script type="application/ld+json">{json.dumps(schema, ensure_ascii=False)}</script>'
+        '<!-- /wp:html -->'
+    )
+    return visible_html + schema_html
+
+
+def _block_fields(block) -> tuple[str, str, int, int | None, str | None, str | None, list]:
+    """Read {type, text, level, media_id, media_url, caption, faq_items} off a dict or pydantic model."""
     if isinstance(block, dict):
         return (block.get("type") or "paragraph", block.get("text") or "", block.get("level") or 2,
-                block.get("media_id"), block.get("media_url"), block.get("caption"))
+                block.get("media_id"), block.get("media_url"), block.get("caption"),
+                block.get("faq_items") or [])
     return (getattr(block, "type", "paragraph") or "paragraph",
             getattr(block, "text", "") or "",
             getattr(block, "level", 2) or 2,
             getattr(block, "media_id", None),
             getattr(block, "media_url", None),
-            getattr(block, "caption", None))
+            getattr(block, "caption", None),
+            getattr(block, "faq_items", None) or [])
 
 
 def blocks_to_content(blocks) -> str:
-    """Render explicit blocks (list of {type, text, level, media_id, media_url, caption})
+    """Render explicit blocks (list of {type, text, level, media_id, media_url, caption, faq_items})
     into post_content.
 
     type == "heading" renders an <h{level}> block; type == "image" renders a
     Gutenberg image block from an existing attachment (media_id + media_url
     required — a block missing either is skipped, since there is nothing to
-    render); anything else (including the default "paragraph") renders a
-    plain paragraph block.
+    render); type == "faq" renders a visible Q&A list plus FAQPage JSON-LD
+    schema (skipped if faq_items is empty); anything else (including the
+    default "paragraph") renders a plain paragraph block.
     """
     rendered = []
     for block in blocks or []:
-        btype, text, level, media_id, media_url, caption = _block_fields(block)
+        btype, text, level, media_id, media_url, caption, faq_items = _block_fields(block)
         if btype == "image":
             if media_id and media_url:
                 rendered.append(image_block(media_id, media_url, alt=text, caption=caption))
+            continue
+        if btype == "faq":
+            rendered_faq = faq_block(faq_items, intro_text=text)
+            if rendered_faq:
+                rendered.append(rendered_faq)
             continue
         if not text.strip():
             continue

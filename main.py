@@ -14,7 +14,7 @@ _LOCAL = ("app", "handlers_connect", "handlers_read", "handlers_woocommerce",
           "handlers_woocommerce_catalog", "handlers_woocommerce_operations",
           "handlers_woocommerce_finance", "handlers_woocommerce_order_edit",
           "handlers_seo", "handlers_builders", "handlers_posts", "handlers_media",
-          "handlers_taxonomy", "skeleton", "panels", "models", "storage", "wp_client", "wp_cli", "gutenberg")
+          "handlers_taxonomy", "handlers_links", "skeleton", "panels", "models", "storage", "wp_client", "wp_cli", "gutenberg")
 for _mod in _LOCAL:
     sys.modules.pop(_mod, None)
 
@@ -31,5 +31,6 @@ import handlers_builders  # noqa: E402,F401
 import handlers_posts  # noqa: E402,F401
 import handlers_media  # noqa: E402,F401
 import handlers_taxonomy  # noqa: E402,F401
+import handlers_links  # noqa: E402,F401
 import skeleton  # noqa: E402,F401
 import panels  # noqa: E402,F401
