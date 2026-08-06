@@ -110,6 +110,20 @@ async def sidebar(ctx, active_site_id="", **kwargs):
     bridge_footer = ui.Stack(children=[
         ui.Divider(),
         ui.Tooltip(
+            content="Pushes every WordPress site connected here into Sites Registry -- the "
+                    "platform-agnostic catalogue app. Fixes sites connected here before Sites "
+                    "Registry existed, or any time the two drift out of sync. Refresh the Sites "
+                    "Registry page after this to see them.",
+            children=ui.Button(
+                "Sync sites to Sites Registry",
+                icon="RefreshCw",
+                variant="secondary",
+                full_width=True,
+                disabled=not rows,
+                on_click=ui.Call("sync_sites_to_registry"),
+            ),
+        ),
+        ui.Tooltip(
             content="Imperal Bridge is the one companion plugin this connector needs on a "
                     "WordPress site — Rank Math SEO fields, Elementor/Bricks builder content, "
                     "and image sideloading, all in a single install.",

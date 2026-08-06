@@ -172,6 +172,122 @@
       "owner_chat_tool": "wp-site-connector"
     },
     {
+      "name": "sync_sites_to_registry",
+      "description": "Push every WordPress site already connected here into Sites Registry -- the platform-agnostic catalogue app. Fixes sites that were connected here before Sites Registry existed, or any time the two drift out of sync.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.sync_registry"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {},
+        "title": "_NoParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "username": {
+            "default": "",
+            "title": "Username",
+            "type": "string"
+          },
+          "last_checked": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Last Checked"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Site",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.sync_sites_to_registry",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
       "name": "forget_site",
       "description": "Disconnect a WordPress site and delete its stored credential.",
       "action_type": "destructive",

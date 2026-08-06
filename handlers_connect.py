@@ -2,7 +2,7 @@ from urllib.parse import urlparse
 
 from app import chat, ext
 from imperal_sdk import ActionResult
-from models import ConnectSiteParams, SiteIdParams, Site, AddSSHParams
+from models import ConnectSiteParams, SiteIdParams, Site, AddSSHParams, _NoParams
 from wp_client import normalize_base_url, site_id_from_url, wp_get, wp_error_message, now_iso
 import storage
 import wp_cli
@@ -78,6 +78,37 @@ async def connect_site(ctx, params: ConnectSiteParams) -> ActionResult:
     site = Site(id=result["site_id"], title=result["name"], kind="wp_site", url=result["url"],
                 username=params.username, status="connected")
     return ActionResult.success(site, summary=f"Connected {result['name']}", refresh_panels=["sidebar"])
+
+
+@chat.function(
+    "sync_sites_to_registry",
+    description=(
+        "Push every WordPress site already connected here into Sites Registry -- the "
+        "platform-agnostic catalogue app. Fixes sites that were connected here before "
+        "Sites Registry existed, or any time the two drift out of sync."
+    ),
+    action_type="write",
+    data_model=Site,
+    effects=["wp.sync_registry"],
+    event="wp-site-connector.sync_sites_to_registry",
+)
+async def sync_sites_to_registry(ctx, params: _NoParams) -> ActionResult:
+    """Thin local wrapper: WP Hub has no direct write access to Sites Registry's
+    own storage, so this calls into Sites Registry's own sync_connected_sites via
+    IPC, which then reads OUR connected sites back out through list_connected_sites.
+    Round-trip, but it's the only bridge the platform allows between two extensions'
+    isolated stores."""
+    try:
+        result = await ctx.extensions.call("sites-registry", "sync_connected_sites_ipc", source="wordpress")
+    except Exception as e:
+        await ctx.log(f"sync_sites_to_registry: IPC call failed: {e}", level="error")
+        return ActionResult.error(
+            "Could not reach Sites Registry -- make sure it's installed and try again.",
+            retryable=True)
+    count = len(result) if isinstance(result, list) else 0
+    return ActionResult.success(
+        Site(id="sync", title="Sites Registry sync", kind="wp_site", status="connected"),
+        summary=f"Synced {count} site(s) into Sites Registry.")
 
 
 @ext.expose("connect_site_ipc", action_type="write")

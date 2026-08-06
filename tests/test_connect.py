@@ -1,7 +1,7 @@
 from imperal_sdk.testing import MockContext
 import handlers_connect as hc
 import storage
-from models import ConnectSiteParams
+from models import ConnectSiteParams, _NoParams
 
 
 async def _ctx():
@@ -54,3 +54,32 @@ async def test_connect_site_ipc_bad_credentials_returns_error_dict():
     assert result["ok"] is False
     assert "error" in result
     assert await storage.get_site_record(ctx, "y-com") is None
+
+
+async def test_sync_sites_to_registry_forwards_to_sites_registry_ipc():
+    """The button in WP Hub's sidebar calls this local wrapper, which must
+    forward to Sites Registry's own sync_connected_sites via IPC -- WP Hub
+    cannot write into Sites Registry's storage directly."""
+    ctx = await _ctx()
+    calls = []
+
+    async def fake_sync(**kwargs):
+        calls.append(kwargs)
+        return [{"id": "climtec-md"}, {"id": "g4s-md"}]
+
+    ctx.extensions.register("sites-registry", "sync_connected_sites_ipc", fake_sync)
+    r = await hc.sync_sites_to_registry(ctx, _NoParams())
+    assert r.status == "success"
+    assert calls == [{"source": "wordpress"}]
+    assert "2" in r.summary
+
+
+async def test_sync_sites_to_registry_surfaces_ipc_failure():
+    ctx = await _ctx()
+
+    async def fake_sync(**kwargs):
+        raise RuntimeError("sites-registry not installed")
+
+    ctx.extensions.register("sites-registry", "sync_connected_sites_ipc", fake_sync)
+    r = await hc.sync_sites_to_registry(ctx, _NoParams())
+    assert r.status != "success"
