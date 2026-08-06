@@ -12786,6 +12786,11 @@
             "title": "Robots",
             "type": "array"
           },
+          "rich_snippet": {
+            "default": "",
+            "title": "Rich Snippet",
+            "type": "string"
+          },
           "seo_plugin": {
             "default": "",
             "title": "Seo Plugin",
@@ -12974,6 +12979,19 @@
             "default": null,
             "description": "Optional Rank Math focus keyword. Omit to leave unchanged.",
             "title": "Focus Keyword"
+          },
+          "rich_snippet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Rank Math schema/rich-snippet type, e.g. 'Article', 'Product', 'Recipe', or 'off' to disable schema for this item. Rank Math accepts an open-ended set of schema.org type names here (including PRO schema templates and custom schema), so this is free text, not a fixed list — pass exactly what should appear in Rank Math's Schema type dropdown. Omit to leave unchanged; empty string clears it.",
+            "title": "Rich Snippet"
           }
         },
         "required": [
@@ -13094,6 +13112,11 @@
             },
             "title": "Robots",
             "type": "array"
+          },
+          "rich_snippet": {
+            "default": "",
+            "title": "Rich Snippet",
+            "type": "string"
           },
           "seo_plugin": {
             "default": "",
@@ -13334,6 +13357,11 @@
             "title": "Robots",
             "type": "array"
           },
+          "rich_snippet": {
+            "default": "",
+            "title": "Rich Snippet",
+            "type": "string"
+          },
           "seo_plugin": {
             "default": "",
             "title": "Seo Plugin",
@@ -13522,6 +13550,19 @@
             "default": null,
             "description": "Optional Rank Math focus keyword. Omit to leave unchanged.",
             "title": "Focus Keyword"
+          },
+          "rich_snippet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Rank Math schema/rich-snippet type for the term archive, e.g. 'Article', 'CollectionPage', or 'off'. Free text — Rank Math accepts an open-ended set of schema.org type names. Omit to leave unchanged; empty string clears it.",
+            "title": "Rich Snippet"
           }
         },
         "required": [
@@ -13642,6 +13683,11 @@
             },
             "title": "Robots",
             "type": "array"
+          },
+          "rich_snippet": {
+            "default": "",
+            "title": "Rich Snippet",
+            "type": "string"
           },
           "seo_plugin": {
             "default": "",
@@ -13842,6 +13888,11 @@
             },
             "title": "Robots",
             "type": "array"
+          },
+          "rich_snippet": {
+            "default": "",
+            "title": "Rich Snippet",
+            "type": "string"
           },
           "seo_plugin": {
             "default": "",
@@ -14757,741 +14808,8 @@
       "owner_chat_tool": "wp-site-connector"
     },
     {
-      "name": "create_post",
-      "description": "Create a WordPress post or page with Gutenberg content, optional category, Polylang language, and Rank Math SEO fields. Content is given as an ordered list of {type, text, level} blocks — 'heading' or 'paragraph' — which this tool renders into Gutenberg block markup. Defaults to a draft.",
-      "action_type": "write",
-      "chain_callable": true,
-      "effects": [
-        "wp.post_create"
-      ],
-      "id_projection": "",
-      "params_schema": {
-        "$defs": {
-          "PostBlockInput": {
-            "description": "One content block, already decided by the caller — no document parsing here.\n\ntype == \"heading\" renders <h{level}>; type == \"image\" renders a Gutenberg\nimage block from a media library attachment (id + url, both from a prior\nupload_media call); anything else renders a paragraph.",
-            "properties": {
-              "type": {
-                "default": "paragraph",
-                "description": "'paragraph', 'heading', or 'image'",
-                "title": "Type",
-                "type": "string"
-              },
-              "text": {
-                "default": "",
-                "description": "Block text (paragraph/heading); alt text for 'image'",
-                "title": "Text",
-                "type": "string"
-              },
-              "level": {
-                "default": 2,
-                "description": "Heading level, used only when type is 'heading'",
-                "maximum": 6,
-                "minimum": 1,
-                "title": "Level",
-                "type": "integer"
-              },
-              "media_id": {
-                "anyOf": [
-                  {
-                    "type": "integer"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "Attachment id from upload_media, used only when type is 'image'",
-                "title": "Media Id"
-              },
-              "media_url": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "Attachment URL from upload_media, used only when type is 'image'",
-                "title": "Media Url"
-              },
-              "caption": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "Optional caption, used only when type is 'image'",
-                "title": "Caption"
-              }
-            },
-            "title": "PostBlockInput",
-            "type": "object"
-          }
-        },
-        "properties": {
-          "site_id": {
-            "description": "Site id from a previous list_sites call — never invent it",
-            "title": "Site Id",
-            "type": "string"
-          },
-          "title": {
-            "description": "Post/page title",
-            "maxLength": 300,
-            "minLength": 1,
-            "title": "Title",
-            "type": "string"
-          },
-          "post_type": {
-            "default": "post",
-            "description": "'post', 'page', or a custom post type's slug",
-            "title": "Post Type",
-            "type": "string"
-          },
-          "status": {
-            "default": "draft",
-            "description": "Initial status: draft, publish, pending, private, or future",
-            "title": "Status",
-            "type": "string"
-          },
-          "slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Optional URL slug; WordPress derives one from the title if omitted",
-            "title": "Slug"
-          },
-          "blocks": {
-            "description": "Content as an ordered list of {type, text, level} blocks, rendered into Gutenberg block markup",
-            "items": {
-              "$ref": "#/$defs/PostBlockInput"
-            },
-            "title": "Blocks",
-            "type": "array"
-          },
-          "excerpt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Optional excerpt",
-            "title": "Excerpt"
-          },
-          "category": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Optional category name (posts only); resolved to an existing term, never created",
-            "title": "Category"
-          },
-          "tags": {
-            "description": "Optional tag names (posts only); resolved to existing terms, never created — names not found are reported back, not silently dropped",
-            "items": {
-              "type": "string"
-            },
-            "title": "Tags",
-            "type": "array"
-          },
-          "featured_media_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Attachment id from a prior upload_media call, set as the post's featured image",
-            "title": "Featured Media Id"
-          },
-          "date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Optional publish/schedule date as YYYY-MM-DD or full ISO 8601; required when status='future'",
-            "title": "Date"
-          },
-          "lang": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Optional Polylang language code, e.g. 'en', 'ro' — requires Polylang on the site",
-            "title": "Lang"
-          },
-          "meta_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Optional Rank Math SEO title, set in the same call",
-            "title": "Meta Title"
-          },
-          "meta_description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Optional Rank Math SEO meta description, set in the same call",
-            "title": "Meta Description"
-          },
-          "focus_keyword": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Optional Rank Math focus keyword, set in the same call",
-            "title": "Focus Keyword"
-          }
-        },
-        "required": [
-          "site_id",
-          "title"
-        ],
-        "title": "CreatePostParams",
-        "type": "object"
-      },
-      "return_schema": {
-        "description": "Outcome of create_post/update_post: the WordPress post/page that was written.",
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              }
-            ],
-            "title": "Id"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "kind": {
-            "default": "",
-            "title": "Kind",
-            "type": "string"
-          },
-          "subtitle": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Subtitle"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Description"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Status"
-          },
-          "url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Url"
-          },
-          "link": {
-            "default": "",
-            "title": "Link",
-            "type": "string"
-          },
-          "post_type": {
-            "default": "post",
-            "title": "Post Type",
-            "type": "string"
-          },
-          "slug": {
-            "default": "",
-            "title": "Slug",
-            "type": "string"
-          },
-          "date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Date"
-          },
-          "category_resolved": {
-            "default": true,
-            "title": "Category Resolved",
-            "type": "boolean"
-          },
-          "tags_not_found": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Tags Not Found",
-            "type": "array"
-          },
-          "featured_media_set": {
-            "default": false,
-            "title": "Featured Media Set",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "id",
-          "title"
-        ],
-        "title": "PostResult",
-        "type": "object",
-        "x-sdl": "entity"
-      },
-      "event": "wp-site-connector.create_post",
-      "background": false,
-      "long_running": false,
-      "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
-    },
-    {
-      "name": "update_post",
-      "description": "Update selected fields of an existing WordPress post or page: title, status, slug, content (as {type, text, level} blocks), excerpt, category, or date. Omitted fields are left unchanged.",
-      "action_type": "write",
-      "chain_callable": true,
-      "effects": [
-        "wp.post_update"
-      ],
-      "id_projection": "",
-      "params_schema": {
-        "$defs": {
-          "PostBlockInput": {
-            "description": "One content block, already decided by the caller — no document parsing here.\n\ntype == \"heading\" renders <h{level}>; type == \"image\" renders a Gutenberg\nimage block from a media library attachment (id + url, both from a prior\nupload_media call); anything else renders a paragraph.",
-            "properties": {
-              "type": {
-                "default": "paragraph",
-                "description": "'paragraph', 'heading', or 'image'",
-                "title": "Type",
-                "type": "string"
-              },
-              "text": {
-                "default": "",
-                "description": "Block text (paragraph/heading); alt text for 'image'",
-                "title": "Text",
-                "type": "string"
-              },
-              "level": {
-                "default": 2,
-                "description": "Heading level, used only when type is 'heading'",
-                "maximum": 6,
-                "minimum": 1,
-                "title": "Level",
-                "type": "integer"
-              },
-              "media_id": {
-                "anyOf": [
-                  {
-                    "type": "integer"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "Attachment id from upload_media, used only when type is 'image'",
-                "title": "Media Id"
-              },
-              "media_url": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "Attachment URL from upload_media, used only when type is 'image'",
-                "title": "Media Url"
-              },
-              "caption": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "Optional caption, used only when type is 'image'",
-                "title": "Caption"
-              }
-            },
-            "title": "PostBlockInput",
-            "type": "object"
-          }
-        },
-        "properties": {
-          "site_id": {
-            "description": "Site id from a previous list_sites call — never invent it",
-            "title": "Site Id",
-            "type": "string"
-          },
-          "post_id": {
-            "description": "Numeric id of the post or page to update",
-            "exclusiveMinimum": 0,
-            "title": "Post Id",
-            "type": "integer"
-          },
-          "post_type": {
-            "default": "post",
-            "description": "'post', 'page', or a custom post type's slug — must match the item being updated",
-            "title": "Post Type",
-            "type": "string"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "maxLength": 300,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "New title; omit to keep it",
-            "title": "Title"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "New status: draft, publish, pending, private, or future",
-            "title": "Status"
-          },
-          "slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "New URL slug; omit to keep it",
-            "title": "Slug"
-          },
-          "blocks": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/$defs/PostBlockInput"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Replace the content with these ordered {type, text, level} blocks; omit to keep existing content",
-            "title": "Blocks"
-          },
-          "excerpt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "New excerpt; omit to keep it",
-            "title": "Excerpt"
-          },
-          "category": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "New category name (posts only); resolved to an existing term, never created",
-            "title": "Category"
-          },
-          "tags": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Replace tag names (posts only); resolved to existing terms, never created; omit to keep existing tags",
-            "title": "Tags"
-          },
-          "featured_media_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Attachment id from a prior upload_media call, set as the post's featured image",
-            "title": "Featured Media Id"
-          },
-          "date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "New publish/schedule date as YYYY-MM-DD or full ISO 8601",
-            "title": "Date"
-          }
-        },
-        "required": [
-          "site_id",
-          "post_id"
-        ],
-        "title": "UpdatePostParams",
-        "type": "object"
-      },
-      "return_schema": {
-        "description": "Outcome of create_post/update_post: the WordPress post/page that was written.",
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              }
-            ],
-            "title": "Id"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "kind": {
-            "default": "",
-            "title": "Kind",
-            "type": "string"
-          },
-          "subtitle": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Subtitle"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Description"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Status"
-          },
-          "url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Url"
-          },
-          "link": {
-            "default": "",
-            "title": "Link",
-            "type": "string"
-          },
-          "post_type": {
-            "default": "post",
-            "title": "Post Type",
-            "type": "string"
-          },
-          "slug": {
-            "default": "",
-            "title": "Slug",
-            "type": "string"
-          },
-          "date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Date"
-          },
-          "category_resolved": {
-            "default": true,
-            "title": "Category Resolved",
-            "type": "boolean"
-          },
-          "tags_not_found": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Tags Not Found",
-            "type": "array"
-          },
-          "featured_media_set": {
-            "default": false,
-            "title": "Featured Media Set",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "id",
-          "title"
-        ],
-        "title": "PostResult",
-        "type": "object",
-        "x-sdl": "entity"
-      },
-      "event": "wp-site-connector.update_post",
-      "background": false,
-      "long_running": false,
-      "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
-    },
-    {
       "name": "upload_media",
-      "description": "Add a publicly reachable https:// image URL to a connected WordPress site's media library, and optionally set it as a post's featured image. WordPress fetches the image itself (via the Imperal Bridge plugin) — Imperal never downloads or re-uploads the image bytes. Use the returned attachment id/url as featured_media_id, or in an 'image' content block, on create_post/update_post.",
+      "description": "Add a publicly reachable https:// image URL to a connected WordPress site's media library, and optionally set it as a post's featured image. WordPress fetches the image itself (via the Imperal Bridge plugin) — Imperal never downloads or re-uploads the image bytes. Use the returned attachment id/url as featured_media_id, or in an 'image' content block, on create_post/update_post. For images already generated as a Media Hub package, prefer passing external_images directly on create_post/update_post instead of calling this per image.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -15795,6 +15113,974 @@
         "x-sdl": "entity"
       },
       "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "create_post",
+      "description": "Create a WordPress post or page with Gutenberg content, optional category, Polylang language, and Rank Math SEO fields (including canonical_url). Content is given as an ordered list of {type, text, level} blocks — 'heading', 'paragraph', 'image', or 'faq' (renders a visible Q&A section plus FAQPage JSON-LD schema, works on any site regardless of SEO plugin) — which this tool renders into Gutenberg block markup. For post_type='post' slug, meta_title, category, excerpt, and featured_media_id are mandatory. Defaults to a draft.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.post_create"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "$defs": {
+          "ExternalImageInput": {
+            "description": "One not-yet-uploaded external image, keyed by role -- the exact shape\na Media Hub `get_media_package`/`generate_media_package` asset already\nhas (role, image_url, alt_text, caption). Passing these on create_post/\nupdate_post sideloads each one into this site's media library and wires\nit up automatically: role == \"featured\" sets featured_media_id, any\nother role is resolved against a block whose image_role matches. This is\nthe one-call bridge between an image-generation package and a published\npost -- no manual upload_media + attachment-id bookkeeping needed.",
+            "properties": {
+              "role": {
+                "description": "'featured' or an inline role like 'inline_1' -- must match either this call's featured slot or a block's image_role",
+                "title": "Role",
+                "type": "string"
+              },
+              "source_url": {
+                "description": "Public https:// URL of the image, e.g. a Media Hub asset's image_url",
+                "title": "Source Url",
+                "type": "string"
+              },
+              "alt_text": {
+                "default": "",
+                "description": "Alt text for the new media library attachment",
+                "title": "Alt Text",
+                "type": "string"
+              },
+              "caption": {
+                "default": "",
+                "description": "Optional caption for the new media library attachment",
+                "title": "Caption",
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "source_url"
+            ],
+            "title": "ExternalImageInput",
+            "type": "object"
+          },
+          "FaqItemInput": {
+            "description": "One question/answer pair inside a 'faq' block.",
+            "properties": {
+              "question": {
+                "description": "The FAQ question, exactly as it should be shown and marked up",
+                "minLength": 1,
+                "title": "Question",
+                "type": "string"
+              },
+              "answer": {
+                "description": "The plain-text answer (no HTML needed — it is escaped and wrapped automatically)",
+                "minLength": 1,
+                "title": "Answer",
+                "type": "string"
+              }
+            },
+            "required": [
+              "question",
+              "answer"
+            ],
+            "title": "FaqItemInput",
+            "type": "object"
+          },
+          "PostBlockInput": {
+            "description": "One content block, already decided by the caller — no document parsing here.\n\ntype == \"heading\" renders <h{level}>; type == \"image\" renders a Gutenberg\nimage block from a media library attachment (id + url, both from a prior\nupload_media call); type == \"faq\" renders a visible Q&A list PLUS a\nFAQPage JSON-LD <script> block (schema.org) covering every item in\nfaq_items -- this works on any WordPress site regardless of which SEO\nplugin is installed, since it is standard schema.org markup rather than\na plugin-proprietary block; anything else renders a paragraph.",
+            "properties": {
+              "type": {
+                "default": "paragraph",
+                "description": "'paragraph', 'heading', 'image', or 'faq'",
+                "title": "Type",
+                "type": "string"
+              },
+              "text": {
+                "default": "",
+                "description": "Block text (paragraph/heading); alt text for 'image'; optional intro text for 'faq'",
+                "title": "Text",
+                "type": "string"
+              },
+              "level": {
+                "default": 2,
+                "description": "Heading level, used only when type is 'heading'",
+                "maximum": 6,
+                "minimum": 1,
+                "title": "Level",
+                "type": "integer"
+              },
+              "media_id": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Attachment id from upload_media, used only when type is 'image'",
+                "title": "Media Id"
+              },
+              "media_url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Attachment URL from upload_media, used only when type is 'image'",
+                "title": "Media Url"
+              },
+              "image_role": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Used only when type is 'image', as an ALTERNATIVE to media_id/media_url: a role name (e.g. 'inline_1') matching one entry in this call's external_images -- lets you place a Media Hub package asset inline without a separate upload_media call and without knowing its attachment id in advance.",
+                "title": "Image Role"
+              },
+              "caption": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional caption, used only when type is 'image'",
+                "title": "Caption"
+              },
+              "faq_items": {
+                "description": "Question/answer pairs, used only when type is 'faq' -- rendered as visible content AND FAQPage JSON-LD schema",
+                "items": {
+                  "$ref": "#/$defs/FaqItemInput"
+                },
+                "title": "Faq Items",
+                "type": "array"
+              }
+            },
+            "title": "PostBlockInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "title": {
+            "description": "Post/page title",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "post_type": {
+            "default": "post",
+            "description": "'post', 'page', or a custom post type's slug",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "description": "Initial status: draft, publish, pending, private, or future",
+            "title": "Status",
+            "type": "string"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "URL slug -- REQUIRED when post_type='post': a clean, human-readable slug for the article. Optional for pages/custom types, where WordPress derives one from the title if omitted",
+            "title": "Slug"
+          },
+          "blocks": {
+            "description": "Content as an ordered list of {type, text, level} blocks, rendered into Gutenberg block markup",
+            "items": {
+              "$ref": "#/$defs/PostBlockInput"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Excerpt -- REQUIRED when post_type='post': a short standalone summary Rank Math and social shares fall back to",
+            "title": "Excerpt"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Category name -- REQUIRED when post_type='post'. Resolved to an existing term by name; if none matches, a new category with this name is created automatically so the post is never left uncategorised",
+            "title": "Category"
+          },
+          "tags": {
+            "description": "Optional tag names (posts only); resolved to existing terms, never created — names not found are reported back, not silently dropped",
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "featured_media_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Attachment id from a prior upload_media call -- REQUIRED when post_type='post' UNLESS external_images includes a 'featured' role entry: every article needs a featured image, set in the same call",
+            "title": "Featured Media Id"
+          },
+          "external_images": {
+            "description": "Images not yet in this site's media library, e.g. straight from a Media Hub package's get_media_package/generate_media_package output (role, image_url as source_url, alt_text, caption). Each one is sideloaded into the media library in this same call: role=='featured' becomes the post's featured image (no need to also pass featured_media_id), any other role is matched against a block whose image_role equals that role. This is the one-call path from 'images exist as a generated package' to 'images are live in the published post' -- no manual per-image upload_media + attachment-id bookkeeping.",
+            "items": {
+              "$ref": "#/$defs/ExternalImageInput"
+            },
+            "title": "External Images",
+            "type": "array"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional publish/schedule date as YYYY-MM-DD or full ISO 8601; required when status='future'",
+            "title": "Date"
+          },
+          "lang": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Polylang language code, e.g. 'en', 'ro' — requires Polylang on the site",
+            "title": "Lang"
+          },
+          "meta_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Rank Math SEO title -- REQUIRED when post_type='post'",
+            "title": "Meta Title"
+          },
+          "meta_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Rank Math SEO meta description, set in the same call",
+            "title": "Meta Description"
+          },
+          "focus_keyword": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Rank Math focus keyword, set in the same call",
+            "title": "Focus Keyword"
+          },
+          "canonical_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Rank Math canonical URL, set in the same call — use when this article duplicates or supersedes another URL",
+            "title": "Canonical Url"
+          }
+        },
+        "required": [
+          "site_id",
+          "title"
+        ],
+        "title": "CreatePostParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of create_post/update_post: the WordPress post/page that was written.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "link": {
+            "default": "",
+            "title": "Link",
+            "type": "string"
+          },
+          "post_type": {
+            "default": "post",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "slug": {
+            "default": "",
+            "title": "Slug",
+            "type": "string"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date"
+          },
+          "category_resolved": {
+            "default": true,
+            "title": "Category Resolved",
+            "type": "boolean"
+          },
+          "tags_not_found": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags Not Found",
+            "type": "array"
+          },
+          "featured_media_set": {
+            "default": false,
+            "title": "Featured Media Set",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PostResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.create_post",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "update_post",
+      "description": "Update selected fields of an existing WordPress post or page: title, status, slug, content (as {type, text, level} blocks), excerpt, category, or date. Omitted fields are left unchanged.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.post_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "$defs": {
+          "ExternalImageInput": {
+            "description": "One not-yet-uploaded external image, keyed by role -- the exact shape\na Media Hub `get_media_package`/`generate_media_package` asset already\nhas (role, image_url, alt_text, caption). Passing these on create_post/\nupdate_post sideloads each one into this site's media library and wires\nit up automatically: role == \"featured\" sets featured_media_id, any\nother role is resolved against a block whose image_role matches. This is\nthe one-call bridge between an image-generation package and a published\npost -- no manual upload_media + attachment-id bookkeeping needed.",
+            "properties": {
+              "role": {
+                "description": "'featured' or an inline role like 'inline_1' -- must match either this call's featured slot or a block's image_role",
+                "title": "Role",
+                "type": "string"
+              },
+              "source_url": {
+                "description": "Public https:// URL of the image, e.g. a Media Hub asset's image_url",
+                "title": "Source Url",
+                "type": "string"
+              },
+              "alt_text": {
+                "default": "",
+                "description": "Alt text for the new media library attachment",
+                "title": "Alt Text",
+                "type": "string"
+              },
+              "caption": {
+                "default": "",
+                "description": "Optional caption for the new media library attachment",
+                "title": "Caption",
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "source_url"
+            ],
+            "title": "ExternalImageInput",
+            "type": "object"
+          },
+          "FaqItemInput": {
+            "description": "One question/answer pair inside a 'faq' block.",
+            "properties": {
+              "question": {
+                "description": "The FAQ question, exactly as it should be shown and marked up",
+                "minLength": 1,
+                "title": "Question",
+                "type": "string"
+              },
+              "answer": {
+                "description": "The plain-text answer (no HTML needed — it is escaped and wrapped automatically)",
+                "minLength": 1,
+                "title": "Answer",
+                "type": "string"
+              }
+            },
+            "required": [
+              "question",
+              "answer"
+            ],
+            "title": "FaqItemInput",
+            "type": "object"
+          },
+          "PostBlockInput": {
+            "description": "One content block, already decided by the caller — no document parsing here.\n\ntype == \"heading\" renders <h{level}>; type == \"image\" renders a Gutenberg\nimage block from a media library attachment (id + url, both from a prior\nupload_media call); type == \"faq\" renders a visible Q&A list PLUS a\nFAQPage JSON-LD <script> block (schema.org) covering every item in\nfaq_items -- this works on any WordPress site regardless of which SEO\nplugin is installed, since it is standard schema.org markup rather than\na plugin-proprietary block; anything else renders a paragraph.",
+            "properties": {
+              "type": {
+                "default": "paragraph",
+                "description": "'paragraph', 'heading', 'image', or 'faq'",
+                "title": "Type",
+                "type": "string"
+              },
+              "text": {
+                "default": "",
+                "description": "Block text (paragraph/heading); alt text for 'image'; optional intro text for 'faq'",
+                "title": "Text",
+                "type": "string"
+              },
+              "level": {
+                "default": 2,
+                "description": "Heading level, used only when type is 'heading'",
+                "maximum": 6,
+                "minimum": 1,
+                "title": "Level",
+                "type": "integer"
+              },
+              "media_id": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Attachment id from upload_media, used only when type is 'image'",
+                "title": "Media Id"
+              },
+              "media_url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Attachment URL from upload_media, used only when type is 'image'",
+                "title": "Media Url"
+              },
+              "image_role": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Used only when type is 'image', as an ALTERNATIVE to media_id/media_url: a role name (e.g. 'inline_1') matching one entry in this call's external_images -- lets you place a Media Hub package asset inline without a separate upload_media call and without knowing its attachment id in advance.",
+                "title": "Image Role"
+              },
+              "caption": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional caption, used only when type is 'image'",
+                "title": "Caption"
+              },
+              "faq_items": {
+                "description": "Question/answer pairs, used only when type is 'faq' -- rendered as visible content AND FAQPage JSON-LD schema",
+                "items": {
+                  "$ref": "#/$defs/FaqItemInput"
+                },
+                "title": "Faq Items",
+                "type": "array"
+              }
+            },
+            "title": "PostBlockInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "description": "Numeric id of the post or page to update",
+            "exclusiveMinimum": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "post",
+            "description": "'post', 'page', or a custom post type's slug — must match the item being updated",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New title; omit to keep it",
+            "title": "Title"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New status: draft, publish, pending, private, or future",
+            "title": "Status"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New URL slug; omit to keep it",
+            "title": "Slug"
+          },
+          "blocks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/PostBlockInput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Replace the content with these ordered {type, text, level} blocks; omit to keep existing content",
+            "title": "Blocks"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New excerpt; omit to keep it",
+            "title": "Excerpt"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New category name (posts only); resolved to an existing term, never created",
+            "title": "Category"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Replace tag names (posts only); resolved to existing terms, never created; omit to keep existing tags",
+            "title": "Tags"
+          },
+          "featured_media_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Attachment id from a prior upload_media call, set as the post's featured image",
+            "title": "Featured Media Id"
+          },
+          "external_images": {
+            "description": "Images not yet in this site's media library, e.g. straight from a Media Hub package's get_media_package output (role, image_url as source_url, alt_text, caption). Sideloaded in this same call: role=='featured' becomes the post's featured image, any other role is matched against a block (in the new blocks, if provided) whose image_role equals that role.",
+            "items": {
+              "$ref": "#/$defs/ExternalImageInput"
+            },
+            "title": "External Images",
+            "type": "array"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New publish/schedule date as YYYY-MM-DD or full ISO 8601",
+            "title": "Date"
+          },
+          "meta_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New Rank Math SEO title, set in the same call; omit to leave unchanged",
+            "title": "Meta Title"
+          },
+          "meta_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New Rank Math meta description, set in the same call; omit to leave unchanged",
+            "title": "Meta Description"
+          },
+          "focus_keyword": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New Rank Math focus keyword, set in the same call; omit to leave unchanged",
+            "title": "Focus Keyword"
+          },
+          "canonical_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New Rank Math canonical URL, set in the same call; omit to leave unchanged",
+            "title": "Canonical Url"
+          }
+        },
+        "required": [
+          "site_id",
+          "post_id"
+        ],
+        "title": "UpdatePostParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of create_post/update_post: the WordPress post/page that was written.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "link": {
+            "default": "",
+            "title": "Link",
+            "type": "string"
+          },
+          "post_type": {
+            "default": "post",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "slug": {
+            "default": "",
+            "title": "Slug",
+            "type": "string"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date"
+          },
+          "category_resolved": {
+            "default": true,
+            "title": "Category Resolved",
+            "type": "boolean"
+          },
+          "tags_not_found": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags Not Found",
+            "type": "array"
+          },
+          "featured_media_set": {
+            "default": false,
+            "title": "Featured Media Set",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PostResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wp-site-connector.update_post",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -17096,6 +17382,438 @@
       "long_running": false,
       "scopes": [],
       "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "extract_links",
+      "description": "Extract every link inside one article's content, with its anchor text and whether it is internal (same site) or external -- the panel's SEO review of an article's link profile. Pass content_html directly (e.g. straight from Article Writer before publishing) OR post_id on a connected site to read a post already on WordPress. Flags anchor text that is generic ('click here', 'read more', the bare URL) since that wastes the internal-linking SEO value, and flags external links missing rel=nofollow/sponsored.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "content_html": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The article's HTML content to scan directly (e.g. straight from Article Writer's export_article_text before the post even exists). Give this OR post_id.",
+            "title": "Content Html"
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Site id from a previous list_sites call — required with post_id, optional with content_html (used only to tell internal vs external apart)",
+            "title": "Site Id"
+          },
+          "post_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Numeric id of an existing post/page to read live from the site. Give this OR content_html.",
+            "title": "Post Id"
+          },
+          "post_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "REST base of the post_id target, e.g. 'posts' or 'pages'. Defaults to 'posts'.",
+            "title": "Post Type"
+          }
+        },
+        "title": "ExtractLinksParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "LinkInfo": {
+            "description": "One <a href> found in an article's content.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "href": {
+                "default": "",
+                "title": "Href",
+                "type": "string"
+              },
+              "anchor_text": {
+                "default": "",
+                "title": "Anchor Text",
+                "type": "string"
+              },
+              "link_type": {
+                "default": "",
+                "title": "Link Type",
+                "type": "string"
+              },
+              "weak_anchor": {
+                "default": false,
+                "title": "Weak Anchor",
+                "type": "boolean"
+              },
+              "rel": {
+                "default": "",
+                "title": "Rel",
+                "type": "string"
+              },
+              "missing_rel_policy": {
+                "default": false,
+                "title": "Missing Rel Policy",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "LinkInfo",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "description": "Full link audit for one article's content.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "total_links": {
+            "default": 0,
+            "title": "Total Links",
+            "type": "integer"
+          },
+          "internal_count": {
+            "default": 0,
+            "title": "Internal Count",
+            "type": "integer"
+          },
+          "external_count": {
+            "default": 0,
+            "title": "External Count",
+            "type": "integer"
+          },
+          "weak_anchor_count": {
+            "default": 0,
+            "title": "Weak Anchor Count",
+            "type": "integer"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/$defs/LinkInfo"
+            },
+            "title": "Links",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "LinkReport",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
+    },
+    {
+      "name": "check_sitemap_inclusion",
+      "description": "Check whether a just-published post/page URL already appears in the site's XML sitemap -- the mandatory post-publish step that catches a page silently excluded from indexing (wrong Rank Math visibility setting, sitemap caching, an SEO plugin config the caller does not control). Tries sitemap_index.xml, sitemap.xml, then wp-sitemap.xml (WordPress core's own, when no SEO plugin publishes one), and recurses one level into an index's sub-sitemaps.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "url": {
+            "description": "The published post/page URL to look for in the site's XML sitemap",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "url"
+        ],
+        "title": "CheckSitemapParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Whether one published URL was found in the site's XML sitemap.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "found": {
+            "default": false,
+            "title": "Found",
+            "type": "boolean"
+          },
+          "sitemap_index_url": {
+            "default": "",
+            "title": "Sitemap Index Url",
+            "type": "string"
+          },
+          "checked_sitemap_url": {
+            "default": "",
+            "title": "Checked Sitemap Url",
+            "type": "string"
+          },
+          "sitemaps_checked": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sitemaps Checked",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SitemapCheckResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wp-site-connector"
     }
   ],
   "signals": [],
@@ -17104,7 +17822,15 @@
   "icon_size_bytes": 4608,
   "exposed": [
     {
+      "name": "connect_site_ipc",
+      "action_type": "write"
+    },
+    {
       "name": "list_connected_sites",
+      "action_type": "read"
+    },
+    {
+      "name": "list_posts_full",
       "action_type": "read"
     }
   ],

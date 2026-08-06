@@ -1,11 +1,65 @@
 from urllib.parse import urlparse
 
-from app import chat
+from app import chat, ext
 from imperal_sdk import ActionResult
 from models import ConnectSiteParams, SiteIdParams, Site, AddSSHParams
 from wp_client import normalize_base_url, site_id_from_url, wp_get, wp_error_message, now_iso
 import storage
 import wp_cli
+
+
+async def _push_to_sites_registry(ctx, *, domain: str, name: str, connector_ref: str, status: str) -> None:
+    """Best-effort push of this site's connection state into Sites Registry
+    (a separate, platform-agnostic catalogue app). Wrapped defensively —
+    Sites Registry may not be installed for every user, and this call must
+    never block or fail a real WordPress connect/disconnect."""
+    try:
+        await ctx.extensions.call(
+            "sites-registry", "upsert_site",
+            domain=domain, name=name, platform="wordpress",
+            connector_app="wp-site-connector", connector_ref=connector_ref,
+            status=status,
+        )
+    except Exception as e:
+        await ctx.log(f"sites-registry upsert skipped: {e}", level="info")
+
+
+async def _do_connect_site(ctx, *, url: str, username: str, app_password: str) -> dict:
+    """Shared connect logic used by both the connect_site chat tool and the
+    connect_site_ipc inter-extension surface (Sites Registry calls this when
+    the user adds a WordPress site there). Returns a plain dict:
+    {"ok": True, "site_id", "name", "url"} or {"ok": False, "error", "retryable"}.
+    """
+    try:
+        base_url = normalize_base_url(url)
+    except ValueError:
+        return {"ok": False, "error": "Site URL must start with https://", "retryable": False}
+
+    site_id = site_id_from_url(base_url)
+    try:
+        r = await wp_get(ctx, base_url, "/wp-json/wp/v2/users/me",
+                         username=username, app_password=app_password)
+    except Exception as e:
+        await ctx.log(f"connect_site http error: {e}", level="error")
+        return {"ok": False, "error": "Could not reach the site — check the URL and try again.", "retryable": True}
+
+    if not (200 <= r.status_code < 300):
+        return {"ok": False, "error": wp_error_message(r.status_code),
+                "retryable": r.status_code >= 500 or r.status_code == 429}
+
+    name = urlparse(base_url).netloc or base_url
+    record = {"id": site_id, "name": name, "url": base_url, "username": username,
+              "status": "connected", "last_checked": now_iso()}
+    await storage.save_site_record(ctx, record)
+    try:
+        await storage.set_credential(ctx, site_id, app_password)
+    except Exception as e:
+        await ctx.log(f"connect_site: credential save failed: {e}", level="error")
+        await storage.delete_site_record(ctx, site_id)
+        return {"ok": False, "error": "Could not save credentials — try again.", "retryable": True}
+
+    await _push_to_sites_registry(ctx, domain=name, name=name, connector_ref=site_id, status="connected")
+    return {"ok": True, "site_id": site_id, "name": name, "url": base_url}
 
 
 @chat.function(
@@ -18,37 +72,26 @@ import wp_cli
 )
 async def connect_site(ctx, params: ConnectSiteParams) -> ActionResult:
     """Validate WP credentials via /users/me, then persist the site record and Application Password."""
-    try:
-        base_url = normalize_base_url(params.url)
-    except ValueError:
-        return ActionResult.error("Site URL must start with https://", retryable=False)
-
-    site_id = site_id_from_url(base_url)
-    try:
-        r = await wp_get(ctx, base_url, "/wp-json/wp/v2/users/me",
-                         username=params.username, app_password=params.app_password)
-    except Exception as e:
-        await ctx.log(f"connect_site http error: {e}", level="error")
-        return ActionResult.error("Could not reach the site — check the URL and try again.", retryable=True)
-
-    if not (200 <= r.status_code < 300):
-        return ActionResult.error(wp_error_message(r.status_code),
-                                  retryable=r.status_code >= 500 or r.status_code == 429)
-
-    name = urlparse(base_url).netloc or base_url
-    record = {"id": site_id, "name": name, "url": base_url, "username": params.username,
-              "status": "connected", "last_checked": now_iso()}
-    await storage.save_site_record(ctx, record)
-    try:
-        await storage.set_credential(ctx, site_id, params.app_password)
-    except Exception as e:
-        await ctx.log(f"connect_site: credential save failed: {e}", level="error")
-        await storage.delete_site_record(ctx, site_id)
-        return ActionResult.error("Could not save credentials — try again.", retryable=True)
-
-    site = Site(id=site_id, title=name, kind="wp_site", url=base_url,
+    result = await _do_connect_site(ctx, url=params.url, username=params.username, app_password=params.app_password)
+    if not result["ok"]:
+        return ActionResult.error(result["error"], retryable=result["retryable"])
+    site = Site(id=result["site_id"], title=result["name"], kind="wp_site", url=result["url"],
                 username=params.username, status="connected")
-    return ActionResult.success(site, summary=f"Connected {name}", refresh_panels=["sidebar"])
+    return ActionResult.success(site, summary=f"Connected {result['name']}", refresh_panels=["sidebar"])
+
+
+@ext.expose("connect_site_ipc", action_type="write")
+async def expose_connect_site_ipc(ctx, url: str = "", username: str = "", app_password: str = "", **kwargs) -> dict:
+    """Inter-extension IPC surface (ctx.extensions.call) for Sites Registry:
+    lets a user add a WordPress site directly from the registry's own form
+    (URL + username + Application Password) and have it connect here in the
+    exact same way as the connect_site chat tool — same validation, same
+    stored credential, one real connection either way.
+
+    Returns a plain dict (never surfaced to the LLM/user directly):
+    {"ok": True, "site_id", "name", "url"} or {"ok": False, "error", "retryable"}.
+    """
+    return await _do_connect_site(ctx, url=url, username=username, app_password=app_password)
 
 
 # forget_site IS LLM-visible by design: takes only site_id (no credential in args).
@@ -76,6 +119,10 @@ async def forget_site(ctx, params: SiteIdParams) -> ActionResult:
     site = Site(id=params.site_id, title=record.get("name", params.site_id), kind="wp_site",
                 url=record.get("url", ""), username=record.get("username", ""), status="disconnected")
     await storage.delete_ssh_cred(ctx, params.site_id)
+    await _push_to_sites_registry(
+        ctx, domain=record.get("name", params.site_id), name=record.get("name", params.site_id),
+        connector_ref=params.site_id, status="disconnected",
+    )
     return ActionResult.success(
         site, summary=f"Disconnected {record.get('name', params.site_id)}",
         refresh_panels=["sidebar", "center"])
