@@ -10,14 +10,46 @@ from __future__ import annotations
 
 import html
 import json
+import re
+
+
+# Matches markdown-style [anchor text](url) so callers can embed a REAL link
+# inside paragraph/heading text -- without this, block text was always passed
+# whole into html.escape(), so an <a href="..."> written directly into a
+# block's text field got escaped into visible literal text like
+# "&lt;a href=...&gt;" instead of ever becoming a clickable link. This was a
+# real gap: nothing in this module could render an internal link, an external
+# citation link, or a CTA link inside article body text -- only inside a
+# separate image caption. The markdown syntax is deliberately narrow (no raw
+# HTML passthrough) so the rest of the text is still safely escaped.
+_INLINE_LINK_RE = re.compile(r"\[([^\]\[]+)\]\((https?://[^\s()]+)\)")
+
+
+def _render_inline_links(text: str) -> str:
+    """Escape ``text`` for safe HTML output, EXCEPT for [anchor](https://url)
+    spans, which become real <a href> tags with the anchor text and URL each
+    individually escaped. Anything that isn't inside that exact syntax is
+    escaped exactly as before -- this is additive, not a relaxation of the
+    existing escaping guarantee."""
+    pieces = []
+    last_end = 0
+    for match in _INLINE_LINK_RE.finditer(text):
+        pieces.append(html.escape(text[last_end:match.start()]))
+        anchor_text, url = match.group(1), match.group(2)
+        pieces.append(
+            f'<a href="{html.escape(url, quote=True)}">{html.escape(anchor_text)}</a>'
+        )
+        last_end = match.end()
+    pieces.append(html.escape(text[last_end:]))
+    return "".join(pieces)
 
 
 def paragraph_block(text: str) -> str:
-    return f"<!-- wp:paragraph --><p>{html.escape(text)}</p><!-- /wp:paragraph -->"
+    return f"<!-- wp:paragraph --><p>{_render_inline_links(text)}</p><!-- /wp:paragraph -->"
 
 
 def heading_block(text: str, level: int = 2) -> str:
-    escaped = html.escape(text)
+    escaped = _render_inline_links(text)
     return (
         f'<!-- wp:heading {{"level":{level}}} -->'
         f'<h{level} class="wp-block-heading">{escaped}</h{level}>'

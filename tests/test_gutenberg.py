@@ -22,6 +22,40 @@ def test_heading_block_renders_level():
     assert "<h3" in out and "</h3>" in out
 
 
+def test_paragraph_block_renders_inline_link():
+    """[anchor](url) syntax becomes a real <a href>, not escaped literal text --
+    this is the fix for internal/external/CTA links inside article body text."""
+    out = gutenberg.paragraph_block("See our [heat recovery guide](https://climtec.md/ru/guide/) for details.")
+    assert '<a href="https://climtec.md/ru/guide/">heat recovery guide</a>' in out
+    assert "&lt;a" not in out
+    assert "[heat recovery guide]" not in out
+
+
+def test_paragraph_block_inline_link_escapes_surrounding_text():
+    out = gutenberg.paragraph_block("A & B [link text](https://x.com/) C < D")
+    assert "A &amp; B" in out
+    assert '<a href="https://x.com/">link text</a>' in out
+    assert "C &lt; D" in out
+
+
+def test_paragraph_block_inline_link_escapes_url_and_anchor():
+    out = gutenberg.paragraph_block('[<script>](https://x.com/?a=1&b=2)')
+    assert "<script>" not in out
+    assert "&amp;b=2" in out
+
+
+def test_heading_block_renders_inline_link():
+    out = gutenberg.heading_block("Read [more](https://climtec.md/)", level=2)
+    assert '<a href="https://climtec.md/">more</a>' in out
+
+
+def test_paragraph_block_without_brackets_unaffected():
+    """Plain text with no [..](..) syntax renders exactly as before."""
+    out = gutenberg.paragraph_block("Just a plain sentence, no links here.")
+    assert "<a href" not in out
+    assert "Just a plain sentence, no links here." in out
+
+
 def test_image_block_renders_id_url_alt():
     out = gutenberg.image_block(42, "https://x.com/pic.jpg", alt="A cat")
     assert "wp:image" in out
