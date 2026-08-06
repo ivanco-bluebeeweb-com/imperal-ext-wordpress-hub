@@ -134,7 +134,7 @@ async def _fetch(ctx, site_id, path, params):
                action_type="read", data_model=sdl.EntityList[Post])
 async def list_posts(ctx, params: ListContentParams) -> ActionResult:
     """Return recent posts from the site's REST API as an entity list."""
-    q = {"per_page": params.limit}
+    q = {"per_page": params.limit, "status": params.status}
     if params.search:
         q["search"] = params.search
     data, err = await _fetch(ctx, params.site_id, "/wp-json/wp/v2/posts", q)
@@ -149,7 +149,7 @@ async def list_posts(ctx, params: ListContentParams) -> ActionResult:
                action_type="read", data_model=sdl.EntityList[Page])
 async def list_pages(ctx, params: ListContentParams) -> ActionResult:
     """Return pages from the site's REST API as an entity list."""
-    q = {"per_page": params.limit}
+    q = {"per_page": params.limit, "status": params.status}
     if params.search:
         q["search"] = params.search
     data, err = await _fetch(ctx, params.site_id, "/wp-json/wp/v2/pages", q)

@@ -18,6 +18,18 @@ class ListContentParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     limit: int = Field(default=20, ge=1, le=100, description="Max items to return, 1-100")
     search: str | None = Field(default=None, description="Optional search term")
+    status: str = Field(
+        default="publish,draft,pending,future,private",
+        description=(
+            "Comma-separated WordPress post status(es) to include, e.g. "
+            "'publish' or 'draft' or 'publish,draft'. WordPress's REST API "
+            "returns ONLY 'publish' posts by default when this is omitted — "
+            "so drafts/pending/scheduled/private posts silently disappear from "
+            "list_posts/list_pages unless requested explicitly. Defaults to "
+            "every common status so nothing is hidden by default; narrow it "
+            "explicitly (e.g. status='draft') to see only drafts."
+        ),
+    )
 
 
 class ListMediaParams(BaseModel):
