@@ -2716,7 +2716,7 @@
     },
     {
       "name": "install_plugin",
-      "description": "Install a WordPress plugin via WP-CLI, from a WordPress.org slug (e.g. 'imperal-media-bridge') or a direct https:// .zip URL, and optionally activate it immediately. Requires SSH access configured with add_ssh. Use this to install Imperal's own companion bridge plugins (Media Bridge, Builder Bridge, SEO Bridge) or any third-party plugin the site needs.",
+      "description": "Install a WordPress plugin via WP-CLI, from a WordPress.org slug or a direct https:// .zip URL, and optionally activate it immediately. Requires SSH access configured with add_ssh. Use this to install Imperal's own companion bridge plugin (Imperal Bridge — SEO + builder + media in one) or any third-party plugin the site needs.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -2731,7 +2731,7 @@
             "type": "string"
           },
           "source": {
-            "description": "WordPress.org plugin slug (e.g. 'imperal-media-bridge') or a direct https:// .zip URL (e.g. a GitHub release asset). Never a shell command.",
+            "description": "WordPress.org plugin slug or a direct https:// .zip URL (e.g. a GitHub release asset — use the Imperal Bridge zip for the companion plugin). Never a shell command.",
             "title": "Source",
             "type": "string"
           },
@@ -13711,7 +13711,7 @@
     },
     {
       "name": "check_seo_support",
-      "description": "Check whether a connected WordPress site can expose Rank Math SEO fields: is the Imperal SEO Bridge plugin installed, is Rank Math active, and which post types and taxonomies (categories/tags) are covered.",
+      "description": "Check whether a connected WordPress site can expose Rank Math SEO fields: is the Imperal Bridge plugin installed, is Rank Math active, and which post types and taxonomies (categories/tags) are covered.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -14455,7 +14455,7 @@
     },
     {
       "name": "check_builder_support",
-      "description": "Check whether a connected WordPress site can read/edit Elementor or Bricks page-builder content — whether the Imperal Builder Bridge plugin is installed and which builder plugin(s) are active site-wide.",
+      "description": "Check whether a connected WordPress site can read/edit Elementor or Bricks page-builder content — whether the Imperal Bridge plugin is installed and which builder plugin(s) are active site-wide.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -15491,7 +15491,7 @@
     },
     {
       "name": "upload_media",
-      "description": "Add a publicly reachable https:// image URL to a connected WordPress site's media library, and optionally set it as a post's featured image. WordPress fetches the image itself (via the Imperal Media Bridge plugin) — Imperal never downloads or re-uploads the image bytes. Use the returned attachment id/url as featured_media_id, or in an 'image' content block, on create_post/update_post.",
+      "description": "Add a publicly reachable https:// image URL to a connected WordPress site's media library, and optionally set it as a post's featured image. WordPress fetches the image itself (via the Imperal Bridge plugin) — Imperal never downloads or re-uploads the image bytes. Use the returned attachment id/url as featured_media_id, or in an 'image' content block, on create_post/update_post.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -15685,7 +15685,7 @@
     },
     {
       "name": "check_media_support",
-      "description": "Check whether a connected WordPress site can add hosted images to its media library via upload_media — whether the Imperal Media Bridge plugin is installed and whether the connected user can upload files.",
+      "description": "Check whether a connected WordPress site can add hosted images to its media library via upload_media — whether the Imperal Bridge plugin is installed and whether the connected user can upload files.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
