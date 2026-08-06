@@ -14,6 +14,17 @@ _BUILTIN_TYPES = {
 }
 _BUILTIN_TAXES = {"nav_menu", "link_category", "post_format"}
 
+# Imperal Bridge is the ONE companion WordPress plugin this connector needs —
+# it replaces the old separate SEO/Builder/Media bridge plugins. Its download
+# link must always be reachable from the sidebar, so every site owner can
+# grab the plugin (or its latest version) without hunting through docs.
+# Hosted as a public raw file straight off the connector's own repo — no
+# extra storage/CDN step needed, and it moves automatically with every push.
+BRIDGE_DOWNLOAD_URL = (
+    "https://raw.githubusercontent.com/ivanco-bluebeeweb-com/"
+    "imperal-ext-wp_site_connector/main/bridge/imperal-bridge.zip"
+)
+
 
 # ── Left sidebar ──────────────────────────────────────────────────────────────
 
@@ -96,7 +107,26 @@ async def sidebar(ctx, active_site_id="", **kwargs):
         ]
         site_list = ui.List(items=items)
 
-    root = ui.Stack(children=[top_bar, ui.Divider(), site_list], gap=3)
+    bridge_footer = ui.Stack(children=[
+        ui.Divider(),
+        ui.Tooltip(
+            content="Imperal Bridge is the one companion plugin this connector needs on a "
+                    "WordPress site — Rank Math SEO fields, Elementor/Bricks builder content, "
+                    "and image sideloading, all in a single install.",
+            children=ui.Button(
+                "Download Imperal Bridge plugin",
+                icon="Download",
+                variant="secondary",
+                full_width=True,
+                on_click=ui.Open(BRIDGE_DOWNLOAD_URL),
+            ),
+        ),
+    ], gap=2)
+
+    root = ui.Stack(
+        children=[top_bar, ui.Divider(), site_list, bridge_footer],
+        gap=3,
+    )
 
     if not active_site_id and rows:
         root.props["auto_action"] = ui.Call(
