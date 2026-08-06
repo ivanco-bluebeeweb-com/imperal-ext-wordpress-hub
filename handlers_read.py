@@ -56,7 +56,7 @@ async def expose_list_posts_full(ctx, site_id: str = "", limit: int = 200, **kwa
     Returns plain dicts (never surfaced to the LLM/user directly):
     [{"id", "title", "slug", "link", "excerpt", "content", "date",
       "categories", "lang"}, ...]
-    lang is best-effort: only populated when the Imperal SEO Bridge (or a
+    lang is best-effort: only populated when the Imperal Bridge (or a
     Polylang REST exposure) reports it; empty string otherwise, never guessed.
     """
     record = await storage.get_site_record(ctx, site_id)
@@ -604,10 +604,10 @@ async def purge_cache(ctx, params: PurgeCacheParams) -> ActionResult:
 @chat.function(
     "install_plugin",
     description=("Install a WordPress plugin via WP-CLI, from a WordPress.org slug "
-                 "(e.g. 'imperal-media-bridge') or a direct https:// .zip URL, and optionally "
+                 "or a direct https:// .zip URL, and optionally "
                  "activate it immediately. Requires SSH access configured with add_ssh. Use this "
-                 "to install Imperal's own companion bridge plugins (Media Bridge, Builder Bridge, "
-                 "SEO Bridge) or any third-party plugin the site needs."),
+                 "to install Imperal's own companion bridge plugin (Imperal Bridge — SEO + "
+                 "builder + media in one) or any third-party plugin the site needs."),
     action_type="write",
     data_model=PluginInstallResult,
     effects=["wp.install_plugin"],

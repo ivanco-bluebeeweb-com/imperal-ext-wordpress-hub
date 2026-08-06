@@ -27,7 +27,7 @@ TERM = "https://x.com/wp-json/imperal/v1/seo/term"
 STATUS = "https://x.com/wp-json/imperal/v1/seo/status"
 
 BRIDGE_PHP = (Path(__file__).resolve().parent.parent
-              / "bridge" / "imperal-seo-bridge" / "imperal-seo-bridge.php")
+              / "bridge" / "imperal-bridge" / "imperal-bridge.php")
 
 
 async def _ctx():

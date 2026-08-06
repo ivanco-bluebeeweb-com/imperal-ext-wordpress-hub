@@ -181,7 +181,7 @@ function wp_slash( $value ) {
 
 // ── Load the plugin ──────────────────────────────────────────────────────────
 
-require __DIR__ . '/../imperal-builder-bridge.php';
+require __DIR__ . '/../imperal-bridge.php';
 
 // ── Tiny assertion helpers ───────────────────────────────────────────────────
 

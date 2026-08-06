@@ -1,4 +1,4 @@
-"""Tests for upload_media / check_media_support — the Imperal Media Bridge tier.
+"""Tests for upload_media / check_media_support — the Imperal Bridge media tier.
 
 The bridge asks WordPress to fetch its own copy of a public image
 (media_sideload_image) rather than Imperal fetching bytes itself, so these

@@ -281,7 +281,7 @@ function esc_url_raw( $value ) {
 
 // ── Load the plugin ──────────────────────────────────────────────────────────
 
-require __DIR__ . '/../imperal-seo-bridge.php';
+require __DIR__ . '/../imperal-bridge.php';
 
 // ── Tiny assertion helpers ───────────────────────────────────────────────────
 

@@ -7,7 +7,7 @@ Neither Elementor (`_elementor_data`) nor Bricks (`_bricks_page_header_2` /
 meta with `register_post_meta()` / `show_in_rest`, so stock WordPress REST +
 an Application Password cannot see or write it — reads come back empty and
 writes are silently dropped. This mirrors the Rank Math situation exactly, so
-a companion plugin (Imperal Builder Bridge, `/wp-json/imperal/v1/builder*`)
+a companion plugin (Imperal Bridge, builder section, `/wp-json/imperal/v1/builder*`)
 is required. There is no fallback tier here: unlike SEO meta, no other
 plugin registers these keys for REST, so a missing bridge is a hard stop.
 
@@ -42,7 +42,7 @@ BRIDGE_STATUS_PATH = "/wp-json/imperal/v1/builder/status"
 BRIDGE_SCAN_PATH = "/wp-json/imperal/v1/builder/scan"
 
 _INSTALL_HINT = (
-    "Install the Imperal Builder Bridge plugin on the site (bridge/imperal-builder-bridge "
+    "Install the Imperal Bridge plugin on the site (bridge/imperal-bridge "
     "in the connector repo) to read or edit Elementor/Bricks content."
 )
 
@@ -110,7 +110,7 @@ def _http_failure(status_code, body):
             return ActionResult.error(wp_message or fallback, retryable=False, code=err_code)
         if wp_code == "rest_no_route":
             return ActionResult.error(
-                "This site does not have the Imperal Builder Bridge plugin installed. " + _INSTALL_HINT,
+                "This site does not have the Imperal Bridge plugin installed. " + _INSTALL_HINT,
                 retryable=False, code="BUILDER_BRIDGE_MISSING")
 
     return ActionResult.error(message, retryable=retry, code=code)
@@ -283,7 +283,7 @@ async def update_builder_field(ctx, params: UpdateBuilderFieldParams) -> ActionR
 @chat.function(
     "check_builder_support",
     description=("Check whether a connected WordPress site can read/edit Elementor or Bricks "
-                 "page-builder content — whether the Imperal Builder Bridge plugin is installed "
+                 "page-builder content — whether the Imperal Bridge plugin is installed "
                  "and which builder plugin(s) are active site-wide."),
     action_type="read",
     data_model=BuilderSupport,
@@ -304,7 +304,7 @@ async def check_builder_support(ctx, params: SiteIdParams) -> ActionResult:
 
     if r.status_code == 404:
         return ActionResult.error(
-            "This site does not have the Imperal Builder Bridge plugin installed. " + _INSTALL_HINT,
+            "This site does not have the Imperal Bridge plugin installed. " + _INSTALL_HINT,
             retryable=False, code="BUILDER_BRIDGE_MISSING")
     if r.status_code != 200 or not isinstance(r.body, dict):
         return _http_failure(r.status_code, r.body)
@@ -351,7 +351,7 @@ async def scan_builder_content(ctx, params: SiteIdParams) -> ActionResult:
 
     if r.status_code == 404:
         return ActionResult.error(
-            "This site's Imperal Builder Bridge plugin does not support /builder/scan yet — "
+            "This site's Imperal Bridge plugin does not support /builder/scan yet — "
             "update it to v1.1.0 or later.",
             retryable=False, code="BUILDER_BRIDGE_MISSING")
     if r.status_code != 200 or not isinstance(r.body, dict):

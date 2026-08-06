@@ -9,13 +9,13 @@ binary bytes, so a naive "fetch the image with ctx.http, re-upload the
 bytes" flow would silently produce a broken attachment every time. There is
 no safe way to move image bytes through this connector's own HTTP client.
 
-Instead, the Imperal Media Bridge companion plugin (`/wp-json/imperal/v1/
-media/sideload`) asks WordPress to fetch its OWN copy of a public HTTPS
-image via `media_sideload_image()` — the same mechanism behind the native
-"Insert from URL" flow in the block editor. Imperal only ever sends a URL,
-never bytes. There is no fallback tier: without the bridge there is no safe
-way to add hosted external images at all, so a missing bridge is a hard
-stop, same as the Builder Bridge.
+Instead, the Imperal Bridge companion plugin's media section (`/wp-json/
+imperal/v1/media/sideload`) asks WordPress to fetch its OWN copy of a public
+HTTPS image via `media_sideload_image()` — the same mechanism behind the
+native "Insert from URL" flow in the block editor. Imperal only ever sends a
+URL, never bytes. There is no fallback tier: without the bridge there is no
+safe way to add hosted external images at all, so a missing bridge is a hard
+stop, same as the builder section.
 """
 
 from imperal_sdk import ActionResult
@@ -29,7 +29,7 @@ BRIDGE_SIDELOAD_PATH = "/wp-json/imperal/v1/media/sideload"
 BRIDGE_STATUS_PATH = "/wp-json/imperal/v1/media/status"
 
 _INSTALL_HINT = (
-    "Install the Imperal Media Bridge plugin on the site (bridge/imperal-media-bridge "
+    "Install the Imperal Bridge plugin on the site (bridge/imperal-bridge "
     "in the connector repo) to add hosted images to the media library."
 )
 
@@ -71,7 +71,7 @@ def _http_failure(status_code, body):
             return ActionResult.error(wp_message or fallback, retryable=False, code=err_code)
         if wp_code == "rest_no_route":
             return ActionResult.error(
-                "This site does not have the Imperal Media Bridge plugin installed. " + _INSTALL_HINT,
+                "This site does not have the Imperal Bridge plugin installed. " + _INSTALL_HINT,
                 retryable=False, code="MEDIA_BRIDGE_MISSING")
 
     return ActionResult.error(message, retryable=retry, code=code)
@@ -127,7 +127,7 @@ async def sideload_image(ctx, base_url, username, pw, *, source_url: str,
     "upload_media",
     description=("Add a publicly reachable https:// image URL to a connected WordPress site's "
                  "media library, and optionally set it as a post's featured image. WordPress "
-                 "fetches the image itself (via the Imperal Media Bridge plugin) — Imperal never "
+                 "fetches the image itself (via the Imperal Bridge plugin) — Imperal never "
                  "downloads or re-uploads the image bytes. Use the returned attachment id/url as "
                  "featured_media_id, or in an 'image' content block, on create_post/update_post. "
                  "For images already generated as a Media Hub package, prefer passing "
@@ -168,13 +168,13 @@ async def upload_media(ctx, params: UploadMediaParams) -> ActionResult:
 @chat.function(
     "check_media_support",
     description=("Check whether a connected WordPress site can add hosted images to its media "
-                 "library via upload_media — whether the Imperal Media Bridge plugin is installed "
+                 "library via upload_media — whether the Imperal Bridge plugin is installed "
                  "and whether the connected user can upload files."),
     action_type="read",
     data_model=MediaSupport,
 )
 async def check_media_support(ctx, params: SiteIdParams) -> ActionResult:
-    """Report Media Bridge presence and upload capability for a site."""
+    """Report Imperal Bridge presence and upload capability for a site."""
     auth, err = await _authed(ctx, params.site_id)
     if err:
         return err
@@ -189,7 +189,7 @@ async def check_media_support(ctx, params: SiteIdParams) -> ActionResult:
 
     if r.status_code == 404:
         return ActionResult.error(
-            "This site does not have the Imperal Media Bridge plugin installed. " + _INSTALL_HINT,
+            "This site does not have the Imperal Bridge plugin installed. " + _INSTALL_HINT,
             retryable=False, code="MEDIA_BRIDGE_MISSING")
     if r.status_code != 200 or not isinstance(r.body, dict):
         return _http_failure(r.status_code, r.body)

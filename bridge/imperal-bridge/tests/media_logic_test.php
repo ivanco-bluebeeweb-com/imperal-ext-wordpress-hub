@@ -105,6 +105,32 @@ function add_action( $hook, $cb, $priority = 10, $args = 1 ) {
 	$GLOBALS['_actions'][ $hook ][] = $cb;
 }
 
+function add_filter( $hook, $cb, $priority = 10, $args = 1 ) {
+	$GLOBALS['_filters'][ $hook ][] = $cb;
+}
+
+function apply_filters( $hook, $value ) {
+	return $value;
+}
+
+function do_action( $hook ) {
+	$GLOBALS['_fired'][] = $hook;
+}
+
+function nocache_headers() {}
+
+function register_post_meta( $type, $key, $args ) {}
+
+function register_term_meta( $taxonomy, $key, $args ) {}
+
+function get_taxonomies( $args = array(), $output = 'names' ) {
+	return array();
+}
+
+function post_type_supports( $type, $feature ) {
+	return false;
+}
+
 function register_rest_route( $ns, $route, $args ) {
 	$GLOBALS['_routes'][ $ns . $route ] = $args;
 }
@@ -202,7 +228,7 @@ function wp_get_attachment_image_src( $attachment_id, $size ) {
 
 // ── Load the plugin ──────────────────────────────────────────────────────────
 
-require __DIR__ . '/../imperal-media-bridge.php';
+require __DIR__ . '/../imperal-bridge.php';
 
 // ── Tiny assertion helpers ───────────────────────────────────────────────────
 

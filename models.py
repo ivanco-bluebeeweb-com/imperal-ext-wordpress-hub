@@ -556,8 +556,9 @@ class CacheActionResult(sdl.Entity):
 class InstallPluginParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     source: str = Field(
-        description="WordPress.org plugin slug (e.g. 'imperal-media-bridge') or a direct https:// .zip URL "
-                    "(e.g. a GitHub release asset). Never a shell command."
+        description="WordPress.org plugin slug or a direct https:// .zip URL "
+                    "(e.g. a GitHub release asset — use the Imperal Bridge zip for the companion plugin). "
+                    "Never a shell command."
     )
     activate: bool = Field(default=True, description="Activate the plugin immediately after install")
 
@@ -1077,7 +1078,7 @@ class PostResult(sdl.Entity):
     featured_media_set: bool = False
 
 
-# ─────────── media upload (sideload via Imperal Media Bridge) ───────────
+# ─────────── media upload (sideload via Imperal Bridge) ───────────
 
 class UploadMediaParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")

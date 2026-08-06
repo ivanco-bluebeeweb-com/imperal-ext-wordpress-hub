@@ -10,7 +10,7 @@ stock WordPress + Application Password alone.
 
 Two tiers, tried in order:
 
-  1. BRIDGE   /wp-json/imperal/v1/seo  (Imperal SEO Bridge)
+  1. BRIDGE   /wp-json/imperal/v1/seo  (Imperal Bridge, SEO section)
      Full fidelity: posts, pages and CPTs; title, description, focus keyword,
      canonical and robots; slug lookup; per-object capability checks.
 
@@ -51,7 +51,7 @@ KEY_ROBOTS = "rank_math_robots"
 KEY_RICH_SNIPPET = "rank_math_rich_snippet"
 
 _INSTALL_HINT = (
-    "Install the Imperal SEO Bridge plugin on the site (bridge/imperal-seo-bridge "
+    "Install the Imperal Bridge plugin on the site (bridge/imperal-bridge "
     "in the connector repo) and make sure Rank Math is active."
 )
 
@@ -136,7 +136,7 @@ def _http_failure(status_code, body):
                                       code="SEO_INVALID_REQUEST")
         if wp_code == "rest_no_route":
             return ActionResult.error(
-                "This site does not have the Imperal SEO Bridge plugin installed. " + _INSTALL_HINT,
+                "This site does not have the Imperal Bridge plugin installed. " + _INSTALL_HINT,
                 retryable=False, code="SEO_BRIDGE_MISSING")
 
     return ActionResult.error(message, retryable=retry, code=code)
@@ -344,7 +344,7 @@ async def get_seo_meta(ctx, params: GetSeoMetaParams) -> ActionResult:
             retryable=False, code="SEO_BRIDGE_MISSING")
 
     entity = _entity_from_core(item, base_url)
-    summary = _summarise(entity) + " (read via core meta — install the Imperal SEO Bridge for robots/canonical)"
+    summary = _summarise(entity) + " (read via core meta — install the Imperal Bridge for robots/canonical)"
     return ActionResult.success(entity, summary=summary)
 
 
@@ -431,7 +431,7 @@ async def update_seo_meta(ctx, params: UpdateSeoMetaParams) -> ActionResult:
     unsupported = [k for k in ("robots", "canonical_url", "rich_snippet") if k in fields]
     if unsupported:
         return ActionResult.error(
-            f"Cannot set {', '.join(unsupported)} without the Imperal SEO Bridge plugin. " + _INSTALL_HINT,
+            f"Cannot set {', '.join(unsupported)} without the Imperal Bridge plugin. " + _INSTALL_HINT,
             retryable=False, code="SEO_BRIDGE_MISSING")
 
     item, core_err = await _core_lookup(ctx, base_url, username, pw, params)
@@ -468,7 +468,7 @@ async def update_seo_meta(ctx, params: UpdateSeoMetaParams) -> ActionResult:
     return ActionResult.success(
         entity,
         summary=(f"Updated {', '.join(entity.updated_fields)} on {entity.post_type or 'item'} "
-                 f"#{entity.post_id} (via core meta — install the Imperal SEO Bridge for robots/canonical)"),
+                 f"#{entity.post_id} (via core meta — install the Imperal Bridge for robots/canonical)"),
         refresh_panels=["center"])
 
 
@@ -526,9 +526,9 @@ def _term_bridge_missing():
     just produce empty reads and silently lost writes.
     """
     return ActionResult.error(
-        "This site's Imperal SEO Bridge does not expose category/tag SEO fields — "
+        "This site's Imperal Bridge does not expose category/tag SEO fields — "
         "it is missing or older than 1.1.0. Install or update the plugin "
-        "(bridge/imperal-seo-bridge in the connector repo), then try again.",
+        "(bridge/imperal-bridge in the connector repo), then try again.",
         retryable=False, code="SEO_BRIDGE_TERMS_UNSUPPORTED")
 
 
@@ -656,7 +656,7 @@ async def update_term_seo_meta(ctx, params: UpdateTermSeoMetaParams) -> ActionRe
 @chat.function(
     "check_seo_support",
     description=("Check whether a connected WordPress site can expose Rank Math SEO fields: "
-                 "is the Imperal SEO Bridge plugin installed, is Rank Math active, and which "
+                 "is the Imperal Bridge plugin installed, is Rank Math active, and which "
                  "post types and taxonomies (categories/tags) are covered."),
     action_type="read",
     data_model=SeoMeta,
@@ -678,7 +678,7 @@ async def check_seo_support(ctx, params: SiteIdParams) -> ActionResult:
 
     if r.status_code == 404:
         return ActionResult.error(
-            "The Imperal SEO Bridge plugin is not installed on this site. " + _INSTALL_HINT,
+            "The Imperal Bridge plugin is not installed on this site. " + _INSTALL_HINT,
             retryable=False, code="SEO_BRIDGE_MISSING")
     if r.status_code != 200 or not isinstance(r.body, dict):
         return _http_failure(r.status_code, r.body)

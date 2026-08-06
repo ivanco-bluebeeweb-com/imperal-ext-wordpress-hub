@@ -45,7 +45,7 @@ Apps/WP Site Connector/
 │                               handlers_seo.update_seo_meta (ported from WP Publisher; document
 │                               parsing/understanding was NOT ported — content arrives as explicit blocks)
 ├── handlers_media.py       ← upload_media, check_media_support — sideload a public image URL into the
-│                               media library via the Imperal Media Bridge (WordPress fetches its own
+│                               media library via the Imperal Bridge (WordPress fetches its own
 │                               copy; ctx.http is never used to move image bytes, see module docstring)
 ├── gutenberg.py            ← blocks_to_content: {type,text,level,media_id,media_url,caption} blocks ->
 │                               Gutenberg block markup, incl. image_block() for inline images
@@ -62,10 +62,11 @@ Apps/WP Site Connector/
 ├── requirements.txt
 ├── design/
 │   └── wp-site-connector-panel.html  ← UI wireframe (source of truth for panel layout)
-├── bridge/                 ← companion WordPress plugins (see bridge/README.md)
-│   ├── imperal-seo-bridge/       ← Rank Math SEO fields over REST
-│   ├── imperal-builder-bridge/   ← Elementor/Bricks element trees, guarded point edits
-│   └── imperal-media-bridge/     ← sideload a public image URL into the media library (media_sideload_image)
+├── bridge/                 ← ONE companion WordPress plugin (see bridge/README.md) — do not add a second
+│   └── imperal-bridge/           ← Imperal Bridge: Rank Math SEO fields + Elementor/Bricks element trees
+│                                     (guarded point edits) + image sideload (media_sideload_image), all in
+│                                     one plugin/one version. Future bridge capabilities are new sections in
+│                                     this same file, never a new plugin.
 ├── docs/
 │   ├── 2026-06-16-wp-site-connector-v1-design.md  ← v1 spec (approved)
 │   ├── 2026-06-16-wp-site-connector-v1-plan.md    ← v1 plan
