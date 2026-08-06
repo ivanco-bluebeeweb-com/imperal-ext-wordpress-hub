@@ -93,22 +93,40 @@ async def connect_site(ctx, params: ConnectSiteParams) -> ActionResult:
     event="wp-site-connector.sync_sites_to_registry",
 )
 async def sync_sites_to_registry(ctx, params: _NoParams) -> ActionResult:
-    """Thin local wrapper: WP Hub has no direct write access to Sites Registry's
-    own storage, so this calls into Sites Registry's own sync_connected_sites via
-    IPC, which then reads OUR connected sites back out through list_connected_sites.
-    Round-trip, but it's the only bridge the platform allows between two extensions'
-    isolated stores."""
-    try:
-        result = await ctx.extensions.call("sites-registry", "sync_connected_sites_ipc", source="wordpress")
-    except Exception as e:
-        await ctx.log(f"sync_sites_to_registry: IPC call failed: {e}", level="error")
+    """Reads OUR own connected sites directly from local storage (no IPC needed
+    for that part -- it's our own data) and pushes each one, one at a time,
+    through the already-proven single-hop upsert_site IPC surface -- the exact
+    same path a normal connect_site/forget_site call already uses successfully.
+    Deliberately avoids a round-trip IPC call (WP Hub -> Sites Registry -> back
+    to WP Hub) since @ext.expose cross-extension calls are an experimental
+    platform surface with undocumented multi-hop behaviour."""
+    rows = await storage.list_site_records(ctx)
+    synced = 0
+    failed = 0
+    for r in rows:
+        domain = urlparse(r.get("url", "")).netloc or r.get("name", r["id"])
+        try:
+            await ctx.extensions.call(
+                "sites-registry", "upsert_site",
+                domain=domain, name=r.get("name", domain), platform="wordpress",
+                connector_app="wp-site-connector", connector_ref=r["id"],
+                status=r.get("status", "connected"),
+            )
+            synced += 1
+        except Exception as e:
+            await ctx.log(f"sync_sites_to_registry: push failed for {domain}: {e}", level="error")
+            failed += 1
+
+    if synced == 0 and failed > 0:
         return ActionResult.error(
             "Could not reach Sites Registry -- make sure it's installed and try again.",
             retryable=True)
-    count = len(result) if isinstance(result, list) else 0
+    summary = f"Synced {synced} site(s) into Sites Registry."
+    if failed:
+        summary += f" {failed} failed."
     return ActionResult.success(
         Site(id="sync", title="Sites Registry sync", kind="wp_site", status="connected"),
-        summary=f"Synced {count} site(s) into Sites Registry.")
+        summary=summary)
 
 
 @ext.expose("connect_site_ipc", action_type="write")

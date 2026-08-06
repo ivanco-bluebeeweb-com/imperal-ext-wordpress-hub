@@ -56,30 +56,45 @@ async def test_connect_site_ipc_bad_credentials_returns_error_dict():
     assert await storage.get_site_record(ctx, "y-com") is None
 
 
-async def test_sync_sites_to_registry_forwards_to_sites_registry_ipc():
-    """The button in WP Hub's sidebar calls this local wrapper, which must
-    forward to Sites Registry's own sync_connected_sites via IPC -- WP Hub
-    cannot write into Sites Registry's storage directly."""
+async def test_sync_sites_to_registry_pushes_each_connected_site_via_upsert():
+    """The button in WP Hub's sidebar reads OUR own connected sites locally
+    (no IPC needed for that -- it's our own storage) and pushes each one via
+    the already-proven single-hop upsert_site IPC surface -- the exact same
+    path a normal connect_site call already uses successfully."""
     ctx = await _ctx()
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/users/me", {"name": "Admin"}, 200)
+    await hc.connect_site(ctx, ConnectSiteParams(url="https://x.com", username="admin", app_password="pw"))
+
     calls = []
 
-    async def fake_sync(**kwargs):
+    async def fake_upsert(**kwargs):
         calls.append(kwargs)
-        return [{"id": "climtec-md"}, {"id": "g4s-md"}]
+        return {"ok": True, "site_id": "reg-1"}
 
-    ctx.extensions.register("sites-registry", "sync_connected_sites_ipc", fake_sync)
+    ctx.extensions.register("sites-registry", "upsert_site", fake_upsert)
     r = await hc.sync_sites_to_registry(ctx, _NoParams())
     assert r.status == "success"
-    assert calls == [{"source": "wordpress"}]
-    assert "2" in r.summary
+    assert len(calls) == 1
+    assert calls[0]["domain"] == "x.com"
+    assert calls[0]["platform"] == "wordpress"
+    assert "1" in r.summary
 
 
 async def test_sync_sites_to_registry_surfaces_ipc_failure():
     ctx = await _ctx()
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/users/me", {"name": "Admin"}, 200)
+    await hc.connect_site(ctx, ConnectSiteParams(url="https://x.com", username="admin", app_password="pw"))
 
-    async def fake_sync(**kwargs):
+    async def fake_upsert(**kwargs):
         raise RuntimeError("sites-registry not installed")
 
-    ctx.extensions.register("sites-registry", "sync_connected_sites_ipc", fake_sync)
+    ctx.extensions.register("sites-registry", "upsert_site", fake_upsert)
     r = await hc.sync_sites_to_registry(ctx, _NoParams())
     assert r.status != "success"
+
+
+async def test_sync_sites_to_registry_with_no_connected_sites_reports_zero():
+    ctx = await _ctx()
+    r = await hc.sync_sites_to_registry(ctx, _NoParams())
+    assert r.status == "success"
+    assert "0" in r.summary
