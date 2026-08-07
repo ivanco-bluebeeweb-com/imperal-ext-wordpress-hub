@@ -1,6 +1,6 @@
 {
   "manifest_schema_version": 3,
-  "sdk_version": "5.9.12",
+  "sdk_version": "5.9.13",
   "app_id": "wp-site-connector",
   "version": "1.8.0",
   "name": "WordPress Hub",
@@ -894,6 +894,12 @@
             "default": null,
             "description": "Optional search term",
             "title": "Search"
+          },
+          "status": {
+            "default": "publish,draft,pending,future,private",
+            "description": "Comma-separated WordPress post status(es) to include, e.g. 'publish' or 'draft' or 'publish,draft'. WordPress's REST API returns ONLY 'publish' posts by default when this is omitted — so drafts/pending/scheduled/private posts silently disappear from list_posts/list_pages unless requested explicitly. Defaults to every common status so nothing is hidden by default; narrow it explicitly (e.g. status='draft') to see only drafts.",
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
@@ -1086,6 +1092,12 @@
             "default": null,
             "description": "Optional search term",
             "title": "Search"
+          },
+          "status": {
+            "default": "publish,draft,pending,future,private",
+            "description": "Comma-separated WordPress post status(es) to include, e.g. 'publish' or 'draft' or 'publish,draft'. WordPress's REST API returns ONLY 'publish' posts by default when this is omitted — so drafts/pending/scheduled/private posts silently disappear from list_posts/list_pages unless requested explicitly. Defaults to every common status so nothing is hidden by default; narrow it explicitly (e.g. status='draft') to see only drafts.",
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
@@ -2192,6 +2204,12 @@
             "default": null,
             "description": "Optional search term",
             "title": "Search"
+          },
+          "status": {
+            "default": "publish,draft,pending,future,private",
+            "description": "Comma-separated WordPress post status(es) to include, e.g. 'publish' or 'draft' or 'publish,draft'. WordPress's REST API returns ONLY 'publish' posts by default when this is omitted — so drafts/pending/scheduled/private posts silently disappear from list_posts/list_pages unless requested explicitly. Defaults to every common status so nothing is hidden by default; narrow it explicitly (e.g. status='draft') to see only drafts.",
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
@@ -2384,6 +2402,12 @@
             "default": null,
             "description": "Optional search term",
             "title": "Search"
+          },
+          "status": {
+            "default": "publish,draft,pending,future,private",
+            "description": "Comma-separated WordPress post status(es) to include, e.g. 'publish' or 'draft' or 'publish,draft'. WordPress's REST API returns ONLY 'publish' posts by default when this is omitted — so drafts/pending/scheduled/private posts silently disappear from list_posts/list_pages unless requested explicitly. Defaults to every common status so nothing is hidden by default; narrow it explicitly (e.g. status='draft') to see only drafts.",
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
@@ -17947,6 +17971,10 @@
     },
     {
       "name": "list_posts_full",
+      "action_type": "read"
+    },
+    {
+      "name": "list_pages_full",
       "action_type": "read"
     }
   ],

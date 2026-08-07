@@ -102,6 +102,54 @@ async def expose_list_posts_full(ctx, site_id: str = "", limit: int = 200, **kwa
     return out
 
 
+@ext.expose("list_pages_full", action_type="read")
+async def expose_list_pages_full(ctx, site_id: str = "", limit: int = 200, **kwargs):
+    """Inter-extension page inventory for Content Strategy's key-action-page
+    resolver. Returns only factual published page fields; selection remains in
+    the consuming pipeline so the same algorithm serves every client/language.
+    """
+    record = await storage.get_site_record(ctx, site_id)
+    if not record:
+        return []
+    pw = await storage.get_credential(ctx, site_id)
+    if not pw:
+        return []
+    base_url, username = record["url"], record["username"]
+    out = []
+    page_num = 1
+    remaining = max(1, min(limit, 500))
+    while remaining > 0:
+        per_page = min(remaining, 100)
+        try:
+            response = await wp_get(
+                ctx, base_url, "/wp-json/wp/v2/pages", username=username,
+                app_password=pw,
+                params={"per_page": per_page, "page": page_num, "status": "publish",
+                        "_fields": "id,slug,link,title,excerpt,content,lang"},
+            )
+        except Exception as exc:
+            await ctx.log(f"list_pages_full http error: {exc}", level="error")
+            break
+        if response.status_code != 200:
+            break
+        rows = response.body if isinstance(response.body, list) else []
+        if not rows:
+            break
+        for page in rows:
+            out.append({
+                "id": page.get("id"), "title": wp_title(page),
+                "slug": page.get("slug", ""), "link": page.get("link", ""),
+                "excerpt": (page.get("excerpt") or {}).get("rendered", ""),
+                "content": (page.get("content") or {}).get("rendered", ""),
+                "lang": page.get("lang", ""),
+            })
+        remaining -= len(rows)
+        page_num += 1
+        if len(rows) < per_page:
+            break
+    return out
+
+
 async def _authed(ctx, site_id):
     record = await storage.get_site_record(ctx, site_id)
     if not record:
