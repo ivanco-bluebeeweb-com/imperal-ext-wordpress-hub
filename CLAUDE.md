@@ -91,6 +91,11 @@ Apps/WordPress Hub/
 
 ## Key Specs
 
+- **Full Feature Roadmap** — `docs/2026-08-09-full-feature-roadmap.md` — **THE canonical master plan
+  for what to build next in this app.** Maps every WP Core / WooCommerce / Rank Math / builder /
+  Bridge+SSH capability against what's implemented (87 functions) vs missing, with a priority
+  order. Read this FIRST before proposing or starting any new feature — do not re-derive this list
+  from memory.
 - **v1 Design** — `docs/2026-06-16-wordpress-hub-v1-design.md` — approved spec, source of truth for architecture and security rules.
 - **v1 Plan** — `docs/2026-06-16-wordpress-hub-v1-plan.md` — implementation plan.
 - **Per-feature plans** — `docs/superpowers/plans/*.md`.
