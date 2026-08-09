@@ -66,6 +66,7 @@ async def resolve_external_images(ctx, base_url, username, pw, *, external_image
         result, err = await handlers_media.sideload_image(
             ctx, base_url, username, pw, source_url=img.source_url,
             alt_text=img.alt_text, caption=img.caption or None,
+            filename=img.filename or None,
         )
         if err is not None:
             warnings.append(f"external image '{img.role}' could not be added: {err.error}")

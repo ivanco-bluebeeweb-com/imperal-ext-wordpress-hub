@@ -1018,7 +1018,7 @@ class PostBlockInput(BaseModel):
 class ExternalImageInput(BaseModel):
     """One not-yet-uploaded external image, keyed by role -- the exact shape
     a Media Hub `get_media_package`/`generate_media_package` asset already
-    has (role, image_url, alt_text, caption). Passing these on create_post/
+    has (role, image_url, alt_text, caption, filename). Passing these on create_post/
     update_post sideloads each one into this site's media library and wires
     it up automatically: role == "featured" sets featured_media_id, any
     other role is resolved against a block whose image_role matches. This is
@@ -1030,6 +1030,10 @@ class ExternalImageInput(BaseModel):
     source_url: str = Field(description="Public https:// URL of the image, e.g. a Media Hub asset's image_url")
     alt_text: str = Field(default="", description="Alt text for the new media library attachment")
     caption: str = Field(default="", description="Optional caption for the new media library attachment")
+    filename: str = Field(
+        default="", description="SEO/AEO-optimized base file name (no extension) for the saved attachment, "
+                     "e.g. a Media Hub asset's own `filename` field -- pass it through so the on-site file "
+                     "name is never the image-generation provider's raw opaque id.")
 
 
 class CreatePostParams(BaseModel):
@@ -1110,6 +1114,12 @@ class UploadMediaParams(BaseModel):
     post_id: int | None = Field(default=None, description="Optional post/page id to attach the uploaded image to")
     alt_text: str | None = Field(default=None, description="Optional alt text to set on the new attachment")
     caption: str | None = Field(default=None, description="Optional caption to set on the new attachment")
+    filename: str | None = Field(
+        default=None, description="Optional SEO/AEO-optimized base file name (no extension, e.g. "
+                       "'heat-recovery-ventilator-featured') to save this attachment under on the site. "
+                       "Omitting it falls back to deriving a name from source_url itself, which is often "
+                       "an opaque provider-generated id -- always pass this when the source is a Media "
+                       "Hub generated image (its `filename` field is already SEO/AEO-optimized).")
     set_featured: bool = Field(default=False, description="Set this image as the featured image of post_id (requires post_id)")
 
 

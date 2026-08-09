@@ -79,7 +79,8 @@ def _http_failure(status_code, body):
 
 async def sideload_image(ctx, base_url, username, pw, *, source_url: str,
                           post_id: int | None = None, alt_text: str | None = None,
-                          caption: str | None = None, set_featured: bool = False):
+                          caption: str | None = None, set_featured: bool = False,
+                          filename: str | None = None):
     """Sideload one external image into a site's media library.
 
     Shared by `upload_media` (direct chat/tool call) and `create_post`/
@@ -88,6 +89,12 @@ async def sideload_image(ctx, base_url, username, pw, *, source_url: str,
     Returns (MediaUploadResult, None) on success or (None, ActionResult.error)
     on failure -- callers decide whether a failure aborts the whole post or
     is just collected as a warning.
+
+    `filename` (no extension) becomes the ACTUAL on-site file name -- e.g.
+    'heat-recovery-ventilator-featured' rather than whatever opaque id the
+    image-generation provider's own URL happened to contain. Bridge v1.1.0+
+    honours this via download_url()+media_handle_sideload(); omitting it
+    falls back to deriving the name from source_url, same as before.
     """
     body = {"source_url": source_url}
     if post_id:
@@ -98,6 +105,8 @@ async def sideload_image(ctx, base_url, username, pw, *, source_url: str,
         body["caption"] = caption
     if set_featured:
         body["set_featured"] = True
+    if filename:
+        body["filename"] = filename
 
     try:
         r = await wp_post(ctx, base_url, BRIDGE_SIDELOAD_PATH, username=username, app_password=pw,
@@ -153,6 +162,7 @@ async def upload_media(ctx, params: UploadMediaParams) -> ActionResult:
     result, err = await sideload_image(
         ctx, base_url, username, pw, source_url=params.source_url, post_id=params.post_id,
         alt_text=params.alt_text, caption=params.caption, set_featured=params.set_featured,
+        filename=params.filename,
     )
     if err:
         return err

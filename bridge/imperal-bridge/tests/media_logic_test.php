@@ -22,6 +22,11 @@ $GLOBALS['_thumbnails'] = array();   // post_id => attachment_id
 $GLOBALS['_attachments']= array();   // attachment_id => [url, width, height]
 $GLOBALS['_sideload_next'] = null;   // queued return value for the next media_sideload_image() call
 $GLOBALS['_sideload_calls'] = array();
+$GLOBALS['_download_next'] = '/tmp/imperal-test-download';  // queued download_url() return
+$GLOBALS['_download_calls'] = array();
+$GLOBALS['_handle_sideload_next'] = null;  // queued media_handle_sideload() return
+$GLOBALS['_handle_sideload_calls'] = array();
+$GLOBALS['_deleted_files'] = array();
 
 class WP_Post {
 	public $ID;
@@ -176,6 +181,14 @@ function sanitize_text_field( $value ) {
 	return trim( (string) $value );
 }
 
+function sanitize_file_name( $value ) {
+	return trim( (string) $value );
+}
+
+function wp_delete_file( $path ) {
+	$GLOBALS['_deleted_files'][] = $path;
+}
+
 function update_post_meta( $id, $key, $value ) {
 	$GLOBALS['_meta'][ $id ][ $key ] = $value;
 	return true;
@@ -189,18 +202,44 @@ function get_post_meta( $id, $key, $single = false ) {
 }
 
 /** Mimics WordPress's wp_parse_url() closely enough for our validator. */
-function wp_parse_url( $url ) {
+function wp_parse_url( $url, $component = -1 ) {
 	$parts = parse_url( $url );
-	return false === $parts ? null : $parts;
+	if ( false === $parts ) {
+		return null;
+	}
+	if ( -1 === $component ) {
+		return $parts;
+	}
+	// Mimic PHP's own parse_url($url, $component) component extraction so
+	// callers doing wp_parse_url($url, PHP_URL_PATH) get a string/null like
+	// the real WordPress function, not the whole parts array.
+	return parse_url( $url, $component );
 }
 
 /**
- * Test double for media_sideload_image(). Real signature returns an
- * attachment id (int) on success or WP_Error on failure; the queued
- * `_sideload_next` value drives which branch each test exercises.
+ * Test double for download_url(). Real signature returns a temp file path
+ * (string) on success or WP_Error on failure; `_download_next` drives which
+ * branch each test exercises. Kept separate from media_handle_sideload()'s
+ * own failure queue so a test can independently exercise "download failed"
+ * vs "WordPress rejected the downloaded file" without one masking the other.
  */
-function media_sideload_image( $source_url, $post_id, $caption, $return_type ) {
-	$GLOBALS['_sideload_calls'][] = array( $source_url, $post_id, $caption, $return_type );
+function download_url( $source_url ) {
+	$GLOBALS['_download_calls'][] = $source_url;
+	if ( $GLOBALS['_download_next'] instanceof WP_Error ) {
+		return $GLOBALS['_download_next'];
+	}
+	return $GLOBALS['_download_next'];
+}
+
+/**
+ * Test double for media_handle_sideload(). Real signature returns an
+ * attachment id (int) on success or WP_Error on failure; `_sideload_next`
+ * (kept under its original name for minimal test churn) drives the branch.
+ * Records the file_array's 'name' so tests can assert the caller-supplied
+ * SEO/AEO filename actually reached WordPress, not just the source_url.
+ */
+function media_handle_sideload( $file_array, $post_id, $caption ) {
+	$GLOBALS['_sideload_calls'][] = array( $file_array, $post_id, $caption );
 	if ( $GLOBALS['_sideload_next'] instanceof WP_Error ) {
 		return $GLOBALS['_sideload_next'];
 	}
@@ -262,6 +301,9 @@ function reset_state() {
 	$GLOBALS['_attachments']    = array();
 	$GLOBALS['_sideload_next']  = null;
 	$GLOBALS['_sideload_calls'] = array();
+	$GLOBALS['_download_next']  = '/tmp/imperal-test-download';
+	$GLOBALS['_download_calls'] = array();
+	$GLOBALS['_deleted_files']  = array();
 }
 
 function seed_post( $id, $slug, $type = 'post', $can_edit = true ) {
@@ -350,16 +392,22 @@ eq( imperal_media_bridge_permission( $req ), true, 'upload_files + can edit targ
 reset_state();
 seed_post( 42, 'hello', 'post', true );
 $GLOBALS['_sideload_next'] = 501;
-seed_attachment( 501, 'https://x.com/wp-content/uploads/cat.jpg', 800, 600 );
+seed_attachment( 501, 'https://x.com/wp-content/uploads/heat-recovery-featured.jpg', 800, 600 );
 
-$req = new WP_REST_Request( array( 'source_url' => 'https://example.com/cat.jpg', 'post_id' => 42 ) );
+$req = new WP_REST_Request( array(
+	'source_url' => 'https://example.com/result_IMAGEN4_ULTRA_abc123.jpg',
+	'post_id'    => 42,
+	'filename'   => 'heat-recovery-featured',
+) );
 $res = imperal_media_bridge_sideload( $req );
 eq( $res['attachment_id'], 501, 'sideload happy path: attachment_id returned' );
-eq( $res['url'], 'https://x.com/wp-content/uploads/cat.jpg', 'sideload happy path: url returned' );
+eq( $res['url'], 'https://x.com/wp-content/uploads/heat-recovery-featured.jpg', 'sideload happy path: url returned' );
 eq( $res['width'], 800, 'sideload happy path: width returned' );
 eq( $res['attached_to'], 42, 'sideload happy path: attached_to echoes post id' );
 eq( $res['featured_set'], false, 'set_featured not requested -> featured_set false' );
 eq( count( $GLOBALS['_thumbnails'] ), 0, 'set_post_thumbnail NOT called when set_featured omitted' );
+eq( $GLOBALS['_sideload_calls'][0][0]['name'], 'heat-recovery-featured.jpg', 'the caller-supplied SEO/AEO filename (not the provider URL name) is what reaches WordPress' );
+eq( $GLOBALS['_download_calls'][0], 'https://example.com/result_IMAGEN4_ULTRA_abc123.jpg', 'download_url() is called with the original source_url' );
 
 reset_state();
 seed_post( 42, 'hello', 'post', true );
@@ -371,11 +419,13 @@ $req = new WP_REST_Request( array(
 	'post_id'      => 42,
 	'set_featured' => true,
 	'alt_text'     => 'A happy dog',
+	'filename'     => 'happy-dog-inline-1',
 ) );
 $res = imperal_media_bridge_sideload( $req );
 eq( $res['featured_set'], true, 'set_featured=true -> featured_set true' );
 eq( $GLOBALS['_thumbnails'][42], 502, 'set_post_thumbnail called with the new attachment id' );
 eq( get_post_meta( 502, '_wp_attachment_image_alt', true ), 'A happy dog', 'alt_text written onto the attachment' );
+eq( $GLOBALS['_sideload_calls'][0][0]['name'], 'happy-dog-inline-1.jpg', 'inline asset also gets its explicit filename, not dog.jpg' );
 
 reset_state();
 $GLOBALS['_sideload_next'] = 503; // no post given at all — library-only upload
@@ -384,26 +434,36 @@ $req = new WP_REST_Request( array( 'source_url' => 'https://example.com/no-post.
 $res = imperal_media_bridge_sideload( $req );
 eq( $res['attached_to'], null, 'no target post -> attached_to null' );
 eq( $res['featured_set'], false, 'no target post -> featured_set false even if set_featured were true' );
+eq( $GLOBALS['_sideload_calls'][0][0]['name'], 'no-post.jpg', 'no filename param given -> falls back to the source_url\'s own name' );
 
 reset_state();
 seed_post( 42, 'hello', 'post', true );
-$GLOBALS['_sideload_next'] = new WP_Error( 'http_request_failed', 'Could not resolve host' );
+$GLOBALS['_download_next'] = new WP_Error( 'http_request_failed', 'Could not resolve host' );
 $req = new WP_REST_Request( array( 'source_url' => 'https://example.com/missing.jpg', 'post_id' => 42 ) );
 $res = imperal_media_bridge_sideload( $req );
-ok( is_wp_error( $res ) && 'imperal_media_sideload_failed' === $res->get_error_code(), 'download_url()/media_sideload_image() failure surfaces as imperal_media_sideload_failed' );
+ok( is_wp_error( $res ) && 'imperal_media_sideload_failed' === $res->get_error_code(), 'download_url() failure surfaces as imperal_media_sideload_failed' );
 eq( $res->get_status(), 502, 'sideload failure carries 502 status' );
+eq( count( $GLOBALS['_sideload_calls'] ), 0, 'media_handle_sideload() never called when download_url() itself failed' );
+
+reset_state();
+seed_post( 42, 'hello', 'post', true );
+$GLOBALS['_sideload_next'] = new WP_Error( 'upload_error', 'Sorry, this file type is not permitted' );
+$req = new WP_REST_Request( array( 'source_url' => 'https://example.com/weird.exe', 'post_id' => 42 ) );
+$res = imperal_media_bridge_sideload( $req );
+ok( is_wp_error( $res ) && 'imperal_media_sideload_failed' === $res->get_error_code(), 'media_handle_sideload() failure (after a successful download) also surfaces as imperal_media_sideload_failed' );
+eq( count( $GLOBALS['_deleted_files'] ), 1, 'the downloaded temp file is cleaned up when WordPress rejects the sideload' );
 
 reset_state();
 $req = new WP_REST_Request( array( 'source_url' => 'http://example.com/insecure.jpg' ) );
 $res = imperal_media_bridge_sideload( $req );
-ok( is_wp_error( $res ) && 'imperal_media_insecure_url' === $res->get_error_code(), 'sideload rejects non-https source_url before ever calling media_sideload_image()' );
-eq( count( $GLOBALS['_sideload_calls'] ), 0, 'media_sideload_image() never called for a rejected url' );
+ok( is_wp_error( $res ) && 'imperal_media_insecure_url' === $res->get_error_code(), 'sideload rejects non-https source_url before ever calling download_url()' );
+eq( count( $GLOBALS['_download_calls'] ), 0, 'download_url() never called for a rejected url' );
 
 reset_state();
 seed_post( 999, 'ghost', 'post', true ); // unrelated seed so globals aren't empty
 $req = new WP_REST_Request( array( 'source_url' => 'https://example.com/x.jpg', 'post_id' => 12345 ) );
 $res = imperal_media_bridge_sideload( $req );
-ok( is_wp_error( $res ) && 'imperal_media_post_not_found' === $res->get_error_code(), 'sideload with unknown post_id fails resolution before calling media_sideload_image()' );
+ok( is_wp_error( $res ) && 'imperal_media_post_not_found' === $res->get_error_code(), 'sideload with unknown post_id fails resolution before calling download_url()' );
 
 // ── Tests: status discovery ──────────────────────────────────────────────────
 

@@ -433,9 +433,37 @@ async def test_create_post_renders_image_block_into_content():
     assert "A very good cat" in content
 
 
-# ─────────── external_images: the Media Hub -> post pipeline bridge ───────────
+async def test_create_post_forwards_external_image_filename_to_the_bridge():
+    """external_images' own `filename` (Media Hub's SEO/AEO-optimized slug)
+    must reach the sideload request per-asset -- otherwise every image in
+    a published post would keep the provider's raw generated name."""
+    ctx = await _ctx()
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
+    captured = []
 
-SIDELOAD = "https://x.com/wp-json/imperal/v1/media/sideload"
+    async def handler(url, *, json=None, **kwargs):
+        captured.append(dict(json or {}))
+        return type("R", (), {"status_code": 201, "body": {
+            "attachment_id": 101, "url": "https://x.com/wp-content/uploads/101.jpg",
+            "width": 800, "height": 600, "attached_to": None, "featured_set": False,
+        }})()
+
+    ctx.http.post = handler
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello",
+        slug="hello", meta_title="Hello — SEO Title", category="News",
+        excerpt="A short standalone summary of the article.",
+        external_images=[
+            {"role": "featured", "source_url": "https://cdn.example/result_xyz.png",
+             "filename": "heat-recovery-ventilator-featured"},
+        ],
+        blocks=[PostBlockInput(type="paragraph", text="Intro")],
+    ))
+    assert result.status == "success"
+    sideload_calls = [c for c in captured if "source_url" in c]
+    assert sideload_calls[0]["filename"] == "heat-recovery-ventilator-featured"
 
 
 async def test_create_post_wires_up_media_hub_package_via_external_images():

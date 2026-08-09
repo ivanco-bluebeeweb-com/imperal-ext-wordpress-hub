@@ -1847,8 +1847,55 @@ add_filter(
  * ever routing image bytes through the Imperal platform's own HTTP client.
  * ============================================================================= */
 
-define( 'IMPERAL_MEDIA_BRIDGE_VERSION', '1.0.0' );
+define( 'IMPERAL_MEDIA_BRIDGE_VERSION', '1.1.0' );
 define( 'IMPERAL_MEDIA_BRIDGE_NAMESPACE', 'imperal/v1' );
+
+/**
+ * Recognised image extensions the bridge will trust straight off the
+ * source_url's own path. Anything else (no extension, a signed CDN path
+ * with no file suffix, an unrecognised one) falls back to 'jpg' -- every
+ * provider this bridge has seen (Magnific/Freepik, Imagen4, Gemini) serves
+ * actual JPEG/PNG bytes regardless of what its URL path looks like, so this
+ * is a safe, simple default rather than inspecting the downloaded bytes.
+ *
+ * @param string $url Raw source_url.
+ * @return string Lowercase extension, no leading dot.
+ */
+function imperal_media_bridge_extension_from_url( $url ) {
+	$path = wp_parse_url( $url, PHP_URL_PATH );
+	if ( ! $path ) {
+		return 'jpg';
+	}
+	$ext = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+	$allowed = array( 'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tif', 'tiff' );
+	return in_array( $ext, $allowed, true ) ? $ext : 'jpg';
+}
+
+/**
+ * Build the actual file name this attachment will be saved under.
+ *
+ * When the caller supplies `filename` (Media Hub's SEO/AEO-optimized slug,
+ * e.g. "heat-recovery-ventilator-featured"), THAT -- not the source_url's own
+ * path -- becomes the on-disk/on-site file name. This is the fix for images
+ * landing on a site as an opaque provider id like
+ * "result_IMAGEN4_ULTRA_f992763b....png": the caller now controls the name
+ * end to end instead of inheriting whatever the image-generation provider's
+ * CDN URL happened to be.
+ *
+ * @param string $filename_param Sanitized `filename` request param, no extension.
+ * @param string $source_url     Original source_url, used only for the extension
+ *                                and as the whole-name fallback when filename_param is empty.
+ * @return string A safe WordPress file name, WITH extension.
+ */
+function imperal_media_bridge_target_filename( $filename_param, $source_url ) {
+	$ext = imperal_media_bridge_extension_from_url( $source_url );
+	if ( '' !== $filename_param ) {
+		return $filename_param . '.' . $ext;
+	}
+	$path = wp_parse_url( $source_url, PHP_URL_PATH );
+	$base = $path ? basename( $path ) : '';
+	return '' !== $base ? $base : ( 'image.' . $ext );
+}
 
 
 /**
@@ -2024,11 +2071,23 @@ function imperal_media_bridge_permission( $request ) {
  * and register it as a media library attachment, optionally attaching it to
  * a post as the featured image.
  *
+ * WHY download_url()+media_handle_sideload() INSTEAD OF media_sideload_image().
+ * media_sideload_image() derives the saved file's name from source_url itself
+ * (WordPress's internal parse of the URL's last path segment) -- there is no
+ * parameter to override it. For an image-generation provider whose URL is an
+ * opaque signed id (e.g. ".../result_IMAGEN4_ULTRA_f992763b....png"), that
+ * meant every image landing on a real site kept that meaningless name
+ * forever -- bad for on-site SEO and for AEO/answer engines that read file
+ * names as a relevance signal. download_url() fetches to a temp file and
+ * media_handle_sideload() accepts an explicit `$file_array['name']`, so the
+ * caller's own SEO/AEO slug (Media Hub's `filename` on each asset) becomes
+ * the actual saved file name end to end.
+ *
  * @param WP_REST_Request $request Request.
  * @return WP_REST_Response|WP_Error
  */
 function imperal_media_bridge_sideload( $request ) {
-	if ( ! function_exists( 'media_sideload_image' ) ) {
+	if ( ! function_exists( 'media_handle_sideload' ) ) {
 		require_once ABSPATH . 'wp-admin/includes/media.php';
 		require_once ABSPATH . 'wp-admin/includes/file.php';
 		require_once ABSPATH . 'wp-admin/includes/image.php';
@@ -2048,10 +2107,30 @@ function imperal_media_bridge_sideload( $request ) {
 	$alt_text    = (string) $request->get_param( 'alt_text' );
 	$caption     = (string) $request->get_param( 'caption' );
 	$as_featured = (bool) $request->get_param( 'set_featured' );
+	$filename    = sanitize_file_name( (string) $request->get_param( 'filename' ) );
 
-	$attachment_id = media_sideload_image( $source_url, $post_id, $caption, 'id' );
+	$tmp_file = download_url( $source_url );
+	if ( is_wp_error( $tmp_file ) ) {
+		return new WP_Error(
+			'imperal_media_sideload_failed',
+			sprintf(
+				/* translators: %s: underlying WordPress error message. */
+				__( 'Could not fetch that image: %s', 'imperal-media-bridge' ),
+				$tmp_file->get_error_message()
+			),
+			array( 'status' => 502 )
+		);
+	}
+
+	$file_array = array(
+		'name'     => imperal_media_bridge_target_filename( $filename, $source_url ),
+		'tmp_name' => $tmp_file,
+	);
+
+	$attachment_id = media_handle_sideload( $file_array, $post_id, $caption );
 
 	if ( is_wp_error( $attachment_id ) ) {
+		wp_delete_file( $tmp_file );
 		return new WP_Error(
 			'imperal_media_sideload_failed',
 			sprintf(
@@ -2120,6 +2199,7 @@ function imperal_media_bridge_register_routes() {
 					'post_type'    => array( 'type' => 'string' ),
 					'alt_text'     => array( 'type' => 'string' ),
 					'caption'      => array( 'type' => 'string' ),
+					'filename'     => array( 'type' => 'string' ),
 					'set_featured' => array( 'type' => 'boolean' ),
 				),
 			),

@@ -43,6 +43,48 @@ async def test_upload_media_happy_path():
     assert "Uploaded media #77" in result.summary
 
 
+async def test_upload_media_forwards_seo_aeo_filename_to_the_bridge():
+    """A caller-supplied filename (e.g. Media Hub's own SEO/AEO-optimized
+    slug) must reach the bridge request body -- that's what lets the actual
+    on-site file name be meaningful instead of the provider's raw URL name."""
+    ctx = await _ctx()
+    captured = {}
+
+    async def handler(url, *, json=None, **kwargs):
+        captured.update(json or {})
+        return type("R", (), {"status_code": 201, "body": {
+            "attachment_id": 77, "url": "https://x.com/wp-content/uploads/pic.jpg",
+            "width": 1200, "height": 800, "attached_to": None, "featured_set": False,
+        }})()
+
+    ctx.http.post = handler
+    result = await hm.upload_media(ctx, UploadMediaParams(
+        site_id="x-com", source_url="https://cdn.example.com/result_abc123.jpg",
+        filename="heat-recovery-ventilator-featured",
+    ))
+    assert result.status == "success"
+    assert captured.get("filename") == "heat-recovery-ventilator-featured"
+
+
+async def test_upload_media_without_filename_omits_it_from_the_request():
+    ctx = await _ctx()
+    captured = {}
+
+    async def handler(url, *, json=None, **kwargs):
+        captured.update(json or {})
+        return type("R", (), {"status_code": 201, "body": {
+            "attachment_id": 77, "url": "https://x.com/wp-content/uploads/pic.jpg",
+            "width": 1200, "height": 800, "attached_to": None, "featured_set": False,
+        }})()
+
+    ctx.http.post = handler
+    result = await hm.upload_media(ctx, UploadMediaParams(
+        site_id="x-com", source_url="https://cdn.example.com/pic.jpg",
+    ))
+    assert result.status == "success"
+    assert "filename" not in captured
+
+
 async def test_upload_media_with_featured_reports_attach_and_featured():
     ctx = await _ctx()
     ctx.http.mock_post(SIDELOAD, {
