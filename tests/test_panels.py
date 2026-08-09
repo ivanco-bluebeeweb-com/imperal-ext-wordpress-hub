@@ -22,6 +22,34 @@ async def test_sidebar_empty_state():
     assert "No sites" in s
 
 
+async def test_sidebar_hides_sync_button_when_sites_registry_not_installed():
+    """No handler registered for sites-registry.ping -- MockExtensions.call
+    raises, _sites_registry_installed must treat that as \"not installed\"
+    and the Sync button must not render at all."""
+    ctx = MockContext()
+    node = await panels.sidebar(ctx)
+    assert "Sync sites to Sites Registry" not in str(node)
+
+
+async def test_sidebar_shows_sync_button_when_sites_registry_installed():
+    """A reachable sites-registry.ping IPC handler answering {"ok": True}
+    is exactly what installing Sites Registry looks like from here -- the
+    Sync button must render in that case."""
+    ctx = MockContext()
+    ctx.extensions.register("sites-registry", "ping", lambda **kw: {"ok": True})
+    node = await panels.sidebar(ctx)
+    assert "Sync sites to Sites Registry" in str(node)
+
+
+async def test_sidebar_hides_sync_button_when_ping_answers_not_ok():
+    """A reachable handler that answers ok=False must still hide the button --
+    only an explicit ok=True counts as \"installed and usable\"."""
+    ctx = MockContext()
+    ctx.extensions.register("sites-registry", "ping", lambda **kw: {"ok": False})
+    node = await panels.sidebar(ctx)
+    assert "Sync sites to Sites Registry" not in str(node)
+
+
 async def test_sidebar_renders_site_list():
     ctx = await _ctx_with_sites(
         {"id": "a-com", "name": "A", "url": "https://a.com", "status": "connected"},

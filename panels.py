@@ -26,6 +26,25 @@ BRIDGE_DOWNLOAD_URL = (
 )
 
 
+async def _sites_registry_installed(ctx) -> bool:
+    """Best-effort probe: is Sites Registry installed and reachable right now?
+
+    There is no ctx.extensions.is_installed() API on this platform -- the
+    only way to find out is to call an exposed IPC method and see whether it
+    raises. Uses Sites Registry's dedicated read-only `ping` surface (no
+    ctx.store access, no side effects) rather than the write-only
+    `upsert_site` surface, so this check can never create a stray site
+    record just by running. Any failure (app not installed, not enabled,
+    unreachable) is treated as "not installed" -- fail closed, so the Sync
+    button only ever appears when it can actually do something.
+    """
+    try:
+        result = await ctx.extensions.call("sites-registry", "ping")
+    except Exception:
+        return False
+    return bool(result and result.get("ok"))
+
+
 # ── Left sidebar ──────────────────────────────────────────────────────────────
 
 def _site_subtitle(r: dict) -> str:
@@ -107,22 +126,25 @@ async def sidebar(ctx, active_site_id="", **kwargs):
         ]
         site_list = ui.List(items=items)
 
-    bridge_footer = ui.Stack(children=[
-        ui.Divider(),
-        ui.Tooltip(
-            content="Pushes every WordPress site connected here into Sites Registry -- the "
-                    "platform-agnostic catalogue app. Fixes sites connected here before Sites "
-                    "Registry existed, or any time the two drift out of sync. Refresh the Sites "
-                    "Registry page after this to see them.",
-            children=ui.Button(
-                "Sync sites to Sites Registry",
-                icon="RefreshCw",
-                variant="secondary",
-                full_width=True,
-                disabled=not rows,
-                on_click=ui.Call("sync_sites_to_registry"),
-            ),
-        ),
+    footer_children = []
+    if await _sites_registry_installed(ctx):
+        footer_children.append(
+            ui.Tooltip(
+                content="Pushes every WordPress site connected here into Sites Registry -- the "
+                        "platform-agnostic catalogue app. Fixes sites connected here before Sites "
+                        "Registry existed, or any time the two drift out of sync. Refresh the Sites "
+                        "Registry page after this to see them.",
+                children=ui.Button(
+                    "Sync sites to Sites Registry",
+                    icon="RefreshCw",
+                    variant="secondary",
+                    full_width=True,
+                    disabled=not rows,
+                    on_click=ui.Call("sync_sites_to_registry"),
+                ),
+            )
+        )
+    footer_children.append(
         ui.Tooltip(
             content="Imperal Bridge is the one companion plugin this connector needs on a "
                     "WordPress site — Rank Math SEO fields, Elementor/Bricks builder content, "
@@ -134,8 +156,9 @@ async def sidebar(ctx, active_site_id="", **kwargs):
                 full_width=True,
                 on_click=ui.Open(BRIDGE_DOWNLOAD_URL),
             ),
-        ),
-    ], gap=2)
+        )
+    )
+    bridge_footer = ui.Stack(children=[ui.Divider(), *footer_children], gap=2)
 
     root = ui.Stack(
         children=[top_bar, ui.Divider(), site_list, bridge_footer],
