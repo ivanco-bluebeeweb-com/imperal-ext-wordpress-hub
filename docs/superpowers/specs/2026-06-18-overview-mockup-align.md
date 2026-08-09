@@ -1,4 +1,4 @@
-# WP Site Connector — Overview Panel: Align to Mockup
+# WordPress Hub — Overview Panel: Align to Mockup
 
 **Date:** 2026-06-18
 **Scope:** Overview panel UI alignment + `refresh_site` function + bug fix.
@@ -8,7 +8,7 @@
 
 ## Goal
 
-Bring the overview panel in line with the design mockup (`design/wp-site-connector-panel.html`):
+Bring the overview panel in line with the design mockup (`design/wordpress-hub-panel.html`):
 3-column grid, clickable cards with per-card Refresh + Remove menu, stretched search input,
 status select dropdown. Add a live `refresh_site` function triggered by the Refresh button.
 Fix a pre-existing bug where connect/forget do not refresh the renamed panel.
@@ -98,7 +98,7 @@ under the key the `overview` handler expects.
     action_type="write",
     data_model=Site,
     effects=["wp.health_check"],
-    event="wp-site-connector.refresh_site",
+    event="wordpress-hub.refresh_site",
 )
 async def refresh_site(ctx, params: SiteIdParams) -> ActionResult:
     """Ping the site REST API, update stored status, and refresh the overview panel."""

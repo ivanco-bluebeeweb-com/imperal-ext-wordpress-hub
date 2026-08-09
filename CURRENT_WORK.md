@@ -1,4 +1,4 @@
-# Current Work — WordPress Hub (formerly "WP Site Connector")
+# Current Work — WordPress Hub (formerly "WordPress Hub")
 
 > Update this file at the END of every work session.
 > One entry per session. Most recent at top.
@@ -39,8 +39,8 @@ left sidebar."
   Rewrote `bridge/README.md` and added `bridge/imperal-bridge/README.md` describing the single-
   plugin architecture and stating explicitly there will not be a fourth bridge plugin.
 - Built `bridge/imperal-bridge.zip` and pushed everything to the connector's own GitHub repo
-  (`ivanco-bluebeeweb-com/imperal-ext-wp_site_connector`, branch `main`). Confirmed the public raw
-  URL is live: `https://raw.githubusercontent.com/ivanco-bluebeeweb-com/imperal-ext-wp_site_connector/main/bridge/imperal-bridge.zip`
+  (`ivanco-bluebeeweb-com/imperal-ext-wordpress-hub`, branch `main`). Confirmed the public raw
+  URL is live: `https://raw.githubusercontent.com/ivanco-bluebeeweb-com/imperal-ext-wordpress-hub/main/bridge/imperal-bridge.zip`
   (curl -I → `200 application/zip`). Used as the download link — no `ctx.storage` upload needed,
   since the file already lives in the repo and moves automatically with every push.
 - `panels.py`: added `BRIDGE_DOWNLOAD_URL` constant and a footer `ui.Stack` (divider + tooltip +
@@ -69,7 +69,7 @@ left sidebar."
 **Why:** user directive (verbatim priority): the app must have functions to create
 categories, create tags, and manage everything nested about them — a tree structure,
 parent/child, all readable/editable/applyable. Also renamed the app display_name from
-"WP Site Connector" to "WordPress Hub" per the same directive. Confirmed featured
+"WordPress Hub" to "WordPress Hub" per the same directive. Confirmed featured
 image + inline image insertion were ALREADY implemented (v1.7.0, `create_post`/
 `update_post`'s `featured_media_id` and `PostBlockInput(type="image")`) — no gap there.
 
@@ -348,8 +348,8 @@ document — `docx_parser.py`, `parse_article`, `confirm_mapping`, and the headi
 **Status:** ✅ design approved, implementation started
 
 **Что было сделано:**
-- v1 design spec written: `docs/2026-06-16-wp-site-connector-v1-design.md`
-- v1 implementation plan: `docs/2026-06-16-wp-site-connector-v1-plan.md`
+- v1 design spec written: `docs/2026-06-16-wordpress-hub-v1-design.md`
+- v1 implementation plan: `docs/2026-06-16-wordpress-hub-v1-plan.md`
 - Initial app scaffold: app.py, handlers_connect.py, handlers_read.py, panels.py, skeleton.py, models.py, wp_client.py, storage.py
 - imperal.json generated (manifest v3, sdk 5.4.2)
 - Tools: connect_site, forget_site, add_ssh, remove_ssh, list_sites, list_posts, list_pages, list_media, get_site_health, refresh_site, refresh_all_sites, list_comments, list_scheduled, list_users, list_orders, list_custom_posts, get_server_info

@@ -22,7 +22,7 @@ _BUILTIN_TAXES = {"nav_menu", "link_category", "post_format"}
 # extra storage/CDN step needed, and it moves automatically with every push.
 BRIDGE_DOWNLOAD_URL = (
     "https://raw.githubusercontent.com/ivanco-bluebeeweb-com/"
-    "imperal-ext-wp_site_connector/main/bridge/imperal-bridge.zip"
+    "imperal-ext-wordpress-hub/main/bridge/imperal-bridge.zip"
 )
 
 
@@ -65,10 +65,10 @@ def _lamp(r: dict) -> ui.Badge:
     default_width=280,
     min_width=200,
     max_width=400,
-    refresh="on_event:wp-site-connector.connect_site,wp-site-connector.forget_site,"
-            "wp-site-connector.refresh_site,wp-site-connector.refresh_all_sites,"
-            "wp-site-connector.add_ssh,wp-site-connector.remove_ssh,"
-            "wp-site-connector.get_server_info",
+    refresh="on_event:wordpress-hub.connect_site,wordpress-hub.forget_site,"
+            "wordpress-hub.refresh_site,wordpress-hub.refresh_all_sites,"
+            "wordpress-hub.add_ssh,wordpress-hub.remove_ssh,"
+            "wordpress-hub.get_server_info",
 )
 async def sidebar(ctx, active_site_id="", **kwargs):
     rows = await storage.list_site_records(ctx)
@@ -151,7 +151,7 @@ async def sidebar(ctx, active_site_id="", **kwargs):
 
 # ── Single center panel ────────────────────────────────────────────────────────
 
-@ext.panel("center", slot="center", center_overlay=True, title="WP Site Connector")
+@ext.panel("center", slot="center", center_overlay=True, title="WordPress Hub")
 async def center(ctx, view="", site_id="",
                  group_tab="standard",
                  std_tab="posts", act_tab="comments", commerce_tab="overview",

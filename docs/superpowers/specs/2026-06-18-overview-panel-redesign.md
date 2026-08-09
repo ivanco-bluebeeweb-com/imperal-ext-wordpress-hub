@@ -1,4 +1,4 @@
-# WP Site Connector — Overview Panel Redesign
+# WordPress Hub — Overview Panel Redesign
 
 **Date:** 2026-06-18  
 **Scope:** Single-panel overview grid (State 1 only). Site detail (State 2) is deferred to next update.

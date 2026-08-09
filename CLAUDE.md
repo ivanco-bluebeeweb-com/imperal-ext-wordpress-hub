@@ -1,4 +1,4 @@
-# WP Site Connector — Claude Code Guide
+# WordPress Hub — Claude Code Guide
 
 ## What this is
 
@@ -6,7 +6,7 @@ An **Imperal Cloud app** (Python extension) — NOT a WordPress plugin. Connects
 via WP REST API + Application Passwords and lets the user read content (posts, pages, media,
 health, comments, scheduled posts, users, WooCommerce orders) from within Imperal OS.
 
-Part of: `Imperal OS / Apps / WP Site Connector`
+Part of: `Imperal OS / Apps / WordPress Hub`
 
 ## Communication
 
@@ -31,7 +31,7 @@ Key rules that apply here:
 ## Project Structure
 
 ```
-Apps/WP Site Connector/
+Apps/WordPress Hub/
 ├── app.py                  ← Extension(...) + ChatExtension(...) + health_check
 ├── main.py                 ← CLI loader (imports app, registers handlers)
 ├── handlers_connect.py     ← connect_site, forget_site, add_ssh, remove_ssh, refresh_site, refresh_all_sites
@@ -61,15 +61,15 @@ Apps/WP Site Connector/
 ├── pyproject.toml
 ├── requirements.txt
 ├── design/
-│   └── wp-site-connector-panel.html  ← UI wireframe (source of truth for panel layout)
+│   └── wordpress-hub-panel.html  ← UI wireframe (source of truth for panel layout)
 ├── bridge/                 ← ONE companion WordPress plugin (see bridge/README.md) — do not add a second
 │   └── imperal-bridge/           ← Imperal Bridge: Rank Math SEO fields + Elementor/Bricks element trees
 │                                     (guarded point edits) + image sideload (media_sideload_image), all in
 │                                     one plugin/one version. Future bridge capabilities are new sections in
 │                                     this same file, never a new plugin.
 ├── docs/
-│   ├── 2026-06-16-wp-site-connector-v1-design.md  ← v1 spec (approved)
-│   ├── 2026-06-16-wp-site-connector-v1-plan.md    ← v1 plan
+│   ├── 2026-06-16-wordpress-hub-v1-design.md  ← v1 spec (approved)
+│   ├── 2026-06-16-wordpress-hub-v1-plan.md    ← v1 plan
 │   └── superpowers/plans/                         ← per-feature implementation plans
 └── tests/
     ├── test_connect.py
@@ -91,8 +91,8 @@ Apps/WP Site Connector/
 
 ## Key Specs
 
-- **v1 Design** — `docs/2026-06-16-wp-site-connector-v1-design.md` — approved spec, source of truth for architecture and security rules.
-- **v1 Plan** — `docs/2026-06-16-wp-site-connector-v1-plan.md` — implementation plan.
+- **v1 Design** — `docs/2026-06-16-wordpress-hub-v1-design.md` — approved spec, source of truth for architecture and security rules.
+- **v1 Plan** — `docs/2026-06-16-wordpress-hub-v1-plan.md` — implementation plan.
 - **Per-feature plans** — `docs/superpowers/plans/*.md`.
 - **UI components reference** — `../../Docs/imperal-docs/ui-components-reference.md` (Imperal OS).
 
@@ -112,7 +112,7 @@ Apps/WP Site Connector/
 ## Running Tests
 
 ```bash
-cd "Apps/WP Site Connector"
+cd "Apps/WordPress Hub"
 python -m pytest
 ```
 
@@ -123,7 +123,7 @@ All tests use `MockContext` from the SDK. No live WordPress site needed. Each `@
 ## Regenerating imperal.json
 
 ```bash
-cd "Apps/WP Site Connector"
+cd "Apps/WordPress Hub"
 imperal build
 ```
 

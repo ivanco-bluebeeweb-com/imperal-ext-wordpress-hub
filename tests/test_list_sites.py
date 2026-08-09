@@ -40,7 +40,7 @@ async def test_expose_list_connected_sites_empty():
 async def test_expose_list_connected_sites_registered_on_ext():
     """Pins the IPC contract: app.ext must expose 'list_connected_sites' with
     action_type='read', matching what Brand/Content Strategy Hub call via
-    ctx.extensions.call('wp-site-connector', 'list_connected_sites')."""
+    ctx.extensions.call('wordpress-hub', 'list_connected_sites')."""
     exposed = app.ext.exposed
     assert "list_connected_sites" in exposed
     assert exposed["list_connected_sites"].action_type == "read"

@@ -239,7 +239,7 @@ async def list_media(ctx, params: ListMediaParams) -> ActionResult:
     action_type="write",
     data_model=MediaAltResult,
     effects=["wp.media_update"],
-    event="wp-site-connector.update_media_alt",
+    event="wordpress-hub.update_media_alt",
 )
 async def update_media_alt(ctx, params: UpdateMediaAltParams) -> ActionResult:
     """Write alt_text onto media library attachments, one REST call per item.
@@ -375,7 +375,7 @@ async def get_site_health(ctx, params: SiteIdParams) -> ActionResult:
     action_type="write",
     data_model=Site,
     effects=["wp.health_check"],
-    event="wp-site-connector.refresh_site",
+    event="wordpress-hub.refresh_site",
 )
 async def refresh_site(ctx, params: SiteIdParams) -> ActionResult:
     """Ping the site REST API, update stored status, and refresh the overview panel."""
@@ -411,7 +411,7 @@ async def refresh_site(ctx, params: SiteIdParams) -> ActionResult:
     action_type="write",
     data_model=RefreshAllResult,
     effects=["wp.health_check"],
-    event="wp-site-connector.refresh_all_sites",
+    event="wordpress-hub.refresh_all_sites",
 )
 async def refresh_all_sites(ctx, params: _NoParams) -> ActionResult:
     """Ping every connected site in parallel, update stored statuses, clear content caches."""
@@ -589,7 +589,7 @@ async def list_plugins(ctx, params: SiteIdParams) -> ActionResult:
     action_type="write",
     data_model=CacheActionResult,
     effects=["wp.purge_cache"],
-    event="wp-site-connector.purge_cache",
+    event="wordpress-hub.purge_cache",
 )
 async def purge_cache(ctx, params: PurgeCacheParams) -> ActionResult:
     """Purge the site's cache via `wp litespeed-purge` over SSH.
@@ -659,7 +659,7 @@ async def purge_cache(ctx, params: PurgeCacheParams) -> ActionResult:
     action_type="write",
     data_model=PluginInstallResult,
     effects=["wp.install_plugin"],
-    event="wp-site-connector.install_plugin",
+    event="wordpress-hub.install_plugin",
 )
 async def install_plugin(ctx, params: InstallPluginParams) -> ActionResult:
     """Install (and optionally activate) a plugin over SSH via `wp plugin install`."""
@@ -723,7 +723,7 @@ async def list_custom_posts(ctx, params: ListCustomPostsParams) -> ActionResult:
     action_type="write",
     data_model=ServerInfo,
     effects=["wp.health_check"],
-    event="wp-site-connector.get_server_info",
+    event="wordpress-hub.get_server_info",
 )
 async def get_server_info(ctx, params: SiteIdParams) -> ActionResult:
     """Run WP-CLI commands via SSH and return server/site diagnostics."""

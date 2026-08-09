@@ -136,7 +136,7 @@ async def sideload_image(ctx, base_url, username, pw, *, source_url: str,
     action_type="write",
     data_model=MediaUploadResult,
     effects=["wp.media_upload"],
-    event="wp-site-connector.upload_media",
+    event="wordpress-hub.upload_media",
 )
 async def upload_media(ctx, params: UploadMediaParams) -> ActionResult:
     """Sideload one external image into the site's media library."""

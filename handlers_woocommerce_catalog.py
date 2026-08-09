@@ -635,7 +635,7 @@ async def list_product_variations(ctx, params: ListProductVariationsParams) -> A
     "create_product_variation",
     description="Create a variation for an existing variable product using its existing attributes. Defaults to draft for safe review.",
     action_type="write", data_model=ProductVariation,
-    effects=["wc.product_variation_create"], event="wp-site-connector.create_product_variation")
+    effects=["wc.product_variation_create"], event="wordpress-hub.create_product_variation")
 async def create_product_variation(ctx, params: CreateProductVariationParams) -> ActionResult:
     """Create a draft-first variation from explicit parent attribute options."""
     payload, err = _variation_payload(params, creating=True)
@@ -671,7 +671,7 @@ async def create_product_variation(ctx, params: CreateProductVariationParams) ->
     "update_product_variation",
     description="Update selected price, SKU, stock, or status fields of one product variation only after its state token is rechecked.",
     action_type="write", data_model=ProductVariation,
-    effects=["wc.product_variation_update"], event="wp-site-connector.update_product_variation")
+    effects=["wc.product_variation_update"], event="wordpress-hub.update_product_variation")
 async def update_product_variation(ctx, params: UpdateProductVariationParams) -> ActionResult:
     """Update one variation only if it still matches the reviewed variation state."""
     payload, err = _variation_payload(params)
@@ -725,7 +725,7 @@ async def preview_bulk_variation_change(ctx, params: BulkVariationChangeParams) 
     "apply_bulk_variation_change",
     description="Apply a reviewed bulk change to 1-100 explicit WooCommerce variation ids. Requires the exact preview state token and stops before all writes if any variation changed.",
     action_type="destructive", data_model=VariationBulkResult,
-    effects=["wc.product_variation_bulk_update"], event="wp-site-connector.apply_bulk_variation_change")
+    effects=["wc.product_variation_bulk_update"], event="wordpress-hub.apply_bulk_variation_change")
 async def apply_bulk_variation_change(ctx, params: ApplyBulkVariationChangeParams) -> ActionResult:
     """Apply an explicit bulk variation update after fresh all-target state verification."""
     target_data, err = await _bulk_variation_targets(ctx, params)
@@ -804,7 +804,7 @@ async def preview_csv_catalog_import(ctx, params: CsvCatalogImportParams) -> Act
     "apply_csv_catalog_import",
     description="Apply a previously previewed CSV import to strictly SKU-matched WooCommerce products. Requires the exact state token and stops before all writes if any matched product changed.",
     action_type="destructive", data_model=ProductBulkResult,
-    effects=["wc.product_csv_import"], event="wp-site-connector.apply_csv_catalog_import")
+    effects=["wc.product_csv_import"], event="wordpress-hub.apply_csv_catalog_import")
 async def apply_csv_catalog_import(ctx, params: ApplyCsvCatalogImportParams) -> ActionResult:
     """Apply a reviewed simple-product CSV import after a fresh all-target check."""
     target_data, err = await _csv_catalog_targets(ctx, params)
@@ -890,7 +890,7 @@ async def preview_csv_variation_import(ctx, params: CsvVariationImportParams) ->
     "apply_csv_variation_import",
     description="Apply a previously previewed CSV import to strictly matched WooCommerce variations. Requires the exact state token and stops before all writes if any matched variation changed.",
     action_type="destructive", data_model=VariationBulkResult,
-    effects=["wc.variation_csv_import"], event="wp-site-connector.apply_csv_variation_import")
+    effects=["wc.variation_csv_import"], event="wordpress-hub.apply_csv_variation_import")
 async def apply_csv_variation_import(ctx, params: ApplyCsvVariationImportParams) -> ActionResult:
     """Apply reviewed variation CSV rows after a fresh all-target state check."""
     target_data, err = await _csv_variation_targets(ctx, params)
@@ -1020,7 +1020,7 @@ async def retry_csv_import_failures(ctx, params: RetryCsvImportFailuresParams) -
     "create_product",
     description="Create a WooCommerce simple, virtual, or downloadable product. Defaults to draft; pass status='publish' explicitly to publish it.",
     action_type="write", data_model=Product,
-    effects=["wc.product_create"], event="wp-site-connector.create_product")
+    effects=["wc.product_create"], event="wordpress-hub.create_product")
 async def create_product(ctx, params: CreateProductParams) -> ActionResult:
     """Create one WooCommerce product with validated price, stock, categories, and images."""
     payload, err = _product_payload(params, creating=True)
@@ -1039,7 +1039,7 @@ async def create_product(ctx, params: CreateProductParams) -> ActionResult:
     "update_product",
     description="Update selected fields of one WooCommerce product: name, status, SKU, prices, descriptions, stock, categories, or images. Omitted fields stay unchanged.",
     action_type="write", data_model=Product,
-    effects=["wc.product_update"], event="wp-site-connector.update_product")
+    effects=["wc.product_update"], event="wordpress-hub.update_product")
 async def update_product(ctx, params: UpdateProductParams) -> ActionResult:
     """Update one product without replacing fields the caller omitted."""
     payload, err = _product_payload(params)
@@ -1061,7 +1061,7 @@ async def update_product(ctx, params: UpdateProductParams) -> ActionResult:
     "archive_product",
     description="Move one WooCommerce product to Trash without permanently deleting it. The product can be restored in WordPress.",
     action_type="destructive", data_model=Product,
-    effects=["wc.product_trash"], event="wp-site-connector.archive_product")
+    effects=["wc.product_trash"], event="wordpress-hub.archive_product")
 async def archive_product(ctx, params: ArchiveProductParams) -> ActionResult:
     """Move a product to WooCommerce trash after the platform confirmation gate."""
     _, err = await _write(
@@ -1105,7 +1105,7 @@ async def list_product_categories(ctx, params: ListProductCategoriesParams) -> A
     "create_product_category",
     description="Create a WooCommerce product category, optionally below an existing parent category.",
     action_type="write", data_model=ProductCategory,
-    effects=["wc.product_category_create"], event="wp-site-connector.create_product_category")
+    effects=["wc.product_category_create"], event="wordpress-hub.create_product_category")
 async def create_product_category(ctx, params: CreateProductCategoryParams) -> ActionResult:
     """Create one WooCommerce product category."""
     payload = {"name": params.name.strip(), "parent": params.parent_id,
@@ -1147,7 +1147,7 @@ async def preview_bulk_product_change(ctx, params: BulkProductChangeParams) -> A
     "apply_bulk_product_change",
     description="Apply a previously reviewed bulk change to 1-100 explicit WooCommerce product ids. Requires the exact state token returned by preview and stops before all writes if any product changed.",
     action_type="destructive", data_model=ProductBulkResult,
-    effects=["wc.product_bulk_update"], event="wp-site-connector.apply_bulk_product_change")
+    effects=["wc.product_bulk_update"], event="wordpress-hub.apply_bulk_product_change")
 async def apply_bulk_product_change(ctx, params: ApplyBulkProductChangeParams) -> ActionResult:
     """Apply a confirmation-gated bulk change only against the reviewed product state."""
     target_data, err = await _bulk_targets(ctx, params)

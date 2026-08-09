@@ -1,4 +1,4 @@
-# WP Site Connector — companion bridge plugin
+# WordPress Hub — companion bridge plugin
 
 **One** WordPress plugin lives under `bridge/imperal-bridge/`: **Imperal
 Bridge**. It is the single companion plugin for this connector — it used to

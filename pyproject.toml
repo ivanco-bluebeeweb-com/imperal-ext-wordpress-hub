@@ -1,5 +1,5 @@
 [project]
-name = "wp-site-connector"
+name = "wordpress-hub"
 version = "1.8.0"
 requires-python = ">=3.11"
 dependencies = ["imperal-sdk"]

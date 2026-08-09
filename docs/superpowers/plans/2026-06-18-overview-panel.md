@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Run all commands from `Apps/WP Site Connector/` (repo root for this extension).
+- Run all commands from `Apps/WordPress Hub/` (repo root for this extension).
 - Always use `src/.venv/bin/python` and `src/.venv/bin/imperal` — not system Python.
 - `imperal validate .` must exit 0 errors before every commit.
 - `pytest -q` must pass (35+ tests) before every commit.
@@ -144,7 +144,7 @@ async def test_detail_has_back_button():
 - [ ] **Step 2: Run tests to verify they fail as expected**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/python -m pytest tests/test_panels.py -q 2>&1 | tail -10
+cd "Apps/WordPress Hub" && src/.venv/bin/python -m pytest tests/test_panels.py -q 2>&1 | tail -10
 ```
 
 Expected: `AttributeError: module 'panels' has no attribute 'overview'` and `__panel__overview` assertion failures.
@@ -260,7 +260,7 @@ async def overview(ctx, search="", status_filter="", **kwargs):
 - [ ] **Step 2: Run tests**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
+cd "Apps/WordPress Hub" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
 ```
 
 Expected: all tests pass.
@@ -268,7 +268,7 @@ Expected: all tests pass.
 - [ ] **Step 3: Build and validate**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/imperal build . && src/.venv/bin/imperal validate . 2>&1 | grep -E "error|RESULTS"
+cd "Apps/WordPress Hub" && src/.venv/bin/imperal build . && src/.venv/bin/imperal validate . 2>&1 | grep -E "error|RESULTS"
 ```
 
 Expected: `RESULTS: 0 error(s)`.
@@ -276,7 +276,7 @@ Expected: `RESULTS: 0 error(s)`.
 - [ ] **Step 4: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add panels.py tests/test_panels.py imperal.json && git commit -m "feat: replace dashboard with full-screen overview grid panel
+cd "Apps/WordPress Hub" && git add panels.py tests/test_panels.py imperal.json && git commit -m "feat: replace dashboard with full-screen overview grid panel
 
 - Single center panel: searchable, filterable 2-column card grid
 - Header: site count + Connect New Site button
@@ -295,7 +295,7 @@ cd "Apps/WP Site Connector" && git add panels.py tests/test_panels.py imperal.js
 - [ ] **Step 1: Push to origin**
 
 ```bash
-cd "Apps/WP Site Connector" && git push origin main 2>&1 | tail -5
+cd "Apps/WordPress Hub" && git push origin main 2>&1 | tail -5
 ```
 
 Expected: `main -> main` with the new commit hash.
@@ -303,7 +303,7 @@ Expected: `main -> main` with the new commit hash.
 - [ ] **Step 2: Confirm local state is clean**
 
 ```bash
-cd "Apps/WP Site Connector" && git status -sb | head -2
+cd "Apps/WordPress Hub" && git status -sb | head -2
 ```
 
 Expected: `## main...origin/main` (no ahead/behind).

@@ -5,7 +5,7 @@ Status: implemented and verified
 
 ## Scope
 
-Add a read-only WooCommerce module to WP Site Connector. Reuse the connected
+Add a read-only WooCommerce module to WordPress Hub. Reuse the connected
 WordPress Application Password; do not add WooCommerce consumer keys and do not
 expose write actions.
 

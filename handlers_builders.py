@@ -228,7 +228,7 @@ async def get_builder_content(ctx, params: GetBuilderContentParams) -> ActionRes
     action_type="write",
     data_model=BuilderFieldUpdateResult,
     effects=["wp.builder_field_update"],
-    event="wp-site-connector.update_builder_field",
+    event="wordpress-hub.update_builder_field",
 )
 async def update_builder_field(ctx, params: UpdateBuilderFieldParams) -> ActionResult:
     """Set one field on one existing builder element, guarded by state_token."""

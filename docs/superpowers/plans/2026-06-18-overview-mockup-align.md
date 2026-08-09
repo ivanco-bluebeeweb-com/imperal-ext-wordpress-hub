@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Run all commands from `Apps/WP Site Connector/` (the extension root).
+- Run all commands from `Apps/WordPress Hub/` (the extension root).
 - Always use `src/.venv/bin/python` and `src/.venv/bin/imperal` — not system Python.
 - `imperal validate .` must exit 0 errors before every commit.
 - `pytest -q` must pass (currently 42 tests) before every commit.
@@ -33,7 +33,7 @@ In `handlers_connect.py`, find both occurrences of `refresh_panels=["dashboard"]
 - [ ] **Step 2: Run tests**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
+cd "Apps/WordPress Hub" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
 ```
 
 Expected: `42 passed`.
@@ -41,7 +41,7 @@ Expected: `42 passed`.
 - [ ] **Step 3: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add handlers_connect.py && git commit -m "fix: refresh overview panel (not dashboard) after connect/forget"
+cd "Apps/WordPress Hub" && git add handlers_connect.py && git commit -m "fix: refresh overview panel (not dashboard) after connect/forget"
 ```
 
 ---
@@ -98,7 +98,7 @@ async def test_refresh_site_errors_on_missing_site():
 - [ ] **Step 2: Run tests to confirm they fail**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/python -m pytest tests/test_list_content.py -q 2>&1 | tail -5
+cd "Apps/WordPress Hub" && src/.venv/bin/python -m pytest tests/test_list_content.py -q 2>&1 | tail -5
 ```
 
 Expected: `3 failed` — `AttributeError: module 'handlers_read' has no attribute 'refresh_site'`.
@@ -124,7 +124,7 @@ def _now() -> str:
     action_type="write",
     data_model=Site,
     effects=["wp.health_check"],
-    event="wp-site-connector.refresh_site",
+    event="wordpress-hub.refresh_site",
 )
 async def refresh_site(ctx, params: SiteIdParams) -> ActionResult:
     """Ping the site REST API, update stored status, and refresh the overview panel."""
@@ -155,7 +155,7 @@ async def refresh_site(ctx, params: SiteIdParams) -> ActionResult:
 - [ ] **Step 4: Run all tests**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
+cd "Apps/WordPress Hub" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
 ```
 
 Expected: `45 passed`.
@@ -163,7 +163,7 @@ Expected: `45 passed`.
 - [ ] **Step 5: Build and validate**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/imperal build . && src/.venv/bin/imperal validate . 2>&1 | grep -E "error|RESULTS"
+cd "Apps/WordPress Hub" && src/.venv/bin/imperal build . && src/.venv/bin/imperal validate . 2>&1 | grep -E "error|RESULTS"
 ```
 
 Expected: `RESULTS: 0 error(s)`.
@@ -171,7 +171,7 @@ Expected: `RESULTS: 0 error(s)`.
 - [ ] **Step 6: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add handlers_read.py tests/test_list_content.py imperal.json && git commit -m "feat: add refresh_site — live health check with store update and panel refresh"
+cd "Apps/WordPress Hub" && git add handlers_read.py tests/test_list_content.py imperal.json && git commit -m "feat: add refresh_site — live health check with store update and panel refresh"
 ```
 
 ---
@@ -228,7 +228,7 @@ async def test_overview_filter_bar_has_status_select():
 - [ ] **Step 2: Run tests to confirm they fail**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/python -m pytest tests/test_panels.py -q 2>&1 | tail -5
+cd "Apps/WordPress Hub" && src/.venv/bin/python -m pytest tests/test_panels.py -q 2>&1 | tail -5
 ```
 
 Expected: `4 failed` — the new assertions are not yet satisfied by the current panel code.
@@ -307,7 +307,7 @@ with:
 - [ ] **Step 5: Run all tests**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
+cd "Apps/WordPress Hub" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
 ```
 
 Expected: `49 passed`.
@@ -315,7 +315,7 @@ Expected: `49 passed`.
 - [ ] **Step 6: Build and validate**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/imperal build . && src/.venv/bin/imperal validate . 2>&1 | grep -E "error|RESULTS"
+cd "Apps/WordPress Hub" && src/.venv/bin/imperal build . && src/.venv/bin/imperal validate . 2>&1 | grep -E "error|RESULTS"
 ```
 
 Expected: `RESULTS: 0 error(s)`.
@@ -323,7 +323,7 @@ Expected: `RESULTS: 0 error(s)`.
 - [ ] **Step 7: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add panels.py tests/test_panels.py imperal.json && git commit -m "feat: align overview panel with mockup — 3-col grid, card on_click, refresh+menu footer, heading count, status select"
+cd "Apps/WordPress Hub" && git add panels.py tests/test_panels.py imperal.json && git commit -m "feat: align overview panel with mockup — 3-col grid, card on_click, refresh+menu footer, heading count, status select"
 ```
 
 ---

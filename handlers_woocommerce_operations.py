@@ -230,7 +230,7 @@ async def _set_order_status(ctx, params):
     "update_order_status",
     description="Change one WooCommerce order status. Financial refunds are not created by this tool.",
     action_type="write", data_model=Order,
-    effects=["wc.order_status_update"], event="wp-site-connector.update_order_status")
+    effects=["wc.order_status_update"], event="wordpress-hub.update_order_status")
 async def update_order_status(ctx, params: UpdateOrderStatusParams) -> ActionResult:
     """Perform routine order transitions; risky target statuses are rejected here."""
     if params.status.strip().lower() in _RISKY_ORDER_STATUSES:
@@ -244,7 +244,7 @@ async def update_order_status(ctx, params: UpdateOrderStatusParams) -> ActionRes
     "update_order_status_risky",
     description="Change one order to cancelled, failed, or refunded after explicit confirmation. This changes WooCommerce status only and never sends money through a payment gateway.",
     action_type="destructive", data_model=Order,
-    effects=["wc.order_status_risky"], event="wp-site-connector.update_order_status_risky")
+    effects=["wc.order_status_risky"], event="wordpress-hub.update_order_status_risky")
 async def update_order_status_risky(ctx, params: UpdateOrderStatusParams) -> ActionResult:
     """Gate status transitions with operational or financial meaning."""
     if params.status.strip().lower() not in _RISKY_ORDER_STATUSES:
@@ -274,7 +274,7 @@ async def _add_note(ctx, params):
     "add_private_order_note",
     description="Add a private internal note to one WooCommerce order.",
     action_type="write", data_model=OrderNote,
-    effects=["wc.order_note_private"], event="wp-site-connector.add_private_order_note")
+    effects=["wc.order_note_private"], event="wordpress-hub.add_private_order_note")
 async def add_private_order_note(ctx, params: AddOrderNoteParams) -> ActionResult:
     """Add an internal note that is not visible to the customer."""
     if params.customer_visible:
@@ -286,7 +286,7 @@ async def add_private_order_note(ctx, params: AddOrderNoteParams) -> ActionResul
     "add_customer_order_note",
     description="Add a customer-visible order note after explicit confirmation; WooCommerce may email the customer.",
     action_type="destructive", data_model=OrderNote,
-    effects=["wc.order_note_customer"], event="wp-site-connector.add_customer_order_note")
+    effects=["wc.order_note_customer"], event="wordpress-hub.add_customer_order_note")
 async def add_customer_order_note(ctx, params: AddOrderNoteParams) -> ActionResult:
     """Gate notes that may notify the customer."""
     if not params.customer_visible:
@@ -311,7 +311,7 @@ async def get_customer(ctx, params: WooObjectParams) -> ActionResult:
     "create_customer",
     description="Create a registered WooCommerce customer with email and optional name/username. Passwords, addresses, and phone numbers are intentionally excluded.",
     action_type="write", data_model=Customer,
-    effects=["wc.customer_create"], event="wp-site-connector.create_customer")
+    effects=["wc.customer_create"], event="wordpress-hub.create_customer")
 async def create_customer(ctx, params: CreateCustomerParams) -> ActionResult:
     """Create one privacy-safe customer record without handling credentials or addresses."""
     payload, err = _customer_payload(params, creating=True)
@@ -328,7 +328,7 @@ async def create_customer(ctx, params: CreateCustomerParams) -> ActionResult:
     "update_customer",
     description="Update email, first name, last name, or username of one registered WooCommerce customer. Addresses, phone numbers, and passwords are not exposed.",
     action_type="write", data_model=Customer,
-    effects=["wc.customer_update"], event="wp-site-connector.update_customer")
+    effects=["wc.customer_update"], event="wordpress-hub.update_customer")
 async def update_customer(ctx, params: UpdateCustomerParams) -> ActionResult:
     """Update only explicitly supplied privacy-safe customer fields."""
     payload, err = _customer_payload(params)
@@ -360,7 +360,7 @@ async def list_customer_orders(ctx, params: CustomerOrdersParams) -> ActionResul
     "create_coupon",
     description="Create a WooCommerce coupon with amount, limits, expiry, product/category rules, and email restrictions.",
     action_type="write", data_model=Coupon,
-    effects=["wc.coupon_create"], event="wp-site-connector.create_coupon")
+    effects=["wc.coupon_create"], event="wordpress-hub.create_coupon")
 async def create_coupon(ctx, params: CreateCouponParams) -> ActionResult:
     """Create one validated coupon."""
     payload, err = _coupon_payload(params, creating=True)
@@ -377,7 +377,7 @@ async def create_coupon(ctx, params: CreateCouponParams) -> ActionResult:
     "update_coupon",
     description="Update selected fields of one WooCommerce coupon without changing omitted fields.",
     action_type="write", data_model=Coupon,
-    effects=["wc.coupon_update"], event="wp-site-connector.update_coupon")
+    effects=["wc.coupon_update"], event="wordpress-hub.update_coupon")
 async def update_coupon(ctx, params: UpdateCouponParams) -> ActionResult:
     """Patch only explicitly supplied coupon fields."""
     payload, err = _coupon_payload(params)
@@ -399,7 +399,7 @@ async def update_coupon(ctx, params: UpdateCouponParams) -> ActionResult:
     "archive_coupon",
     description="Move one WooCommerce coupon to Trash without permanently deleting it.",
     action_type="destructive", data_model=Coupon,
-    effects=["wc.coupon_trash"], event="wp-site-connector.archive_coupon")
+    effects=["wc.coupon_trash"], event="wordpress-hub.archive_coupon")
 async def archive_coupon(ctx, params: ArchiveCouponParams) -> ActionResult:
     """Archive and verify one coupon after confirmation."""
     _, err = await _write(ctx, params.site_id, f"/coupons/{params.coupon_id}", {"status": "trash"})

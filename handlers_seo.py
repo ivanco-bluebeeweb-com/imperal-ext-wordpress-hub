@@ -357,7 +357,7 @@ async def get_seo_meta(ctx, params: GetSeoMetaParams) -> ActionResult:
     action_type="write",
     data_model=SeoMeta,
     effects=["wp.seo_update"],
-    event="wp-site-connector.update_seo_meta",
+    event="wordpress-hub.update_seo_meta",
 )
 async def update_seo_meta(ctx, params: UpdateSeoMetaParams) -> ActionResult:
     """Write Rank Math SEO meta for a single post or page."""
@@ -585,7 +585,7 @@ async def get_term_seo_meta(ctx, params: GetTermSeoMetaParams) -> ActionResult:
     action_type="write",
     data_model=SeoMeta,
     effects=["wp.seo_update"],
-    event="wp-site-connector.update_term_seo_meta",
+    event="wordpress-hub.update_term_seo_meta",
 )
 async def update_term_seo_meta(ctx, params: UpdateTermSeoMetaParams) -> ActionResult:
     """Write Rank Math SEO meta for a single category/tag term."""

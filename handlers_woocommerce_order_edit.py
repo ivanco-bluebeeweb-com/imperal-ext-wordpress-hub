@@ -146,7 +146,7 @@ async def preview_order_line_changes(ctx, params: PreviewOrderLineChangesParams)
     "apply_order_line_changes",
     description="Apply previously previewed quantity changes to existing line items on one unpaid editable WooCommerce order. Requires explicit confirmation and the exact state token from preview.",
     action_type="destructive", data_model=OrderLineChangeResult,
-    effects=["wc.order_line_update"], event="wp-site-connector.apply_order_line_changes")
+    effects=["wc.order_line_update"], event="wordpress-hub.apply_order_line_changes")
 async def apply_order_line_changes(ctx, params: ApplyOrderLineChangesParams) -> ActionResult:
     """Recheck state, then change only explicit existing line quantities."""
     order, plan, err = await _read_plan(ctx, params)

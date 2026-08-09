@@ -1,4 +1,4 @@
-# WP Site Connector v1 — Implementation Plan
+# WordPress Hub v1 — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -18,21 +18,21 @@
 - **action_type discipline:** read tools declare `data_model=` (V23); `connect_site` is `write`; `forget_site` is `destructive` (KAV confirmation fires automatically — never roll your own confirm).
 - **Return contract:** every `@chat.function` returns `ActionResult.success(<sdl.Entity|sdl.EntityList>, summary=...)` / `.error("user-safe msg", retryable=...)` — never bare dicts. `retryable=True` only for timeout/429/5xx. Never `error(str(e))`; `await ctx.log(...)` the detail, return a stable message.
 - **Validation gate:** `imperal validate .` must exit with **0 ERRORs** (validators V14–V24 + V31). ≥1 test per `@chat.function`. `description` ≥ 40 chars and concrete.
-- **Constants:** secret name `wp_credentials`; store collection `sites`; `app_id` `wp-site-connector`.
+- **Constants:** secret name `wp_credentials`; store collection `sites`; `app_id` `wordpress-hub`.
 
-Spec: `Apps/WP Site Connector/docs/2026-06-16-wp-site-connector-v1-design.md`.
+Spec: `Apps/WordPress Hub/docs/2026-06-16-wordpress-hub-v1-design.md`.
 
 ---
 
 ### Task 1: Scaffold, environment, and a validate-clean minimal extension
 
 **Files:**
-- Create: `Apps/WP Site Connector/src/main.py`
-- Create: `Apps/WP Site Connector/src/app.py`
-- Create: `Apps/WP Site Connector/src/icon.svg`
-- Create: `Apps/WP Site Connector/src/pyproject.toml`
-- Create: `Apps/WP Site Connector/src/.gitignore`
-- Create: `Apps/WP Site Connector/src/tests/__init__.py`
+- Create: `Apps/WordPress Hub/src/main.py`
+- Create: `Apps/WordPress Hub/src/app.py`
+- Create: `Apps/WordPress Hub/src/icon.svg`
+- Create: `Apps/WordPress Hub/src/pyproject.toml`
+- Create: `Apps/WordPress Hub/src/.gitignore`
+- Create: `Apps/WordPress Hub/src/tests/__init__.py`
 
 **Interfaces:**
 - Produces: module `app` exporting `ext` (`Extension`) and `chat` (`ChatExtension`); a temporary `ping` read tool returning a `sdl.Entity`. Later tasks register their handlers/panels on `ext`/`chat` and remove `ping`.
@@ -41,7 +41,7 @@ Spec: `Apps/WP Site Connector/docs/2026-06-16-wp-site-connector-v1-design.md`.
 
 Run (try in order; use the first that prints 3.11+):
 ```bash
-cd "Apps/WP Site Connector/src"
+cd "Apps/WordPress Hub/src"
 for p in python3.12 python3.11; do command -v $p && $p --version && break; done
 # If none exist: `brew install python@3.12` then re-run.
 python3.12 -m venv .venv || python3.11 -m venv .venv
@@ -63,7 +63,7 @@ Expected: a `5.x` version and a working `imperal` CLI. **If the import fails or 
 
 ```toml
 [project]
-name = "wp-site-connector"
+name = "wordpress-hub"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = ["imperal-sdk"]
@@ -77,7 +77,7 @@ testpaths = ["tests"]
 
 ```bash
 printf ".venv/\n__pycache__/\n*.pyc\nimperal.json\n" > .gitignore
-cd "Apps/WP Site Connector" && git init && cd src
+cd "Apps/WordPress Hub" && git init && cd src
 ```
 
 - [ ] **Step 5: Write a minimal `icon.svg`** (valid `viewBox`, ≤100 KB)
@@ -93,15 +93,15 @@ from imperal_sdk import Extension, ChatExtension, ActionResult, sdl
 from pydantic import BaseModel
 
 ext = Extension(
-    "wp-site-connector",
+    "wordpress-hub",
     version="0.1.0",
-    display_name="WP Site Connector",
+    display_name="WordPress Hub",
     description="Connect WordPress sites by URL and Application Password and read their posts, pages, media, and health.",
     icon="icon.svg",
     actions_explicit=True,
 )
 
-chat = ChatExtension(ext, tool_name="wp-site-connector", description="Browse connected WordPress sites")
+chat = ChatExtension(ext, tool_name="wordpress-hub", description="Browse connected WordPress sites")
 
 
 class _PingResult(sdl.Entity):
@@ -135,7 +135,7 @@ Expected: `py_compile` silent; `imperal validate .` exits 0 with 0 ERRORs.
 - [ ] **Step 9: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: scaffold wp-site-connector with validate-clean minimal extension"
+cd "Apps/WordPress Hub" && git add -A && git commit -m "feat: scaffold wordpress-hub with validate-clean minimal extension"
 ```
 
 ---
@@ -143,8 +143,8 @@ cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: scaffold wp-si
 ### Task 2: Data models — Pydantic params + SDL entities
 
 **Files:**
-- Create: `Apps/WP Site Connector/src/models.py`
-- Test: `Apps/WP Site Connector/src/tests/test_models.py`
+- Create: `Apps/WordPress Hub/src/models.py`
+- Test: `Apps/WordPress Hub/src/tests/test_models.py`
 
 **Interfaces:**
 - Produces:
@@ -189,7 +189,7 @@ def test_site_health_marks_vnext_fields_unavailable():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd "Apps/WP Site Connector/src" && . .venv/bin/activate && pytest tests/test_models.py -v`
+Run: `cd "Apps/WordPress Hub/src" && . .venv/bin/activate && pytest tests/test_models.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'models'`.
 
 - [ ] **Step 3: Write `models.py`**
@@ -263,7 +263,7 @@ Expected: PASS (4 tests). If `sdl.Entity` rejects extra fields, consult `_digest
 - [ ] **Step 5: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add Pydantic params and SDL entities"
+cd "Apps/WordPress Hub" && git add -A && git commit -m "feat: add Pydantic params and SDL entities"
 ```
 
 ---
@@ -271,8 +271,8 @@ cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add Pydantic p
 ### Task 3: `wp_client.py` — auth, URL normalization, GET wrapper, error mapping
 
 **Files:**
-- Create: `Apps/WP Site Connector/src/wp_client.py`
-- Test: `Apps/WP Site Connector/src/tests/test_wp_client.py`
+- Create: `Apps/WordPress Hub/src/wp_client.py`
+- Test: `Apps/WordPress Hub/src/tests/test_wp_client.py`
 
 **Interfaces:**
 - Produces:
@@ -385,7 +385,7 @@ Expected: PASS (5 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add WordPress REST client helpers"
+cd "Apps/WordPress Hub" && git add -A && git commit -m "feat: add WordPress REST client helpers"
 ```
 
 ---
@@ -393,8 +393,8 @@ cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add WordPress 
 ### Task 4: `storage.py` — site records + credential map
 
 **Files:**
-- Create: `Apps/WP Site Connector/src/storage.py`
-- Test: `Apps/WP Site Connector/src/tests/test_storage.py`
+- Create: `Apps/WordPress Hub/src/storage.py`
+- Test: `Apps/WordPress Hub/src/tests/test_storage.py`
 
 **Interfaces:**
 - Produces (all async, all scoped by `ctx.user.imperal_id` via `ctx.store`):
@@ -499,7 +499,7 @@ Expected: PASS (2 tests). If `ctx.store.create` signature differs (e.g. no `id=`
 - [ ] **Step 5: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add site-record and credential-map storage"
+cd "Apps/WordPress Hub" && git add -A && git commit -m "feat: add site-record and credential-map storage"
 ```
 
 ---
@@ -507,9 +507,9 @@ cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add site-recor
 ### Task 5: `connect_site` — connection-form action (write)
 
 **Files:**
-- Create: `Apps/WP Site Connector/src/handlers_connect.py`
-- Modify: `Apps/WP Site Connector/src/app.py` (import handlers_connect so its decorators register; remove `ping`)
-- Test: `Apps/WP Site Connector/src/tests/test_connect.py`
+- Create: `Apps/WordPress Hub/src/handlers_connect.py`
+- Modify: `Apps/WordPress Hub/src/app.py` (import handlers_connect so its decorators register; remove `ping`)
+- Test: `Apps/WordPress Hub/src/tests/test_connect.py`
 
 **Interfaces:**
 - Produces: `connect_site` registered via `@chat.function(action_type="write", ...)` used only as the panel form action. Validates via `GET /wp-json/wp/v2/users/me`, then `save_site_record` + `set_credential`. Returns `ActionResult.success(Site, refresh_panels=["dashboard"])` or `.error(...)`.
@@ -630,7 +630,7 @@ Expected: 3 tests PASS; validate 0 ERRORs.
 - [ ] **Step 6: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add connect_site form action with credential validation"
+cd "Apps/WordPress Hub" && git add -A && git commit -m "feat: add connect_site form action with credential validation"
 ```
 
 ---
@@ -638,8 +638,8 @@ cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add connect_si
 ### Task 6: `forget_site` — disconnect (destructive)
 
 **Files:**
-- Modify: `Apps/WP Site Connector/src/handlers_connect.py`
-- Test: `Apps/WP Site Connector/src/tests/test_forget.py`
+- Modify: `Apps/WordPress Hub/src/handlers_connect.py`
+- Test: `Apps/WordPress Hub/src/tests/test_forget.py`
 
 **Interfaces:**
 - Produces: `forget_site` via `@chat.function(action_type="destructive", ...)` taking only `SiteIdParams`. Removes the site record and its credential. The KAV confirmation card fires automatically — no manual confirm.
@@ -710,7 +710,7 @@ Expected: 2 tests PASS; validate 0 ERRORs.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add destructive forget_site disconnect"
+cd "Apps/WordPress Hub" && git add -A && git commit -m "feat: add destructive forget_site disconnect"
 ```
 
 ---
@@ -718,9 +718,9 @@ cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add destructiv
 ### Task 7: `list_sites` (read)
 
 **Files:**
-- Create: `Apps/WP Site Connector/src/handlers_read.py`
-- Modify: `Apps/WP Site Connector/src/app.py` (import handlers_read)
-- Test: `Apps/WP Site Connector/src/tests/test_list_sites.py`
+- Create: `Apps/WordPress Hub/src/handlers_read.py`
+- Modify: `Apps/WordPress Hub/src/app.py` (import handlers_read)
+- Test: `Apps/WordPress Hub/src/tests/test_list_sites.py`
 
 **Interfaces:**
 - Produces: `list_sites` via `@chat.function(action_type="read", data_model=sdl.EntityList[Site])` → `ActionResult.success(EntityList[Site])`.
@@ -789,7 +789,7 @@ Expected: PASS; validate 0 ERRORs.
 - [ ] **Step 7: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add list_sites read tool"
+cd "Apps/WordPress Hub" && git add -A && git commit -m "feat: add list_sites read tool"
 ```
 
 ---
@@ -797,8 +797,8 @@ cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add list_sites
 ### Task 8: `list_posts` / `list_pages` / `list_media` (read, shared helper)
 
 **Files:**
-- Modify: `Apps/WP Site Connector/src/handlers_read.py`
-- Test: `Apps/WP Site Connector/src/tests/test_list_content.py`
+- Modify: `Apps/WordPress Hub/src/handlers_read.py`
+- Test: `Apps/WordPress Hub/src/tests/test_list_content.py`
 
 **Interfaces:**
 - Produces: `list_posts`/`list_pages` (`ListContentParams` → `EntityList[Post]`/`EntityList[Page]`), `list_media` (`ListMediaParams` → `EntityList[MediaItem]`). All `action_type="read"`. Internal helper `_authed(ctx, site_id)` → `(base_url, username, app_password)` or raises a handled error.
@@ -936,7 +936,7 @@ Expected: 3 tests PASS; validate 0 ERRORs.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add list_posts/list_pages/list_media read tools"
+cd "Apps/WordPress Hub" && git add -A && git commit -m "feat: add list_posts/list_pages/list_media read tools"
 ```
 
 ---
@@ -944,8 +944,8 @@ cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add list_posts
 ### Task 9: `get_site_health` (read, best-effort + degradation)
 
 **Files:**
-- Modify: `Apps/WP Site Connector/src/handlers_read.py`
-- Test: `Apps/WP Site Connector/src/tests/test_health.py`
+- Modify: `Apps/WordPress Hub/src/handlers_read.py`
+- Test: `Apps/WordPress Hub/src/tests/test_health.py`
 
 **Interfaces:**
 - Produces: `get_site_health(SiteIdParams) -> SiteHealth`. `reachable`/`auth_ok` from `GET /wp-json/wp/v2/users/me`; `content_counts` from `X-WP-Total` headers of posts/pages/media (`per_page=1`); `ssl_valid=True` (request reached over https); `plugin_updates_available`/`php_version` left at the `VNEXT` marker.
@@ -1034,7 +1034,7 @@ Expected: PASS; validate 0 ERRORs.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add best-effort get_site_health with vNext degradation"
+cd "Apps/WordPress Hub" && git add -A && git commit -m "feat: add best-effort get_site_health with vNext degradation"
 ```
 
 ---
@@ -1042,9 +1042,9 @@ cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add best-effor
 ### Task 10: `skeleton.py` — ambient site counts
 
 **Files:**
-- Create: `Apps/WP Site Connector/src/skeleton.py`
-- Modify: `Apps/WP Site Connector/src/app.py` (import skeleton)
-- Test: `Apps/WP Site Connector/src/tests/test_skeleton.py`
+- Create: `Apps/WordPress Hub/src/skeleton.py`
+- Modify: `Apps/WordPress Hub/src/app.py` (import skeleton)
+- Test: `Apps/WordPress Hub/src/tests/test_skeleton.py`
 
 **Interfaces:**
 - Produces: an `@ext.skeleton` handler returning `{"response": {"sites_connected": int}}` (small ambient context). Confirm the exact skeleton return contract (`{"response": {...}}`) and decorator signature in `_digests/02-concepts-a.md` / tutorial.
@@ -1096,7 +1096,7 @@ Expected: PASS; validate 0 ERRORs.
 - [ ] **Step 6: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add ambient site-count skeleton"
+cd "Apps/WordPress Hub" && git add -A && git commit -m "feat: add ambient site-count skeleton"
 ```
 
 ---
@@ -1104,9 +1104,9 @@ cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add ambient si
 ### Task 11: `panels.py` — dashboard, detail, connection form
 
 **Files:**
-- Create: `Apps/WP Site Connector/src/panels.py`
-- Modify: `Apps/WP Site Connector/src/app.py` (import panels)
-- Test: `Apps/WP Site Connector/src/tests/test_panels.py`
+- Create: `Apps/WordPress Hub/src/panels.py`
+- Modify: `Apps/WordPress Hub/src/app.py` (import panels)
+- Test: `Apps/WordPress Hub/src/tests/test_panels.py`
 
 **Interfaces:**
 - Produces three `@ext.panel` handlers: `dashboard` (`slot="left"` — site list + "Connect site" button), `detail` (`slot="center", center_overlay=True` — header + `ui.Tabs` Posts/Pages/Media + health card; returns `ui.Empty()` when no `site_id`), `connect_form` (`slot="center", center_overlay=True` — `ui.Form` with `ui.Input(type="url")`, `ui.Input` username, `ui.Password`, `ui.Tooltip` on every label, submit → `connect_site`).
@@ -1222,7 +1222,7 @@ Expected: 3 tests PASS; validate 0 ERRORs. (If `ui.*` prop names differ, fix per
 - [ ] **Step 6: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add dashboard, detail, and connection-form panels"
+cd "Apps/WordPress Hub" && git add -A && git commit -m "feat: add dashboard, detail, and connection-form panels"
 ```
 
 ---
@@ -1230,7 +1230,7 @@ cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: add dashboard,
 ### Task 12: Wire-up, full validation, and build
 
 **Files:**
-- Modify: `Apps/WP Site Connector/src/app.py` (declare the `wp_credentials` secret; confirm final import order)
+- Modify: `Apps/WordPress Hub/src/app.py` (declare the `wp_credentials` secret; confirm final import order)
 - Test: full suite
 
 **Interfaces:**
@@ -1254,7 +1254,7 @@ ext.secret(
 
 - [ ] **Step 3: Run the full test suite**
 
-Run: `cd "Apps/WP Site Connector/src" && . .venv/bin/activate && pytest -v`
+Run: `cd "Apps/WordPress Hub/src" && . .venv/bin/activate && pytest -v`
 Expected: every test from Tasks 2–11 PASSES (≥1 per `@chat.function`).
 
 - [ ] **Step 4: Validate and build**
@@ -1270,7 +1270,7 @@ Expected: `validate` 0 ERRORs; `build` produces `imperal.json`. Open `imperal.js
 - [ ] **Step 5: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add -A && git commit -m "feat: declare wp_credentials secret and finalize buildable v1 extension"
+cd "Apps/WordPress Hub" && git add -A && git commit -m "feat: declare wp_credentials secret and finalize buildable v1 extension"
 ```
 
 ---

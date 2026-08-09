@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Run all commands from `/Users/vladivanco/Documents/Imperal OS/Apps/WP Site Connector/`
+- Run all commands from `/Users/vladivanco/Documents/Imperal OS/Apps/WordPress Hub/`
 - Use `src/.venv/bin/python` and `src/.venv/bin/imperal` — not system Python
 - TDD: write failing tests first, then implement
 - `imperal build .` + `imperal validate .` → `RESULTS: 0 error(s)` before committing
@@ -80,7 +80,7 @@ async def test_connect_placeholder_absent_when_no_sites():
 - [ ] **Step 2: Run tests to confirm they fail**
 
 ```bash
-cd "/Users/vladivanco/Documents/Imperal OS/Apps/WP Site Connector" && src/.venv/bin/python -m pytest tests/test_panels.py -q 2>&1 | tail -5
+cd "/Users/vladivanco/Documents/Imperal OS/Apps/WordPress Hub" && src/.venv/bin/python -m pytest tests/test_panels.py -q 2>&1 | tail -5
 ```
 
 Expected: 4 failures — assertions not yet satisfied.
@@ -158,7 +158,7 @@ Replace with:
 - [ ] **Step 6: Run all tests**
 
 ```bash
-cd "/Users/vladivanco/Documents/Imperal OS/Apps/WP Site Connector" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
+cd "/Users/vladivanco/Documents/Imperal OS/Apps/WordPress Hub" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
 ```
 
 Expected: `53 passed`.
@@ -166,7 +166,7 @@ Expected: `53 passed`.
 - [ ] **Step 7: Build and validate**
 
 ```bash
-cd "/Users/vladivanco/Documents/Imperal OS/Apps/WP Site Connector" && src/.venv/bin/imperal build . && src/.venv/bin/imperal validate . 2>&1 | grep -E "error|RESULTS"
+cd "/Users/vladivanco/Documents/Imperal OS/Apps/WordPress Hub" && src/.venv/bin/imperal build . && src/.venv/bin/imperal validate . 2>&1 | grep -E "error|RESULTS"
 ```
 
 Expected: `RESULTS: 0 error(s)`.
@@ -174,7 +174,7 @@ Expected: `RESULTS: 0 error(s)`.
 - [ ] **Step 8: Commit**
 
 ```bash
-cd "/Users/vladivanco/Documents/Imperal OS/Apps/WP Site Connector" && git add panels.py handlers_connect.py tests/test_panels.py imperal.json && git commit -m "feat: redesign site card — compact single-row layout, domain name, connect placeholder"
+cd "/Users/vladivanco/Documents/Imperal OS/Apps/WordPress Hub" && git add panels.py handlers_connect.py tests/test_panels.py imperal.json && git commit -m "feat: redesign site card — compact single-row layout, domain name, connect placeholder"
 ```
 
 ---

@@ -136,7 +136,7 @@ async def preview_refund(ctx, params: PreviewRefundParams) -> ActionResult:
     "create_manual_refund",
     description="Record a previously previewed manual WooCommerce refund after explicit confirmation. This does NOT contact the payment gateway and does NOT restock items. Requires the exact remaining amount from preview and a unique idempotency key.",
     action_type="destructive", data_model=RefundOperation,
-    effects=["wc.refund_manual_record"], event="wp-site-connector.create_manual_refund")
+    effects=["wc.refund_manual_record"], event="wordpress-hub.create_manual_refund")
 async def create_manual_refund(ctx, params: CreateRefundParams) -> ActionResult:
     """Record one confirmation-gated, idempotent manual refund."""
     requested, err = _amount(params.amount, "amount", positive=True)

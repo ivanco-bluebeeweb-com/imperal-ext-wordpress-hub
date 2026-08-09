@@ -1,4 +1,4 @@
-# WP Site Connector — UI Components Redesign
+# WordPress Hub — UI Components Redesign
 
 **Date:** 2026-06-18  
 **Scope:** Replace improvised layout primitives in `overview` and `detail` panels with correct SDK components.

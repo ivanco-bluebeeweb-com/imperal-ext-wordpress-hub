@@ -1,4 +1,4 @@
-# WP Site Connector — Card Redesign
+# WordPress Hub — Card Redesign
 
 **Date:** 2026-06-18
 **Scope:** `_site_card` redesign + site name fix + "Connect new site" grid placeholder.

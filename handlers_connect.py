@@ -17,7 +17,7 @@ async def _push_to_sites_registry(ctx, *, domain: str, name: str, connector_ref:
         await ctx.extensions.call(
             "sites-registry", "upsert_site",
             domain=domain, name=name, platform="wordpress",
-            connector_app="wp-site-connector", connector_ref=connector_ref,
+            connector_app="wordpress-hub", connector_ref=connector_ref,
             status=status,
         )
     except Exception as e:
@@ -68,7 +68,7 @@ async def _do_connect_site(ctx, *, url: str, username: str, app_password: str) -
     action_type="write",
     data_model=Site,
     effects=["wp.connect"],
-    event="wp-site-connector.connect_site",
+    event="wordpress-hub.connect_site",
 )
 async def connect_site(ctx, params: ConnectSiteParams) -> ActionResult:
     """Validate WP credentials via /users/me, then persist the site record and Application Password."""
@@ -90,7 +90,7 @@ async def connect_site(ctx, params: ConnectSiteParams) -> ActionResult:
     action_type="write",
     data_model=Site,
     effects=["wp.sync_registry"],
-    event="wp-site-connector.sync_sites_to_registry",
+    event="wordpress-hub.sync_sites_to_registry",
 )
 async def sync_sites_to_registry(ctx, params: _NoParams) -> ActionResult:
     """Reads OUR own connected sites directly from local storage (no IPC needed
@@ -109,7 +109,7 @@ async def sync_sites_to_registry(ctx, params: _NoParams) -> ActionResult:
             await ctx.extensions.call(
                 "sites-registry", "upsert_site",
                 domain=domain, name=r.get("name", domain), platform="wordpress",
-                connector_app="wp-site-connector", connector_ref=r["id"],
+                connector_app="wordpress-hub", connector_ref=r["id"],
                 status=r.get("status", "connected"),
             )
             synced += 1
@@ -151,7 +151,7 @@ async def expose_connect_site_ipc(ctx, url: str = "", username: str = "", app_pa
     action_type="destructive",
     data_model=Site,
     effects=["wp.disconnect"],
-    event="wp-site-connector.forget_site",
+    event="wordpress-hub.forget_site",
 )
 async def forget_site(ctx, params: SiteIdParams) -> ActionResult:
     """Remove the site record and its stored Application Password after user confirmation."""
@@ -183,7 +183,7 @@ async def forget_site(ctx, params: SiteIdParams) -> ActionResult:
     action_type="write",
     data_model=Site,
     effects=["wp.ssh_connect"],
-    event="wp-site-connector.add_ssh",
+    event="wordpress-hub.add_ssh",
 )
 async def add_ssh(ctx, params: AddSSHParams) -> ActionResult:
     """Validate SSH connection + WP-CLI, then store credentials."""
@@ -231,7 +231,7 @@ async def add_ssh(ctx, params: AddSSHParams) -> ActionResult:
     action_type="write",
     data_model=Site,
     effects=["wp.ssh_disconnect"],
-    event="wp-site-connector.remove_ssh",
+    event="wordpress-hub.remove_ssh",
 )
 async def remove_ssh(ctx, params: SiteIdParams) -> ActionResult:
     """Delete stored SSH credentials for the site."""

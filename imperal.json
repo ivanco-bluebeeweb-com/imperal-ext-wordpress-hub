@@ -1,7 +1,7 @@
 {
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
-  "app_id": "wp-site-connector",
+  "app_id": "wordpress-hub",
   "version": "1.8.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
@@ -165,11 +165,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.connect_site",
+      "event": "wordpress-hub.connect_site",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "sync_sites_to_registry",
@@ -281,11 +281,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.sync_sites_to_registry",
+      "event": "wordpress-hub.sync_sites_to_registry",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "forget_site",
@@ -406,11 +406,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.forget_site",
+      "event": "wordpress-hub.forget_site",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "add_ssh",
@@ -567,11 +567,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.add_ssh",
+      "event": "wordpress-hub.add_ssh",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "remove_ssh",
@@ -692,11 +692,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.remove_ssh",
+      "event": "wordpress-hub.remove_ssh",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_sites",
@@ -858,7 +858,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_posts",
@@ -1056,7 +1056,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_pages",
@@ -1254,7 +1254,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_media",
@@ -1432,7 +1432,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "update_media_alt",
@@ -1611,11 +1611,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.update_media_alt",
+      "event": "wordpress-hub.update_media_alt",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "get_site_health",
@@ -1751,7 +1751,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "refresh_site",
@@ -1872,11 +1872,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.refresh_site",
+      "event": "wordpress-hub.refresh_site",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "refresh_all_sites",
@@ -1981,11 +1981,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.refresh_all_sites",
+      "event": "wordpress-hub.refresh_all_sites",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_comments",
@@ -2168,7 +2168,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_scheduled",
@@ -2366,7 +2366,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_users",
@@ -2557,7 +2557,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_plugins",
@@ -2722,7 +2722,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "purge_cache",
@@ -2848,11 +2848,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.purge_cache",
+      "event": "wordpress-hub.purge_cache",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "install_plugin",
@@ -2984,11 +2984,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.install_plugin",
+      "event": "wordpress-hub.install_plugin",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_custom_posts",
@@ -3186,7 +3186,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "get_server_info",
@@ -3340,11 +3340,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.get_server_info",
+      "event": "wordpress-hub.get_server_info",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "get_woocommerce_status",
@@ -3470,7 +3470,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_orders",
@@ -3758,7 +3758,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "get_order",
@@ -3938,7 +3938,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_products",
@@ -4223,7 +4223,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "get_product",
@@ -4413,7 +4413,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_customers",
@@ -4630,7 +4630,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_coupons",
@@ -4921,7 +4921,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_refunds",
@@ -5115,7 +5115,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "get_store_summary",
@@ -5297,7 +5297,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_product_variations",
@@ -5527,7 +5527,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "create_product_variation",
@@ -5815,11 +5815,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.create_product_variation",
+      "event": "wordpress-hub.create_product_variation",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "update_product_variation",
@@ -6092,11 +6092,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.update_product_variation",
+      "event": "wordpress-hub.update_product_variation",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "preview_bulk_variation_change",
@@ -6320,7 +6320,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "apply_bulk_variation_change",
@@ -6550,11 +6550,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.apply_bulk_variation_change",
+      "event": "wordpress-hub.apply_bulk_variation_change",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "preview_csv_catalog_import",
@@ -6724,7 +6724,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "apply_csv_catalog_import",
@@ -6913,11 +6913,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.apply_csv_catalog_import",
+      "event": "wordpress-hub.apply_csv_catalog_import",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "preview_csv_variation_import",
@@ -7092,7 +7092,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "apply_csv_variation_import",
@@ -7286,11 +7286,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.apply_csv_variation_import",
+      "event": "wordpress-hub.apply_csv_variation_import",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_csv_imports",
@@ -7492,7 +7492,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "get_csv_import",
@@ -7645,7 +7645,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "retry_csv_import_failures",
@@ -7814,7 +7814,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "create_product",
@@ -8125,11 +8125,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.create_product",
+      "event": "wordpress-hub.create_product",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "update_product",
@@ -8485,11 +8485,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.update_product",
+      "event": "wordpress-hub.update_product",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "archive_product",
@@ -8677,11 +8677,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.archive_product",
+      "event": "wordpress-hub.archive_product",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_product_categories",
@@ -8873,7 +8873,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "create_product_category",
@@ -9008,11 +9008,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.create_product_category",
+      "event": "wordpress-hub.create_product_category",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "preview_bulk_product_change",
@@ -9238,7 +9238,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "apply_bulk_product_change",
@@ -9470,11 +9470,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.apply_bulk_product_change",
+      "event": "wordpress-hub.apply_bulk_product_change",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "update_order_status",
@@ -9658,11 +9658,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.update_order_status",
+      "event": "wordpress-hub.update_order_status",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "update_order_status_risky",
@@ -9846,11 +9846,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.update_order_status_risky",
+      "event": "wordpress-hub.update_order_status_risky",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "add_private_order_note",
@@ -10000,11 +10000,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.add_private_order_note",
+      "event": "wordpress-hub.add_private_order_note",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "add_customer_order_note",
@@ -10154,11 +10154,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.add_customer_order_note",
+      "event": "wordpress-hub.add_customer_order_note",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "get_customer",
@@ -10306,7 +10306,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "create_customer",
@@ -10482,11 +10482,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.create_customer",
+      "event": "wordpress-hub.create_customer",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "update_customer",
@@ -10690,11 +10690,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.update_customer",
+      "event": "wordpress-hub.update_customer",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_customer_orders",
@@ -10937,7 +10937,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "create_coupon",
@@ -11307,11 +11307,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.create_coupon",
+      "event": "wordpress-hub.create_coupon",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "update_coupon",
@@ -11777,11 +11777,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.update_coupon",
+      "event": "wordpress-hub.update_coupon",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "archive_coupon",
@@ -12001,11 +12001,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.archive_coupon",
+      "event": "wordpress-hub.archive_coupon",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "preview_refund",
@@ -12186,7 +12186,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "create_manual_refund",
@@ -12379,11 +12379,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.create_manual_refund",
+      "event": "wordpress-hub.create_manual_refund",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "preview_order_line_changes",
@@ -12562,7 +12562,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "apply_order_line_changes",
@@ -12747,11 +12747,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.apply_order_line_changes",
+      "event": "wordpress-hub.apply_order_line_changes",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "get_seo_meta",
@@ -12995,7 +12995,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "update_seo_meta",
@@ -13318,11 +13318,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.update_seo_meta",
+      "event": "wordpress-hub.update_seo_meta",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "get_term_seo_meta",
@@ -13566,7 +13566,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "update_term_seo_meta",
@@ -13889,11 +13889,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.update_term_seo_meta",
+      "event": "wordpress-hub.update_term_seo_meta",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "check_seo_support",
@@ -14098,7 +14098,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "get_builder_content",
@@ -14391,7 +14391,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "update_builder_field",
@@ -14638,11 +14638,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.update_builder_field",
+      "event": "wordpress-hub.update_builder_field",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "check_builder_support",
@@ -14773,7 +14773,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "scan_builder_content",
@@ -14945,7 +14945,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "upload_media",
@@ -15135,11 +15135,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.upload_media",
+      "event": "wordpress-hub.upload_media",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "check_media_support",
@@ -15256,7 +15256,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "create_post",
@@ -15724,11 +15724,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.create_post",
+      "event": "wordpress-hub.create_post",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "update_post",
@@ -16220,11 +16220,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.update_post",
+      "event": "wordpress-hub.update_post",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_post_categories",
@@ -16441,7 +16441,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "create_post_category",
@@ -16587,11 +16587,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.create_post_category",
+      "event": "wordpress-hub.create_post_category",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "update_post_category",
@@ -16765,11 +16765,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.update_post_category",
+      "event": "wordpress-hub.update_post_category",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "delete_post_category",
@@ -16886,11 +16886,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.delete_post_category",
+      "event": "wordpress-hub.delete_post_category",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "list_post_tags",
@@ -17093,7 +17093,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "create_post_tag",
@@ -17232,11 +17232,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.create_post_tag",
+      "event": "wordpress-hub.create_post_tag",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "update_post_tag",
@@ -17396,11 +17396,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.update_post_tag",
+      "event": "wordpress-hub.update_post_tag",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "delete_post_tag",
@@ -17517,11 +17517,11 @@
         "type": "object",
         "x-sdl": "entity"
       },
-      "event": "wp-site-connector.delete_post_tag",
+      "event": "wordpress-hub.delete_post_tag",
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "extract_links",
@@ -17818,7 +17818,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     },
     {
       "name": "check_sitemap_inclusion",
@@ -17953,7 +17953,7 @@
       "background": false,
       "long_running": false,
       "scopes": [],
-      "owner_chat_tool": "wp-site-connector"
+      "owner_chat_tool": "wordpress-hub"
     }
   ],
   "signals": [],
@@ -17990,7 +17990,7 @@
       "title": "WP Sites",
       "tree": {},
       "icon": "",
-      "refresh": "on_event:wp-site-connector.connect_site,wp-site-connector.forget_site,wp-site-connector.refresh_site,wp-site-connector.refresh_all_sites,wp-site-connector.add_ssh,wp-site-connector.remove_ssh,wp-site-connector.get_server_info",
+      "refresh": "on_event:wordpress-hub.connect_site,wordpress-hub.forget_site,wordpress-hub.refresh_site,wordpress-hub.refresh_all_sites,wordpress-hub.add_ssh,wordpress-hub.remove_ssh,wordpress-hub.get_server_info",
       "center_overlay": false,
       "default_width": 280,
       "min_width": 200,
@@ -17999,7 +17999,7 @@
     {
       "panel_id": "center",
       "slot": "center",
-      "title": "WP Site Connector",
+      "title": "WordPress Hub",
       "tree": {},
       "icon": "",
       "refresh": "manual",

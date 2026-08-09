@@ -159,7 +159,7 @@ def _post_result(item: dict, *, post_type: str, category_resolved: bool = True,
     action_type="write",
     data_model=PostResult,
     effects=["wp.post_create"],
-    event="wp-site-connector.create_post",
+    event="wordpress-hub.create_post",
 )
 async def create_post(ctx, params: CreatePostParams) -> ActionResult:
     """Create one WordPress post/page, then best-effort write any given SEO fields."""
@@ -295,7 +295,7 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
     action_type="write",
     data_model=PostResult,
     effects=["wp.post_update"],
-    event="wp-site-connector.update_post",
+    event="wordpress-hub.update_post",
 )
 async def update_post(ctx, params: UpdatePostParams) -> ActionResult:
     """Update one WordPress post/page. Only the fields the caller passed are sent."""

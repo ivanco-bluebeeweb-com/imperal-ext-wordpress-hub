@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Run all commands from `Apps/WP Site Connector/` (repo root for this extension).
+- Run all commands from `Apps/WordPress Hub/` (repo root for this extension).
 - Use `src/.venv/bin/python` and `src/.venv/bin/imperal` — not system Python.
 - `imperal validate .` must exit 0 errors before every commit.
 - All tests must pass before every commit.
@@ -82,7 +82,7 @@ async def test_detail_renders_site_content():
 - [ ] **Step 2: Run tests — confirm only the two changed tests fail**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/python -m pytest tests/test_panels.py -v 2>&1 | tail -20
+cd "Apps/WordPress Hub" && src/.venv/bin/python -m pytest tests/test_panels.py -v 2>&1 | tail -20
 ```
 
 Expected: `test_overview_renders_site_cards` FAILS (`AssertionError: assert 'Grid' in ...`), `test_detail_renders_site_content` FAILS (`assert 'Page' in ...`). All other tests PASS.
@@ -90,7 +90,7 @@ Expected: `test_overview_renders_site_cards` FAILS (`AssertionError: assert 'Gri
 - [ ] **Step 3: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add tests/test_panels.py && git commit -m "test: update panel tests to assert correct SDK components (Grid, Stats, DataTable, Page)"
+cd "Apps/WordPress Hub" && git add tests/test_panels.py && git commit -m "test: update panel tests to assert correct SDK components (Grid, Stats, DataTable, Page)"
 ```
 
 ---
@@ -125,7 +125,7 @@ Replace with:
 - [ ] **Step 2: Run the overview test**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/python -m pytest tests/test_panels.py::test_overview_renders_site_cards -v 2>&1
+cd "Apps/WordPress Hub" && src/.venv/bin/python -m pytest tests/test_panels.py::test_overview_renders_site_cards -v 2>&1
 ```
 
 Expected: PASS.
@@ -133,7 +133,7 @@ Expected: PASS.
 - [ ] **Step 3: Run full test suite**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
+cd "Apps/WordPress Hub" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
 ```
 
 Expected: `test_detail_renders_site_content` still fails (Task 3 not done yet), all others pass.
@@ -141,7 +141,7 @@ Expected: `test_detail_renders_site_content` still fails (Task 3 not done yet), 
 - [ ] **Step 4: Validate**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/imperal validate . 2>&1 | grep "RESULTS"
+cd "Apps/WordPress Hub" && src/.venv/bin/imperal validate . 2>&1 | grep "RESULTS"
 ```
 
 Expected: `RESULTS: 0 error(s)`.
@@ -149,7 +149,7 @@ Expected: `RESULTS: 0 error(s)`.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add panels.py && git commit -m "feat: replace manual grid pairs with ui.Grid(columns=2) in overview panel"
+cd "Apps/WordPress Hub" && git add panels.py && git commit -m "feat: replace manual grid pairs with ui.Grid(columns=2) in overview panel"
 ```
 
 ---
@@ -284,7 +284,7 @@ Replace with:
 - [ ] **Step 4: Run the detail test**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/python -m pytest tests/test_panels.py::test_detail_renders_site_content tests/test_panels.py::test_detail_has_back_button -v 2>&1
+cd "Apps/WordPress Hub" && src/.venv/bin/python -m pytest tests/test_panels.py::test_detail_renders_site_content tests/test_panels.py::test_detail_has_back_button -v 2>&1
 ```
 
 Expected: both PASS.
@@ -292,7 +292,7 @@ Expected: both PASS.
 - [ ] **Step 5: Run full test suite**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
+cd "Apps/WordPress Hub" && src/.venv/bin/python -m pytest -q 2>&1 | tail -5
 ```
 
 Expected: all 41 tests PASS.
@@ -300,7 +300,7 @@ Expected: all 41 tests PASS.
 - [ ] **Step 6: Validate and build**
 
 ```bash
-cd "Apps/WP Site Connector" && src/.venv/bin/imperal build . && src/.venv/bin/imperal validate . 2>&1 | grep "RESULTS"
+cd "Apps/WordPress Hub" && src/.venv/bin/imperal build . && src/.venv/bin/imperal validate . 2>&1 | grep "RESULTS"
 ```
 
 Expected: `RESULTS: 0 error(s)`.
@@ -308,7 +308,7 @@ Expected: `RESULTS: 0 error(s)`.
 - [ ] **Step 7: Commit**
 
 ```bash
-cd "Apps/WP Site Connector" && git add panels.py && git commit -m "feat: rebuild detail panel with ui.Page, ui.Stats, ui.DataTable
+cd "Apps/WordPress Hub" && git add panels.py && git commit -m "feat: rebuild detail panel with ui.Page, ui.Stats, ui.DataTable
 
 - ui.Page(title=site_name, subtitle=url) replaces ui.Section wrapper
 - ui.Stats + ui.Stat for health (Reachable/Auth/SSL) and content counts
@@ -327,7 +327,7 @@ cd "Apps/WP Site Connector" && git add panels.py && git commit -m "feat: rebuild
 - [ ] **Step 1: Push to origin**
 
 ```bash
-cd "Apps/WP Site Connector" && git push origin main 2>&1 | tail -3
+cd "Apps/WordPress Hub" && git push origin main 2>&1 | tail -3
 ```
 
 Expected: `main -> main`.
