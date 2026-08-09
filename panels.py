@@ -434,90 +434,96 @@ async def _render_detail(ctx, site_id,
         ssh_btn,
     ])
 
-    # ── Zone 2: Server info (from record, no SSH call) ─
+    # ── Zone 2: Server info (from record; refresh works via Bridge or SSH) ─
     server_section_children = []
-    if has_ssh:
-        wp_ver    = record.get("wp_version")
-        php_ver   = record.get("php_version")
-        db_size   = record.get("db_size_mb")
-        cron_cnt  = record.get("cron_count")
-        n_updates = record.get("pending_updates", 0)
-        plug_list = record.get("plugin_updates_list") or []
-        theme_list = record.get("theme_updates_list") or []
-        last_check = record.get("server_last_checked", "")
+    wp_ver    = record.get("wp_version")
+    php_ver   = record.get("php_version")
+    db_size   = record.get("db_size_mb")
+    cron_cnt  = record.get("cron_count")
+    n_updates = record.get("pending_updates", 0)
+    plug_list = record.get("plugin_updates_list") or []
+    theme_list = record.get("theme_updates_list") or []
+    last_check = record.get("server_last_checked", "")
+    server_source = record.get("server_source", "")
 
-        refresh_server_btn = ui.Button(
-            "Refresh server info", icon="RefreshCw", variant="ghost", size="sm",
-            on_click=ui.Call("get_server_info", site_id=site_id),
+    refresh_server_btn = ui.Button(
+        "Refresh server info", icon="RefreshCw", variant="ghost", size="sm",
+        on_click=ui.Call("get_server_info", site_id=site_id),
+    )
+
+    ssh_error = record.get("ssh_error", "")
+    if not wp_ver:
+        msg = ssh_error if ssh_error else (
+            "No server data yet — reads through the Imperal Bridge plugin if it's installed, "
+            "or falls back to SSH."
         )
+        server_section_children = [
+            ui.Divider(label="Server"),
+            ui.Stack(direction="h", align="center", gap=3, children=[
+                ui.Text(msg),
+                refresh_server_btn,
+            ]),
+        ]
+    else:
+        stat_items = [
+            ui.Stat(label="WordPress", value=wp_ver, color="blue"),
+            ui.Stat(label="PHP",       value=php_ver or "—", color="blue"),
+        ]
+        if db_size:
+            stat_items.append(ui.Stat(label="Database", value=f"{db_size} MB", color="blue"))
+        if cron_cnt is not None:
+            stat_items.append(ui.Stat(label="Cron jobs", value=str(cron_cnt), color="blue"))
 
-        ssh_error = record.get("ssh_error", "")
-        if not wp_ver:
-            msg = ssh_error if ssh_error else "No server data yet."
-            server_section_children = [
-                ui.Divider(label="Server"),
-                ui.Stack(direction="h", align="center", gap=3, children=[
-                    ui.Text(msg),
-                    refresh_server_btn,
-                ]),
-            ]
+        update_items = []
+        if n_updates == 0:
+            update_items.append(
+                ui.Alert(message="All plugins, themes and core are up to date.", type="success")
+            )
         else:
-            stat_items = [
-                ui.Stat(label="WordPress", value=wp_ver, color="blue"),
-                ui.Stat(label="PHP",       value=php_ver or "—", color="blue"),
-            ]
-            if db_size:
-                stat_items.append(ui.Stat(label="Database", value=f"{db_size} MB", color="blue"))
-            if cron_cnt is not None:
-                stat_items.append(ui.Stat(label="Cron jobs", value=str(cron_cnt), color="blue"))
+            if plug_list:
+                update_items += [
+                    ui.Text("Plugin updates", variant="heading"),
+                    ui.DataTable(
+                        columns=[
+                            ui.DataColumn("title",          "Plugin",    sortable=True),
+                            ui.DataColumn("version",        "Current",   sortable=False),
+                            ui.DataColumn("update_version", "Available", sortable=False),
+                        ],
+                        rows=[{"title": p.get("title") or p.get("name", ""),
+                               "version": p.get("version", ""),
+                               "update_version": p.get("update_version", "")}
+                              for p in plug_list],
+                    ),
+                ]
+            if theme_list:
+                update_items += [
+                    ui.Text("Theme updates", variant="heading"),
+                    ui.DataTable(
+                        columns=[
+                            ui.DataColumn("title",          "Theme",     sortable=True),
+                            ui.DataColumn("version",        "Current",   sortable=False),
+                            ui.DataColumn("update_version", "Available", sortable=False),
+                        ],
+                        rows=[{"title": t.get("title") or t.get("name", ""),
+                               "version": t.get("version", ""),
+                               "update_version": t.get("update_version", "")}
+                              for t in theme_list],
+                    ),
+                ]
 
-            update_items = []
-            if n_updates == 0:
-                update_items.append(
-                    ui.Alert(message="All plugins, themes and core are up to date.", type="success")
-                )
-            else:
-                if plug_list:
-                    update_items += [
-                        ui.Text("Plugin updates", variant="heading"),
-                        ui.DataTable(
-                            columns=[
-                                ui.DataColumn("title",          "Plugin",    sortable=True),
-                                ui.DataColumn("version",        "Current",   sortable=False),
-                                ui.DataColumn("update_version", "Available", sortable=False),
-                            ],
-                            rows=[{"title": p.get("title") or p.get("name", ""),
-                                   "version": p.get("version", ""),
-                                   "update_version": p.get("update_version", "")}
-                                  for p in plug_list],
-                        ),
-                    ]
-                if theme_list:
-                    update_items += [
-                        ui.Text("Theme updates", variant="heading"),
-                        ui.DataTable(
-                            columns=[
-                                ui.DataColumn("title",          "Theme",     sortable=True),
-                                ui.DataColumn("version",        "Current",   sortable=False),
-                                ui.DataColumn("update_version", "Available", sortable=False),
-                            ],
-                            rows=[{"title": t.get("title") or t.get("name", ""),
-                                   "version": t.get("version", ""),
-                                   "update_version": t.get("update_version", "")}
-                                  for t in theme_list],
-                        ),
-                    ]
-
-            checked_text = f"Last checked: {last_check[:16].replace('T', ' ')}" if last_check else ""
-            server_section_children = [
-                ui.Divider(label="Server"),
-                ui.Stats(columns=len(stat_items), children=stat_items),
-                *update_items,
-                ui.Stack(direction="h", justify="between", align="center", children=[
-                    ui.Text(checked_text, variant="caption"),
-                    refresh_server_btn,
-                ]),
-            ]
+        checked_text = f"Last checked: {last_check[:16].replace('T', ' ')}" if last_check else ""
+        if server_source:
+            via = "Imperal Bridge" if server_source == "bridge" else "SSH"
+            checked_text = f"{checked_text} · via {via}" if checked_text else f"via {via}"
+        server_section_children = [
+            ui.Divider(label="Server"),
+            ui.Stats(columns=len(stat_items), children=stat_items),
+            *update_items,
+            ui.Stack(direction="h", justify="between", align="center", children=[
+                ui.Text(checked_text, variant="caption"),
+                refresh_server_btn,
+            ]),
+        ]
 
     # ── Content cache + fetch ──────────────────────────
     async def _list(path, params=None):

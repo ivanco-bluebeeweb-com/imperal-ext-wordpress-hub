@@ -787,6 +787,7 @@ class ServerInfo(sdl.Entity):
     core_update_version: str = ""
     cron_count: int = 0
     db_size_mb: str = ""
+    source: str = ""  # "bridge" (no SSH needed) or "ssh" (WP-CLI fallback)
 
 
 class RefreshAllResult(sdl.Entity):

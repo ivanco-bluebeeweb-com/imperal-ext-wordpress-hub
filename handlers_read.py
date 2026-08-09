@@ -842,32 +842,73 @@ async def list_custom_posts(ctx, params: ListCustomPostsParams) -> ActionResult:
                                 summary=f"{len(items)} {params.post_type} item(s)")
 
 
+BRIDGE_SERVER_INFO_PATH = "/wp-json/imperal/v1/server/info"
+
+
+async def _server_info_via_bridge(ctx, base_url: str, username: str, pw: str) -> dict | None:
+    """Try the Imperal Bridge server-info route first -- every fact it returns
+    (core/PHP version, plugin/theme/core updates, cron count, DB size) is
+    plain WordPress core data, so a site with the Bridge installed needs no
+    SSH at all to see it. Returns None (never raises) on 404/unreachable/bad
+    response so the caller can fall back to SSH -- this is a probe, not the
+    only path.
+    """
+    try:
+        r = await wp_get(ctx, base_url, BRIDGE_SERVER_INFO_PATH,
+                         username=username, app_password=pw, params={"_": now_iso()})
+    except Exception:
+        return None
+    if r.status_code != 200 or not isinstance(r.body, dict):
+        return None
+    return r.body
+
+
 @chat.function(
     "get_server_info",
-    description="Get server information for a WordPress site via SSH + WP-CLI: PHP version, WordPress version, available plugin/theme/core updates, cron job count, database size. SSH must be configured first with add_ssh.",
+    description=(
+        "Get server information for a WordPress site: PHP version, WordPress version, "
+        "available plugin/theme/core updates, cron job count, database size. Reads it "
+        "through the Imperal Bridge plugin when installed (no SSH needed at all); falls "
+        "back to SSH + WP-CLI when the Bridge isn't there yet or doesn't answer."
+    ),
     action_type="write",
     data_model=ServerInfo,
     effects=["wp.health_check"],
     event="wordpress-hub.get_server_info",
 )
 async def get_server_info(ctx, params: SiteIdParams) -> ActionResult:
-    """Run WP-CLI commands via SSH and return server/site diagnostics."""
+    """Bridge-first, SSH-fallback: this data never actually required a shell."""
     record = await storage.get_site_record(ctx, params.site_id) or {}
-    cred = await storage.get_ssh_cred(ctx, params.site_id)
-    if not cred:
+    if not record:
         return ActionResult.error(
-            "SSH not configured for this site. Use add_ssh first.", retryable=False
-        )
-    try:
-        info = await wp_cli.get_server_info(cred)
-    except Exception as e:
-        await ctx.log(f"get_server_info: {e}", level="error")
-        return ActionResult.error("SSH connection failed — check credentials.", retryable=True)
+            "No connected site with that id — run list_sites to see the connected sites.",
+            retryable=False, code="SITE_NOT_CONNECTED")
+    pw = await storage.get_credential(ctx, params.site_id)
+    if not pw:
+        return ActionResult.error(
+            "Stored credential is missing — reconnect the site.",
+            retryable=False, code="SITE_CREDENTIAL_MISSING")
 
-    if "error" in info:
-        await storage.save_site_record(ctx, {**record, "ssh_error": info["error"]})
-        return ActionResult.error(f"SSH/WP-CLI error: {info['error']}", retryable=True,
-                                  refresh_panels=["center"])
+    info = await _server_info_via_bridge(ctx, record["url"], record["username"], pw)
+    source = "bridge"
+
+    if info is None:
+        cred = await storage.get_ssh_cred(ctx, params.site_id)
+        if not cred:
+            return ActionResult.error(
+                "Server info needs either the Imperal Bridge plugin installed on the site, "
+                "or SSH configured with add_ssh — neither is available for this site yet.",
+                retryable=False, code="SERVER_INFO_UNAVAILABLE")
+        try:
+            info = await wp_cli.get_server_info(cred)
+        except Exception as e:
+            await ctx.log(f"get_server_info: {e}", level="error")
+            return ActionResult.error("SSH connection failed — check credentials.", retryable=True)
+
+        if "error" in info:
+            await storage.save_site_record(ctx, {**record, "ssh_error": info["error"]})
+            return ActionResult.error(f"SSH/WP-CLI error: {info['error']}", retryable=True)
+        source = "ssh"
 
     result = ServerInfo(
         id=params.site_id,
@@ -882,14 +923,14 @@ async def get_server_info(ctx, params: SiteIdParams) -> ActionResult:
         core_update=info["core_update"],
         core_update_version=info["core_update_version"],
         cron_count=info["cron_count"],
-        db_size_mb=info["db_size_mb"],
+        db_size_mb=str(info["db_size_mb"]) if info["db_size_mb"] not in (None, "") else "",
+        source=source,
     )
     updates = result.plugin_updates + result.theme_updates + (1 if result.core_update else 0)
 
-    # Only persist if we actually got real data (SSH succeeded)
     if not result.wp_version:
         return ActionResult.error(
-            "SSH connected but WP-CLI returned no data — check the WordPress path and WP-CLI installation.",
+            "Server info answered but returned no WordPress version — check the plugin/WP-CLI response.",
             retryable=True,
         )
 
@@ -902,11 +943,14 @@ async def get_server_info(ctx, params: SiteIdParams) -> ActionResult:
         "pending_updates":     updates,
         "plugin_updates_list": info["plugin_updates_list"],
         "theme_updates_list":  info["theme_updates_list"],
+        "server_source":       source,
         "server_last_checked": now_iso(),
+        "ssh_error":           "",
     })
 
     icon = "⚠️" if updates else "✅"
-    summary = f"{icon} WP {result.wp_version} · PHP {result.php_version}"
+    via = "Bridge" if source == "bridge" else "SSH"
+    summary = f"{icon} WP {result.wp_version} · PHP {result.php_version} (via {via})"
     if updates:
         summary += f" · {updates} update(s) available"
     return ActionResult.success(result, summary=summary, refresh_panels=["sidebar", "center"])

@@ -226,6 +226,28 @@ async def _store_panel_ctx(woocommerce=True):
     return ctx
 
 
+async def test_center_detail_shows_server_section_without_ssh_when_bridge_data_present():
+    """Server info gathered via the Bridge (no SSH ever configured) must still
+    render in the detail page — the Server section isn't gated on has_ssh."""
+    ctx = MockContext()
+    await storage.save_site_record(ctx, {
+        "id": "x-com", "name": "X", "url": "https://x.com", "username": "admin",
+        "status": "connected",
+        "wp_version": "6.5.2", "php_version": "8.2.10",
+        "pending_updates": 0, "server_source": "bridge",
+    })
+    await storage.set_credential(ctx, "x-com", "pw")
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/users/me", {"name": "Admin"}, 200)
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/posts", [], 200)
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/pages", [], 200)
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/media", [], 200)
+    node = await panels.center(ctx, view="", site_id="x-com")
+    s = str(node)
+    assert "6.5.2" in s
+    assert "8.2.10" in s
+    assert "Add SSH" in s  # SSH button still offered, but not required for this data
+
+
 async def test_center_store_has_separate_commerce_group():
     ctx = await _store_panel_ctx()
     node = await panels.center(ctx, view="", site_id="shop-com")

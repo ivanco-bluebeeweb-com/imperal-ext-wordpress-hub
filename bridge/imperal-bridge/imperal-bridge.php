@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
- * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, and external-image sideloading to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.0.0
+ * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, and server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
+ * Version:           2.1.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.0.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.1.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server' ),
 		)
 	);
 }
@@ -2221,3 +2221,141 @@ function imperal_media_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_media_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 4 — SERVER (WordPress/PHP versions, updates, cron, DB size)
+ *
+ * Everything here used to require SSH + WP-CLI from the connector side, but
+ * every one of these facts (core/PHP version, pending plugin/theme/core
+ * updates, cron job count, database size) is plain WordPress core data —
+ * get_bloginfo(), PHP_VERSION, get_plugin_updates(), get_theme_updates(),
+ * get_core_updates(), the cron option, and one $wpdb query against
+ * information_schema. None of it needs a shell. SSH stays available as a
+ * fallback for sites that haven't updated this plugin yet, and remains the
+ * only path for actions that truly need a shell (installing a plugin).
+ * ============================================================================= */
+
+define( 'IMPERAL_SERVER_BRIDGE_NAMESPACE', 'imperal/v1' );
+define( 'IMPERAL_SERVER_BRIDGE_VERSION', '1.0.0' );
+
+/**
+ * GET /imperal/v1/server/info — WP-CLI-equivalent server diagnostics without
+ * a shell: core/PHP version, plugin/theme/core update lists, cron job count,
+ * and database size in MB.
+ *
+ * @return WP_REST_Response
+ */
+function imperal_server_bridge_info() {
+	require_once ABSPATH . 'wp-admin/includes/update.php';
+	require_once ABSPATH . 'wp-admin/includes/plugin.php';
+
+	global $wpdb;
+
+	// Plugin updates: get_plugin_updates() returns [plugin_file => object]
+	// with ->Name and ->update->new_version.
+	$plugin_updates      = get_plugin_updates();
+	$plugin_updates_list = array();
+	foreach ( $plugin_updates as $file => $data ) {
+		$plugin_updates_list[] = array(
+			'title'           => isset( $data->Name ) ? $data->Name : $file,
+			'version'         => isset( $data->Version ) ? $data->Version : '',
+			'update_version'  => isset( $data->update->new_version ) ? $data->update->new_version : '',
+		);
+	}
+
+	// Theme updates: get_theme_updates() returns [stylesheet => WP_Theme],
+	// each with its ->update array (set by core to the transient data --
+	// see wp-admin/includes/update.php) carrying 'new_version'.
+	$theme_updates      = get_theme_updates();
+	$theme_updates_list = array();
+	foreach ( $theme_updates as $stylesheet => $theme ) {
+		$new_version = '';
+		if ( isset( $theme->update ) && is_array( $theme->update )
+			&& isset( $theme->update['new_version'] ) ) {
+			$new_version = $theme->update['new_version'];
+		}
+		$theme_updates_list[] = array(
+			'title'          => $theme->get( 'Name' ),
+			'version'        => $theme->get( 'Version' ),
+			'update_version' => $new_version,
+		);
+	}
+
+	// Core update.
+	$core_updates       = get_core_updates();
+	$core_update        = false;
+	$core_update_version = '';
+	if ( is_array( $core_updates ) && ! empty( $core_updates ) ) {
+		$first = $core_updates[0];
+		if ( isset( $first->response ) && 'upgrade' === $first->response ) {
+			$core_update         = true;
+			$core_update_version = isset( $first->current ) ? $first->current : '';
+		}
+	}
+
+	// Cron job count — flatten the cron option's per-timestamp hook arrays.
+	$cron_array = _get_cron_array();
+	$cron_count = 0;
+	if ( is_array( $cron_array ) ) {
+		foreach ( $cron_array as $timestamp => $hooks ) {
+			if ( ! is_array( $hooks ) ) {
+				continue;
+			}
+			foreach ( $hooks as $hook => $events ) {
+				$cron_count += is_array( $events ) ? count( $events ) : 0;
+			}
+		}
+	}
+
+	// Database size in MB — sum data+index length for every table in this DB.
+	$db_size_mb = '';
+	$row        = $wpdb->get_row(
+		$wpdb->prepare(
+			"SELECT SUM(data_length + index_length) AS bytes FROM information_schema.tables WHERE table_schema = %s",
+			DB_NAME
+		)
+	);
+	if ( $row && null !== $row->bytes ) {
+		$db_size_mb = round( ( (float) $row->bytes ) / 1048576, 2 );
+	}
+
+	return rest_ensure_response(
+		array(
+			'bridge'               => true,
+			'bridge_version'       => IMPERAL_SERVER_BRIDGE_VERSION,
+			'wp_version'           => get_bloginfo( 'version' ),
+			'php_version'          => PHP_VERSION,
+			'plugin_updates'       => count( $plugin_updates_list ),
+			'plugin_updates_list'  => $plugin_updates_list,
+			'theme_updates'        => count( $theme_updates_list ),
+			'theme_updates_list'   => $theme_updates_list,
+			'core_update'          => $core_update,
+			'core_update_version'  => $core_update_version,
+			'cron_count'           => $cron_count,
+			'db_size_mb'           => $db_size_mb,
+		)
+	);
+}
+
+/**
+ * Register the REST routes. Gated behind manage_options: this is server-wide
+ * diagnostic data (every plugin's update state, DB size), not per-post
+ * editing, so it needs an admin-capable WordPress user regardless of which
+ * post the acting Application Password could otherwise touch.
+ */
+function imperal_server_bridge_register_routes() {
+	register_rest_route(
+		IMPERAL_SERVER_BRIDGE_NAMESPACE,
+		'/server/info',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_server_bridge_info',
+				'permission_callback' => function () {
+					return current_user_can( 'manage_options' );
+				},
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_server_bridge_register_routes' );
