@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -2165,6 +2165,280 @@
         "x-sdl": "entity-list"
       },
       "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "set_comment_status",
+      "description": "Change a comment's moderation status: 'approved' (publish it), 'hold' (send back to pending moderation), 'spam', or 'trash'. Use list_comments first to find the comment_id.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.comment_status_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "comment_id": {
+            "description": "Numeric WordPress comment id from list_comments",
+            "exclusiveMinimum": 0,
+            "title": "Comment Id",
+            "type": "integer"
+          },
+          "status": {
+            "description": "New status: 'approved' (publish), 'hold' (unapprove/pending), 'spam', or 'trash'",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "comment_id",
+          "status"
+        ],
+        "title": "SetCommentStatusParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "author": {
+            "default": "",
+            "title": "Author",
+            "type": "string"
+          },
+          "snippet": {
+            "default": "",
+            "title": "Snippet",
+            "type": "string"
+          },
+          "post_id": {
+            "default": "",
+            "title": "Post Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Comment",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.set_comment_status",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "reply_to_comment",
+      "description": "Post a reply to an existing comment, as the connected WordPress user. The reply is automatically attached to the same post and nested under the original comment. Use list_comments first to find the comment_id.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.comment_reply"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "comment_id": {
+            "description": "Numeric WordPress comment id being replied to, from list_comments",
+            "exclusiveMinimum": 0,
+            "title": "Comment Id",
+            "type": "integer"
+          },
+          "content": {
+            "description": "Reply text, posted as the connected WordPress user",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "comment_id",
+          "content"
+        ],
+        "title": "ReplyToCommentParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "author": {
+            "default": "",
+            "title": "Author",
+            "type": "string"
+          },
+          "snippet": {
+            "default": "",
+            "title": "Snippet",
+            "type": "string"
+          },
+          "post_id": {
+            "default": "",
+            "title": "Post Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Comment",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.reply_to_comment",
       "background": false,
       "long_running": false,
       "scopes": [],

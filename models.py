@@ -396,6 +396,18 @@ class ListCommentsParams(BaseModel):
     limit: int = Field(default=20, ge=1, le=100, description="Max items to return, 1-100")
 
 
+class SetCommentStatusParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    comment_id: int = Field(gt=0, description="Numeric WordPress comment id from list_comments")
+    status: str = Field(description="New status: 'approved' (publish), 'hold' (unapprove/pending), 'spam', or 'trash'")
+
+
+class ReplyToCommentParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    comment_id: int = Field(gt=0, description="Numeric WordPress comment id being replied to, from list_comments")
+    content: str = Field(min_length=1, max_length=5000, description="Reply text, posted as the connected WordPress user")
+
+
 class ListCustomPostsParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     post_type: str = Field(description="REST base slug of the custom post type, e.g. 'products', 'events', 'portfolio'")

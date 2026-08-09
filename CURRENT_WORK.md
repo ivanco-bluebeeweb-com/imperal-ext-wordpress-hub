@@ -5,6 +5,47 @@
 
 ---
 
+## 2026-08-09 — Full Feature Roadmap + shipped Priority 1: comment moderation (v1.9.0)
+
+**Status:** ✅ implemented and verified (370/370 Python tests pass — 356 pre-existing + 14 new;
+`imperal validate` clean: 89 functions, 0 errors/warnings, 1 harmless info; committed and pushed).
+
+**Why:** user asked for a comprehensive plan of every realistic WP Core / WooCommerce / Rank Math /
+builder / Bridge+SSH capability, to use as the standing roadmap for this app going forward — then
+asked to submit the app for review and start on Priority 1 immediately.
+
+**What was done:**
+- Wrote `docs/2026-08-09-full-feature-roadmap.md` — canonical master plan, mapping all 5 capability
+  layers (WP Core, Rank Math, WooCommerce, page builders, Bridge/SSH) against the 87 functions that
+  existed at the time, with an explicit priority order for what to build next. Linked from
+  `CLAUDE.md`'s Key Specs section as the doc to read before proposing/starting any new feature.
+  Duplicated as a canonical note in the Notes app (`aaf4c105...`) so it's visible from the general
+  memory layer, not just this repo.
+- Implemented Priority 1 — comment moderation, previously 100% read-only:
+  - `set_comment_status(site_id, comment_id, status)` — one parameterized write covering
+    approve/hold/spam/trash, mirroring the WP REST API's own single-`status`-field model rather
+    than four near-duplicate functions.
+  - `reply_to_comment(site_id, comment_id, content)` — creates a reply nested under an existing
+    comment, posted as the connected WP user.
+  - New models `SetCommentStatusParams`, `ReplyToCommentParams` in `models.py`.
+  - Caught and fixed two bugs of my own while writing tests: (a) `reply_to_comment` originally used
+    the file's `_fetch()` helper to read the parent comment, but `_fetch()` is built for list
+    endpoints and silently returns `[]` for a single-object dict body — would have hidden a real
+    404 and then crashed on `.get()`; switched to a direct `wp_get()` call with explicit status
+    handling. (b) both new handlers returned `_authed()`'s error as-is, but in this file `_authed()`
+    returns a bare string on failure (not an `ActionResult`, unlike the same-named helper in
+    `handlers_taxonomy.py`/`handlers_woocommerce.py`) — wrapped it in `ActionResult.error(...)`.
+  - 14 new tests in `tests/test_comment_moderation.py` covering both happy paths, invalid status,
+    missing comment (404), unknown site, empty reply text, and retryable 5xx.
+- Bumped version 1.8.0 → 1.9.0 in `app.py` (source of truth), regenerated `imperal.json` via
+  `imperal build` (never hand-edited — confirmed against CLAUDE.md's explicit rule).
+- Marked Priority 1 done in the roadmap doc itself (status line + priority-order list).
+
+**Next:** Priority 2 — user management (`create_user`/`update_user`/`delete_user`, same REST-wrapper
+pattern as everything else, no Bridge changes needed since `/wp/v2/users` is core).
+
+---
+
 ## 2026-08-06 — Merged the three bridge plugins into ONE ("Imperal Bridge") + sidebar download button
 
 **Status:** ✅ implemented and verified (346/346 Python tests pass; merged PHP plugin lints clean

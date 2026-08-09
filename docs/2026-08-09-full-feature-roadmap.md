@@ -30,15 +30,13 @@ Coverage baseline verified against the actual codebase on 2026-08-09 (grep of al
 | **`set_post_password`** (password-protected post) | ❌ missing — low priority |
 | **Bulk post status change** (publish/draft/trash N posts at once) | ❌ missing — same `apply_bulk_*` + preview pattern we already use for WooCommerce products |
 
-### 1.2 Comments — ⚠️ read-only today, biggest real gap
+### 1.2 Comments — ✅ moderation shipped 2026-08-09 (v1.9.0)
 | Function | Status |
 |---|---|
 | `list_comments` | ✅ done (read-only) |
-| **`approve_comment` / `unapprove_comment`** | ❌ missing |
-| **`mark_comment_spam`** | ❌ missing |
-| **`trash_comment` / `delete_comment`** | ❌ missing |
-| **`reply_to_comment`** (create a comment as site admin) | ❌ missing |
-| **`edit_comment_content`** | ❌ missing (low priority) |
+| **`set_comment_status`** (approve/hold/spam/trash — one parameterized function, matches the WP REST API's own single-field model) | ✅ done |
+| **`reply_to_comment`** (create a comment as site admin) | ✅ done |
+| **`edit_comment_content`** | ❌ missing (low priority — deferred) |
 
 **Why this matters:** comment moderation is one of the most frequent daily WP admin tasks and is
 currently 100% unsupported beyond viewing. This is Priority 1.
@@ -211,9 +209,10 @@ expose them — verify per-feature before assuming a Bridge change is needed.
 
 ## Priority order (what to actually build next, in sequence)
 
-1. **Comment moderation** (1.2) — `approve_comment`, `mark_comment_spam`, `trash_comment`,
-   `reply_to_comment`. Highest daily-use value, zero coverage today, straightforward REST wrapper
-   pattern identical to existing handlers.
+1. ✅ **Comment moderation** (1.2) — DONE 2026-08-09, v1.9.0. Shipped `set_comment_status`
+   (approve/hold/spam/trash — one parameterized function, not four separate ones) and
+   `reply_to_comment`. 14 new tests, full suite 370/370 passing, `imperal validate` clean (89
+   functions, 0 errors/warnings).
 2. **User management** (1.3) — `create_user`, `update_user`, `delete_user`. Same REST-wrapper
    pattern; no Bridge changes needed (`/wp/v2/users` is core).
 3. **Menus & navigation** (1.5) — `list_menus`, `get_menu_items`, `create_menu_item`,
