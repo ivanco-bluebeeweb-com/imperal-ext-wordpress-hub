@@ -5,6 +5,72 @@
 
 ---
 
+## 2026-08-10 — Shipped Priorities 2-7 from the full feature roadmap (87 to 114 functions)
+
+**Status:** implemented and verified (434/434 Python tests pass; PHP `php -l` clean on the updated
+Bridge plugin; pricing merged and applied via `developer.update_pricing`; app suspended, priced,
+resubmitted, back to `pending_review`).
+
+**Why:** direct user request -- add the remaining functionality flagged as missing, record it in
+notes, then run UI/UX tests and rework the connected-site detail screen. This entry covers the
+first half (functionality + notes); UX-sim and detail-screen rework are the next part of this
+same session.
+
+**What was shipped, one module per roadmap priority:**
+- Priority 2 -- Users (`handlers_users.py`, new): `create_user`, `update_user`, `delete_user`
+  (with optional `reassign_to`) via native `/wp/v2/users` -- no Bridge changes needed.
+- Priority 3 -- Menus (`handlers_menus.py`, new): `list_menus`, `list_menu_items`,
+  `create_menu_item`, `update_menu_item`, `delete_menu_item`, `reorder_menu_items` via native
+  `/wp/v2/menus` + `/wp/v2/menu-items` (WP 5.9+) -- confirmed core REST was sufficient.
+- Priority 4 -- Redirects (`handlers_redirects.py`, new): `list_redirects`, `create_redirect`,
+  `delete_redirect`, `set_redirect_status`. Required a genuinely new Bridge section -- Rank Math
+  never exposes its Redirections module over REST. Added Bridge SECTION 5 to
+  `imperal-bridge.php` (bumped 2.1.0 to 2.2.0): reads/writes Rank Math's own
+  `{prefix}rank_math_redirections` table directly (sources array, url_to, header_code, hits,
+  status), clearing Rank Math's own cache table after writes instead of touching its internal
+  classes. Rebuilt `bridge/imperal-bridge.zip` and updated `bridge/imperal-bridge/README.md` to
+  document all 5 sections (was stale at 3).
+- Priority 5 -- Product reviews (`handlers_reviews.py`, new): `list_product_reviews`,
+  `set_product_review_status`, `reply_to_product_review`, reusing the comment-moderation plumbing
+  from the prior session since WooCommerce reviews are `comment_type=review` under the hood.
+- Priority 6 -- Post lifecycle (`handlers_post_lifecycle.py`, new): `delete_post`,
+  `duplicate_post`, `bulk_update_post_status`.
+- Priority 7 -- Site settings (`handlers_site_settings.py`, new): `get_site_settings`,
+  `update_site_settings`, `list_native_plugins`, `activate_plugin`, `deactivate_plugin`,
+  `list_themes` -- all via native `/wp/v2/settings`, `/wp/v2/plugins`, `/wp/v2/themes` (WP 5.5+),
+  no SSH needed. Theme *switching* deliberately not implemented -- there is no core REST route
+  for it.
+
+**Pricing:** merged the 25 new functions into a complete 114-function price map (existing prices
+preserved, nothing wiped) and applied it via `developer.update_pricing` per the standing pricing
+method (suspend, then update_pricing with prices nested under `pricing_config.tool_prices`, never
+`save_pricing`). Prices follow the standing rule -- cost of actual work (REST/SSH call count),
+not risk: 0 for connect/list/forget (front-door), 1 for single-GET reads, 2 for single-write/
+delete calls, 4 for multi-call bulk/preview operations, 6 for CSV import preview/apply (loops over
+up to 100 rows). App was suspended for the price write and resubmitted afterward -- back to
+`pending_review`, same state it was in before.
+
+**Bug investigated per user report (Bridge installed on 3 sites but detail page says "No server
+data yet"):** confirmed via live `get_server_info` calls this is NOT the generic-message bug (that
+was already fixed in a prior commit, `5526375`). The real, current state: g4s.md and
+ksrenovationgroup.com are both stuck on physical Bridge plugin v2.0.0 on the live WordPress sites
+themselves (predates the `/server/info` route added in 2.1.0) -- `climtec.md` is already updated
+and correctly returns server info via the Bridge. The code already distinguishes "Bridge missing"
+from "Bridge outdated" and shows a specific alert with a download link and the detected version
+rather than the generic message -- refresh doesn't "fix" it because refresh can't update a plugin
+file sitting on someone else's server; only actually updating/reinstalling the Bridge plugin on
+those 2 sites (via WP admin Plugins screen, or SSH+WP-CLI if configured) will. Not something this
+codebase can silently work around from here. Documented in note `aaf4c105...` and in this file.
+
+**Notes updated:** appended a dated update block to the canonical roadmap note `aaf4c105...`
+marking Priorities 2-7 done with dates and file names, matching this file and the roadmap doc.
+
+**Not done yet, explicitly next:** the UI/UX simulation pass (protocol note `ea041207...`) on the
+connected-site detail screen, and the resulting redesign/overhaul of that screen -- this is the
+second half of the same user request and the next work in this session.
+
+---
+
 ## 2026-08-09 — Full Feature Roadmap + shipped Priority 1: comment moderation (v1.9.0)
 
 **Status:** ✅ implemented and verified (370/370 Python tests pass — 356 pre-existing + 14 new;

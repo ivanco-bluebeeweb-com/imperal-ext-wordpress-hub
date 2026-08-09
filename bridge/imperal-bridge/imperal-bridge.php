@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, and server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.1.0
+ * Version:           2.2.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.1.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.2.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media', 'server' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects' ),
 		)
 	);
 }
@@ -2359,3 +2359,303 @@ function imperal_server_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_server_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 5 — REDIRECTS (Rank Math's URL redirection module)
+ *
+ * Rank Math never registers its own REST routes for the Redirections module
+ * (verified against seo-by-rank-math 1.0.274.1 — the admin UI talks to
+ * admin-ajax.php, not the REST API), so without a bridge this data is
+ * completely invisible to Imperal, the same problem SECTION 1 solves for
+ * per-post SEO meta. Redirects live in Rank Math's own custom table
+ * ({$wpdb->prefix}rank_math_redirections: id, sources, url_to, header_code,
+ * hits, status, created, updated, last_accessed) rather than wp_postmeta, so
+ * this section talks to that table directly via $wpdb rather than any WP
+ * core object API. `sources` is a serialized array of
+ * {pattern, comparison} pairs — Rank Math's own storage shape, preserved
+ * here rather than reinvented. A companion cache table
+ * ({$wpdb->prefix}rank_math_redirections_cache) memoises URL → redirection
+ * matches for speed; it is purely a rebuildable performance cache (Rank
+ * Math repopulates it lazily on the next unmatched request), so this
+ * section simply clears it after any write rather than depending on
+ * internal Rank Math cache-invalidation classes that may not be loaded.
+ * ============================================================================= */
+
+define( 'IMPERAL_REDIRECTS_BRIDGE_NAMESPACE', 'imperal/v1' );
+define( 'IMPERAL_REDIRECTS_BRIDGE_VERSION', '1.0.0' );
+
+/**
+ * Whether Rank Math's redirections table exists on this site (module may be
+ * disabled, or Rank Math itself may not be installed).
+ *
+ * @return bool
+ */
+function imperal_redirects_bridge_table_exists() {
+	global $wpdb;
+	$table = $wpdb->prefix . 'rank_math_redirections';
+	$found = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+	return $found === $table;
+}
+
+/**
+ * Format one redirections table row for the REST response.
+ *
+ * @param object $row Raw $wpdb row.
+ * @return array
+ */
+function imperal_redirects_bridge_format_row( $row ) {
+	$sources = maybe_unserialize( $row->sources );
+	if ( ! is_array( $sources ) ) {
+		$sources = array();
+	}
+	return array(
+		'id'            => (int) $row->id,
+		'sources'       => $sources,
+		'url_to'        => (string) $row->url_to,
+		'header_code'   => (int) $row->header_code,
+		'hits'          => (int) $row->hits,
+		'status'        => (string) $row->status,
+		'created'       => (string) $row->created,
+		'updated'       => (string) $row->updated,
+		'last_accessed' => (string) $row->last_accessed,
+	);
+}
+
+/**
+ * Clear Rank Math's redirection match cache after any write. It is a pure
+ * performance cache — Rank Math repopulates it lazily on the next request
+ * for a URL it hasn't seen — so truncating it is always safe and avoids a
+ * hard dependency on Rank Math's own (private) cache classes.
+ */
+function imperal_redirects_bridge_clear_cache() {
+	global $wpdb;
+	$cache_table = $wpdb->prefix . 'rank_math_redirections_cache';
+	$found       = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $cache_table ) );
+	if ( $found === $cache_table ) {
+		$wpdb->query( "TRUNCATE TABLE {$cache_table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+}
+
+/**
+ * GET /imperal/v1/redirects — list redirections, optionally filtered by status.
+ *
+ * @param WP_REST_Request $request Incoming request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_redirects_bridge_list( $request ) {
+	if ( ! imperal_redirects_bridge_table_exists() ) {
+		return new WP_Error(
+			'imperal_redirects_not_available',
+			__( 'Rank Math\'s Redirections module does not appear to be enabled on this site.', 'imperal-bridge' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	global $wpdb;
+	$table  = $wpdb->prefix . 'rank_math_redirections';
+	$status = $request->get_param( 'status' );
+
+	if ( $status && 'all' !== $status ) {
+		$rows = $wpdb->get_results(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE status = %s ORDER BY id DESC", $status ) // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		);
+	} else {
+		$rows = $wpdb->get_results( "SELECT * FROM {$table} ORDER BY id DESC" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	$items = array_map( 'imperal_redirects_bridge_format_row', $rows ? $rows : array() );
+	return rest_ensure_response( $items );
+}
+
+/**
+ * POST /imperal/v1/redirects — create a redirection.
+ *
+ * @param WP_REST_Request $request Incoming request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_redirects_bridge_create( $request ) {
+	if ( ! imperal_redirects_bridge_table_exists() ) {
+		return new WP_Error(
+			'imperal_redirects_not_available',
+			__( 'Rank Math\'s Redirections module does not appear to be enabled on this site.', 'imperal-bridge' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	$sources = $request->get_param( 'sources' );
+	$url_to  = (string) $request->get_param( 'url_to' );
+	$code    = (int) $request->get_param( 'header_code' );
+
+	if ( ! is_array( $sources ) || empty( $sources ) || '' === trim( $url_to ) || ! $code ) {
+		return new WP_Error(
+			'imperal_redirects_invalid',
+			__( 'sources (non-empty array), url_to, and header_code are required.', 'imperal-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	global $wpdb;
+	$table = $wpdb->prefix . 'rank_math_redirections';
+	$now   = current_time( 'mysql' );
+
+	$wpdb->insert(
+		$table,
+		array(
+			'sources'     => maybe_serialize( $sources ),
+			'url_to'      => $url_to,
+			'header_code' => $code,
+			'hits'        => 0,
+			'status'      => 'active',
+			'created'     => $now,
+			'updated'     => $now,
+		),
+		array( '%s', '%s', '%d', '%d', '%s', '%s', '%s' )
+	);
+	$id = (int) $wpdb->insert_id;
+	if ( ! $id ) {
+		return new WP_Error(
+			'imperal_redirects_write_failed',
+			__( 'Could not write the redirection.', 'imperal-bridge' ),
+			array( 'status' => 500 )
+		);
+	}
+	imperal_redirects_bridge_clear_cache();
+
+	$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	return rest_ensure_response( imperal_redirects_bridge_format_row( $row ) );
+}
+
+/**
+ * DELETE /imperal/v1/redirects/{id} — permanently delete one redirection.
+ *
+ * @param WP_REST_Request $request Incoming request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_redirects_bridge_delete( $request ) {
+	if ( ! imperal_redirects_bridge_table_exists() ) {
+		return new WP_Error(
+			'imperal_redirects_not_available',
+			__( 'Rank Math\'s Redirections module does not appear to be enabled on this site.', 'imperal-bridge' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	global $wpdb;
+	$table = $wpdb->prefix . 'rank_math_redirections';
+	$id    = (int) $request->get_param( 'id' );
+
+	$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( ! $row ) {
+		return new WP_Error(
+			'imperal_redirects_not_found',
+			__( 'That redirection does not exist.', 'imperal-bridge' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	$wpdb->delete( $table, array( 'id' => $id ), array( '%d' ) );
+	imperal_redirects_bridge_clear_cache();
+
+	return rest_ensure_response( array( 'id' => $id, 'deleted' => true ) );
+}
+
+/**
+ * POST /imperal/v1/redirects/{id}/status — activate/deactivate/trash a redirection.
+ *
+ * @param WP_REST_Request $request Incoming request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_redirects_bridge_set_status( $request ) {
+	if ( ! imperal_redirects_bridge_table_exists() ) {
+		return new WP_Error(
+			'imperal_redirects_not_available',
+			__( 'Rank Math\'s Redirections module does not appear to be enabled on this site.', 'imperal-bridge' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	global $wpdb;
+	$table  = $wpdb->prefix . 'rank_math_redirections';
+	$id     = (int) $request->get_param( 'id' );
+	$status = (string) $request->get_param( 'status' );
+
+	if ( ! in_array( $status, array( 'active', 'inactive', 'trashed' ), true ) ) {
+		return new WP_Error(
+			'imperal_redirects_invalid_status',
+			__( 'status must be one of: active, inactive, trashed.', 'imperal-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( ! $row ) {
+		return new WP_Error(
+			'imperal_redirects_not_found',
+			__( 'That redirection does not exist.', 'imperal-bridge' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	$wpdb->update(
+		$table,
+		array( 'status' => $status, 'updated' => current_time( 'mysql' ) ),
+		array( 'id' => $id ),
+		array( '%s', '%s' ),
+		array( '%d' )
+	);
+	imperal_redirects_bridge_clear_cache();
+	$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	return rest_ensure_response( imperal_redirects_bridge_format_row( $row ) );
+}
+
+/**
+ * Register the redirects REST routes. Gated behind manage_options — Rank
+ * Math itself requires 'manage_options' for its Redirections admin screen,
+ * so an Application Password without it could never do this from wp-admin
+ * either.
+ */
+function imperal_redirects_bridge_register_routes() {
+	register_rest_route(
+		IMPERAL_REDIRECTS_BRIDGE_NAMESPACE,
+		'/redirects',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_redirects_bridge_list',
+				'permission_callback' => function () {
+					return current_user_can( 'manage_options' );
+				},
+			),
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_redirects_bridge_create',
+				'permission_callback' => function () {
+					return current_user_can( 'manage_options' );
+				},
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_REDIRECTS_BRIDGE_NAMESPACE,
+		'/redirects/(?P<id>\d+)',
+		array(
+			'methods'             => WP_REST_Server::DELETABLE,
+			'callback'            => 'imperal_redirects_bridge_delete',
+			'permission_callback' => function () {
+				return current_user_can( 'manage_options' );
+			},
+		)
+	);
+	register_rest_route(
+		IMPERAL_REDIRECTS_BRIDGE_NAMESPACE,
+		'/redirects/(?P<id>\d+)/status',
+		array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => 'imperal_redirects_bridge_set_status',
+			'permission_callback' => function () {
+				return current_user_can( 'manage_options' );
+			},
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_redirects_bridge_register_routes' );

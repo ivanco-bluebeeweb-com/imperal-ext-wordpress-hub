@@ -1,0 +1,213 @@
+"""Rank Math URL redirects: list, create, delete, and change status.
+
+Rank Math never registers REST routes for its own Redirections module (the
+admin UI talks to admin-ajax.php, not the REST API), so this is a genuine
+gap the same way per-post SEO meta was before SECTION 1 of the Imperal
+Bridge existed. This module talks exclusively to Imperal Bridge SECTION 5
+(/wp-json/imperal/v1/redirects) -- there is no stock-WordPress fallback
+tier, because there is no core concept of a redirect for us to fall back
+onto.
+"""
+from imperal_sdk import ActionResult, sdl
+
+from app import chat
+from models import (
+    CreateRedirectParams,
+    DeleteRedirectParams,
+    ListRedirectsParams,
+    Redirect,
+    RedirectDeleteResult,
+    RedirectSource,
+    SetRedirectStatusParams,
+)
+import storage
+from wp_client import wp_error_code, wp_error_message, wp_get, wp_post, wp_request
+
+BRIDGE_PATH = "/wp-json/imperal/v1/redirects"
+
+_INSTALL_HINT = (
+    "Install the Imperal Bridge plugin on the site (bridge/imperal-bridge "
+    "in the connector repo) and make sure Rank Math's Redirections module is enabled."
+)
+
+
+async def _authed(ctx, site_id):
+    record = await storage.get_site_record(ctx, site_id)
+    if not record:
+        return None, ActionResult.error(
+            "No connected site with that id — run list_sites to see the connected sites.",
+            retryable=False, code="SITE_NOT_CONNECTED")
+    pw = await storage.get_credential(ctx, site_id)
+    if not pw:
+        return None, ActionResult.error(
+            "Stored credential is missing — reconnect the site.",
+            retryable=False, code="SITE_CREDENTIAL_MISSING")
+    return (record["url"], record["username"], pw), None
+
+
+def _failure(status_code, body):
+    if isinstance(body, dict):
+        wp_code = body.get("code", "")
+        wp_message = body.get("message", "")
+        if wp_code == "rest_no_route":
+            return ActionResult.error(
+                "This site does not have the Imperal Bridge plugin installed, or it is "
+                "older than the version that adds redirects. " + _INSTALL_HINT,
+                retryable=False, code="REDIRECTS_BRIDGE_MISSING")
+        if wp_code == "imperal_redirects_not_found":
+            return ActionResult.error(
+                wp_message or "No Rank Math redirections table found — is Rank Math "
+                "installed with the Redirections module enabled?",
+                retryable=False, code="REDIRECTS_MODULE_MISSING")
+        if wp_code == "imperal_redirects_item_not_found":
+            return ActionResult.error(
+                wp_message or "No redirect with that id.",
+                retryable=False, code="REDIRECT_NOT_FOUND")
+        if wp_code == "imperal_redirects_invalid":
+            return ActionResult.error(
+                wp_message or "Invalid redirect data.", retryable=False,
+                code="REDIRECT_INVALID")
+        if wp_message:
+            return ActionResult.error(
+                wp_message, retryable=status_code >= 500, code=wp_error_code(status_code))
+    retryable = status_code == 429 or status_code >= 500
+    return ActionResult.error(
+        wp_error_message(status_code), retryable=retryable, code=wp_error_code(status_code))
+
+
+def _redirect_entity(item: dict) -> Redirect:
+    sources = [
+        RedirectSource(pattern=s.get("pattern", ""), comparison=s.get("comparison", "exact"))
+        for s in (item.get("sources") or []) if isinstance(s, dict)
+    ]
+    rid = item.get("id", 0)
+    return Redirect(
+        id=str(rid), title=item.get("url_to", ""), kind="wp_redirect",
+        sources=sources, url_to=item.get("url_to", ""),
+        header_code=int(item.get("header_code", 301) or 301),
+        hits=int(item.get("hits", 0) or 0), status=item.get("status", ""),
+        created=item.get("created", ""), updated=item.get("updated", ""),
+    )
+
+
+@chat.function(
+    "list_redirects",
+    description=(
+        "List Rank Math URL redirects on a site — which old URLs redirect to which new ones, "
+        "with hit counts. Requires the Imperal Bridge plugin and Rank Math's Redirections module."
+    ),
+    action_type="read", data_model=sdl.EntityList[Redirect],
+)
+async def list_redirects(ctx, params: ListRedirectsParams) -> ActionResult:
+    """GET /imperal/v1/redirects."""
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+    q = {} if params.status == "all" else {"status": params.status}
+    r = await wp_get(ctx, base_url, BRIDGE_PATH, username=username, app_password=pw, params=q)
+    if not 200 <= r.status_code < 300:
+        return _failure(r.status_code, r.body)
+    data = r.body if isinstance(r.body, list) else (r.body or {}).get("redirects", [])
+    if not isinstance(data, list):
+        data = []
+    items = [_redirect_entity(item) for item in data]
+    total_hits = sum(i.hits for i in items)
+    return ActionResult.success(
+        sdl.EntityList[Redirect](items=items),
+        summary=f"{len(items)} redirect(s), {total_hits} total hit(s)")
+
+
+@chat.function(
+    "create_redirect",
+    description=(
+        "Create a Rank Math URL redirect: which URL to redirect FROM (source_pattern), where "
+        "TO (url_to), and the HTTP status code (301 permanent, 302 temporary, 410 gone). "
+        "Requires the Imperal Bridge plugin and Rank Math's Redirections module."
+    ),
+    action_type="write", data_model=Redirect,
+    effects=["wp.redirect_create"], event="wordpress-hub.create_redirect",
+)
+async def create_redirect(ctx, params: CreateRedirectParams) -> ActionResult:
+    """POST /imperal/v1/redirects."""
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+    payload = {
+        "sources": [{"pattern": params.source_pattern, "comparison": params.source_comparison}],
+        "url_to": params.url_to,
+        "header_code": params.header_code,
+    }
+    try:
+        r = await wp_post(ctx, base_url, BRIDGE_PATH, username=username, app_password=pw, json=payload)
+    except Exception as e:
+        await ctx.log(f"create_redirect request failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")
+    if not 200 <= r.status_code < 300:
+        return _failure(r.status_code, r.body)
+    body = r.body if isinstance(r.body, dict) else {}
+    return ActionResult.success(
+        _redirect_entity(body), summary=f"Redirect created: {params.source_pattern} → {params.url_to}")
+
+
+@chat.function(
+    "delete_redirect",
+    description="Permanently delete a Rank Math URL redirect by id, from list_redirects.",
+    action_type="write", data_model=RedirectDeleteResult,
+    effects=["wp.redirect_delete"], event="wordpress-hub.delete_redirect",
+)
+async def delete_redirect(ctx, params: DeleteRedirectParams) -> ActionResult:
+    """DELETE /imperal/v1/redirects/{id}."""
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+    try:
+        r = await wp_request(
+            ctx, "delete", base_url, f"{BRIDGE_PATH}/{params.redirect_id}",
+            username=username, app_password=pw)
+    except Exception as e:
+        await ctx.log(f"delete_redirect request failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")
+    if not 200 <= r.status_code < 300:
+        return _failure(r.status_code, r.body)
+    return ActionResult.success(
+        RedirectDeleteResult(id=str(params.redirect_id), title=str(params.redirect_id),
+                             kind="wp_redirect_delete", deleted=True),
+        summary=f"Redirect {params.redirect_id} deleted")
+
+
+@chat.function(
+    "set_redirect_status",
+    description=(
+        "Change a redirect's status: 'active' (live), 'inactive' (paused, does not redirect), "
+        "or 'trashed'. Use list_redirects first to find the redirect_id."
+    ),
+    action_type="write", data_model=Redirect,
+    effects=["wp.redirect_status_update"], event="wordpress-hub.set_redirect_status",
+)
+async def set_redirect_status(ctx, params: SetRedirectStatusParams) -> ActionResult:
+    """POST /imperal/v1/redirects/{id}/status."""
+    status = params.status.strip().lower()
+    if status not in ("active", "inactive", "trashed"):
+        return ActionResult.error(
+            "status must be 'active', 'inactive', or 'trashed'.",
+            retryable=False, code="REDIRECT_INVALID_STATUS")
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+    try:
+        r = await wp_post(
+            ctx, base_url, f"{BRIDGE_PATH}/{params.redirect_id}/status",
+            username=username, app_password=pw, json={"status": status})
+    except Exception as e:
+        await ctx.log(f"set_redirect_status request failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")
+    if not 200 <= r.status_code < 300:
+        return _failure(r.status_code, r.body)
+    body = r.body if isinstance(r.body, dict) else {}
+    result = _redirect_entity(body) if body else Redirect(
+        id=str(params.redirect_id), title=str(params.redirect_id), kind="wp_redirect", status=status)
+    return ActionResult.success(result, summary=f"Redirect {params.redirect_id} is now {status}")

@@ -559,6 +559,111 @@ class WPUser(sdl.Entity):
     registered: str = ""
 
 
+class CreateUserParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    username: str = Field(min_length=1, max_length=60, description="Login username")
+    email: str = Field(min_length=3, max_length=254, description="User's email address")
+    role: str = Field(
+        default="subscriber",
+        description="WordPress role: administrator, editor, author, contributor, or subscriber",
+    )
+    first_name: str = Field(default="", max_length=100, description="Optional first name")
+    last_name: str = Field(default="", max_length=100, description="Optional last name")
+    password: str | None = Field(
+        default=None, min_length=8, max_length=200,
+        description="Optional login password; a strong random one is generated and returned "
+                     "once if omitted (WordPress core requires a password to create a user)",
+    )
+
+
+class UpdateUserParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    user_id: int = Field(gt=0, description="Numeric WordPress user id from list_users")
+    role: str | None = Field(default=None, description="New role: administrator, editor, author, contributor, or subscriber")
+    email: str | None = Field(default=None, description="New email address")
+    first_name: str | None = Field(default=None, description="New first name")
+    last_name: str | None = Field(default=None, description="New last name")
+
+
+class UserCreateResult(sdl.Entity):
+    """Result of create_user -- carries the generated password ONCE, if one was generated."""
+    role: str = ""
+    email: str = ""
+    generated_password: str = Field(
+        default="", description="Only set when no password was supplied; shown once and never stored")
+
+
+class UserDeleteResult(sdl.Entity):
+    deleted: bool = False
+    reassigned_to: str = ""
+
+
+class DeleteUserParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    user_id: int = Field(gt=0, description="Numeric WordPress user id to permanently delete")
+    reassign_to: int | None = Field(
+        default=None,
+        description="Optional user id to reassign this user's posts to; omit to delete their posts too",
+    )
+
+
+# ─────────── native WordPress navigation menus (WP 5.9+ REST: /wp/v2/menus, /wp/v2/menu-items) ───────────
+
+class Menu(sdl.Entity):
+    """One nav_menu taxonomy term -- a named menu, e.g. 'Main Menu'."""
+    locations: str = ""  # comma-separated theme location slugs this menu is assigned to
+    item_count: int = 0
+
+
+class MenuItem(sdl.Entity):
+    """One item (link/page/category) inside a WordPress navigation menu."""
+    menu_id: int = 0
+    parent_id: int = 0
+    url: str = ""
+    menu_order: int = 0
+    object_type: str = ""  # 'custom', 'post_type', 'taxonomy'
+
+
+class ListMenuItemsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    menu_id: int = Field(gt=0, description="Numeric menu id from list_menus")
+
+
+class CreateMenuItemParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    menu_id: int = Field(gt=0, description="Numeric menu id from list_menus to add this item to")
+    title: str = Field(min_length=1, max_length=200, description="Link text shown in the menu")
+    url: str = Field(description="Destination URL, e.g. an existing page/post URL or any external https:// link")
+    parent_id: int = Field(default=0, description="Parent menu item id for a submenu item; 0 for top-level")
+    menu_order: int | None = Field(default=None, description="Optional position within the menu (1-based); appended at the end if omitted")
+
+
+class UpdateMenuItemParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    menu_item_id: int = Field(gt=0, description="Numeric menu item id from list_menu_items")
+    title: str | None = Field(default=None, description="New link text")
+    url: str | None = Field(default=None, description="New destination URL")
+    parent_id: int | None = Field(default=None, description="New parent menu item id; 0 moves it to top-level")
+    menu_order: int | None = Field(default=None, description="New position within the menu")
+
+
+class DeleteMenuItemParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    menu_item_id: int = Field(gt=0, description="Numeric menu item id to permanently remove from the menu")
+
+
+class ReorderMenuItemsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    menu_id: int = Field(gt=0, description="Numeric menu id whose items are being reordered")
+    ordered_item_ids: list[int] = Field(
+        min_length=1, max_length=200,
+        description="ALL top-level menu item ids for this menu, in the desired top-to-bottom order")
+
+
+class MenuItemDeleteResult(sdl.Entity):
+    deleted: bool = False
+
+
 class Plugin(sdl.Entity):
     """One WordPress plugin returned by the read-only WP-CLI inventory."""
     version: str = ""
@@ -1105,6 +1210,165 @@ class PostResult(sdl.Entity):
     category_resolved: bool = True
     tags_not_found: list[str] = Field(default_factory=list)
     featured_media_set: bool = False
+
+
+class DeletePostParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(gt=0, description="Numeric post/page id from list_posts/list_pages")
+    post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug")
+    force: bool = Field(
+        default=False,
+        description="False (default) moves it to Trash, recoverable in WordPress. "
+                    "True permanently deletes it, bypassing Trash — cannot be undone.",
+    )
+
+
+class PostDeleteResult(sdl.Entity):
+    deleted: bool = False
+    trashed: bool = False
+
+
+class DuplicatePostParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(gt=0, description="Numeric post/page id to duplicate, from list_posts/list_pages")
+    post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug")
+    title_suffix: str = Field(default=" (Copy)", description="Text appended to the duplicated title")
+
+
+class BulkUpdatePostStatusParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_ids: list[int] = Field(min_length=1, max_length=50, description="Explicit post/page ids; 1-50, never inferred")
+    post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug — all ids must share this type")
+    status: str = Field(description="New status for every listed post: publish, draft, pending, private, or trash")
+
+
+class BulkPostStatusResult(sdl.Entity):
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
+
+
+# ─────────── WooCommerce product reviews (/wc/v3/products/reviews) ───────────
+
+class ProductReview(sdl.Entity):
+    """One WooCommerce product review -- a comment on the 'product' content type."""
+    product_id: int = 0
+    reviewer: str = ""
+    reviewer_email: str = ""
+    rating: int = 0
+    status: str = ""
+    snippet: str = ""
+    date: str = ""
+
+
+class ListProductReviewsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    product_id: int | None = Field(default=None, description="Optional product id to filter reviews for one product only")
+    status: str = Field(default="hold", description="Review status: 'hold' (pending moderation), 'approved', 'spam', or 'all'")
+    limit: int = Field(default=20, ge=1, le=100, description="Max items to return, 1-100")
+
+
+class SetProductReviewStatusParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    review_id: int = Field(gt=0, description="Numeric review id from list_product_reviews")
+    status: str = Field(description="New status: 'approved' (publish), 'hold' (unapprove/pending), 'spam', or 'trash'")
+
+
+class ReplyToProductReviewParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    review_id: int = Field(gt=0, description="Numeric review id being replied to, from list_product_reviews")
+    content: str = Field(min_length=1, max_length=5000, description="Reply text, posted as the connected WordPress user")
+
+
+# ─────────── native plugin/theme/settings management (/wp/v2/plugins, /wp/v2/themes, /wp/v2/settings — WP 5.5+, no SSH) ───────────
+
+class NativePlugin(sdl.Entity):
+    """One plugin as reported by the native /wp/v2/plugins REST route (requires WP 5.5+)."""
+    plugin: str = ""  # identifier used for activate/deactivate, e.g. 'hello-dolly/hello'
+    version: str = ""
+    status: str = ""  # 'active' or 'inactive'
+    description: str = ""
+
+
+class SetPluginStatusParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    plugin: str = Field(
+        min_length=1, description="Plugin identifier from list_native_plugins, e.g. 'hello-dolly/hello'")
+
+
+class Theme(sdl.Entity):
+    """One installed theme as reported by the native /wp/v2/themes REST route."""
+    stylesheet: str = ""
+    version: str = ""
+    status: str = ""  # 'active' or 'inactive'
+    is_block_theme: bool = False
+
+
+class SiteSettings(sdl.Entity):
+    """Native WordPress site settings (/wp/v2/settings)."""
+    description: str = ""
+    url: str = ""
+    timezone_string: str = ""
+    date_format: str = ""
+    time_format: str = ""
+    start_of_week: int = 0
+    language: str = ""
+
+
+# ─────────── Rank Math redirects (Bridge SECTION 5: /imperal/v1/redirects) ───────────
+
+class RedirectSource(BaseModel):
+    pattern: str = Field(description="URL path or regex pattern to match, e.g. '/old-page/'")
+    comparison: str = Field(default="exact", description="'exact', 'contains', 'start', 'end', or 'regex'")
+
+
+class Redirect(sdl.Entity):
+    """One Rank Math URL redirection."""
+    sources: list[RedirectSource] = Field(default_factory=list)
+    url_to: str = ""
+    header_code: int = 301
+    hits: int = 0
+    status: str = ""  # 'active', 'inactive', 'trashed'
+    created: str = ""
+    updated: str = ""
+
+
+class ListRedirectsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    status: str = Field(default="active", description="'active', 'inactive', 'trashed', or 'all'")
+
+
+class CreateRedirectParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    source_pattern: str = Field(min_length=1, description="URL path to redirect FROM, e.g. '/old-page/'")
+    source_comparison: str = Field(
+        default="exact", description="'exact', 'contains', 'start', 'end', or 'regex'")
+    url_to: str = Field(min_length=1, description="Destination URL to redirect TO")
+    header_code: int = Field(default=301, description="HTTP redirect status code: 301 (permanent), 302 (temporary), 307, or 410 (gone)")
+
+
+class DeleteRedirectParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    redirect_id: int = Field(gt=0, description="Numeric redirect id from list_redirects")
+
+
+class SetRedirectStatusParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    redirect_id: int = Field(gt=0, description="Numeric redirect id from list_redirects")
+    status: str = Field(description="New status: 'active', 'inactive', or 'trashed'")
+
+
+class RedirectDeleteResult(sdl.Entity):
+    deleted: bool = False
+
+
+class UpdateSiteSettingsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    title: str | None = Field(default=None, description="New site title")
+    description: str | None = Field(default=None, description="New site tagline/description")
+    timezone_string: str | None = Field(default=None, description="New timezone, e.g. 'Europe/Chisinau'")
+    date_format: str | None = Field(default=None, description="New PHP date() format string, e.g. 'F j, Y'")
+    time_format: str | None = Field(default=None, description="New PHP date() time format string, e.g. 'g:i a'")
+    start_of_week: int | None = Field(default=None, ge=0, le=6, description="New first day of the week: 0=Sunday .. 6=Saturday")
 
 
 # ─────────── media upload (sideload via Imperal Bridge) ───────────

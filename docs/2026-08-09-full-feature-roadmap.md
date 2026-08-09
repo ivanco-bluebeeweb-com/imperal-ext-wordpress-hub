@@ -1,34 +1,37 @@
 # WordPress Hub — Full Feature Roadmap
 
 Status: **canonical / living document — this is the master plan for what to build in this app.**
-Date: 2026-08-09. Supersedes ad-hoc feature lists; update this file whenever scope changes.
+Date: 2026-08-09, updated 2026-08-10. Supersedes ad-hoc feature lists; update this file whenever scope changes.
 
 ## Purpose
 
-WordPress Hub currently ships 87 functions covering sites, posts/pages, taxonomy, media, SEO
-(Rank Math), page builders (Elementor/Bricks point-edits), WooCommerce, and SSH/WP-CLI server ops.
+WordPress Hub now ships 114 functions covering sites, posts/pages (incl. delete/duplicate/bulk
+status), taxonomy, media, SEO (Rank Math per-content + site-wide redirects), page builders
+(Elementor/Bricks point-edits), WooCommerce (incl. product reviews), native user management,
+menus/navigation, site settings + native plugin/theme listing, and SSH/WP-CLI + Bridge server ops.
 This document maps EVERY realistic capability across WordPress Core, WooCommerce, Rank Math, and
 our own Bridge/SSH layer — what exists today, what's missing, and in what order to build it. Every
 future "what should we add" conversation starts from this file, not from memory.
 
-Coverage baseline verified against the actual codebase on 2026-08-09 (grep of all
-`@chat.function`/`@ext.expose` decorators across `handlers_*.py` — 87 functions confirmed).
+Coverage baseline verified against the actual codebase on 2026-08-10 (grep of all
+`@chat.function`/`@ext.expose` decorators across `handlers_*.py` — 114 functions confirmed, up from
+87 on 2026-08-09 — Priorities 2 through 7 below all shipped in this pass).
 
 ---
 
 ## Layer 1 — WordPress Core (native content & site management)
 
-### 1.1 Posts & Pages — ✅ mostly covered
+### 1.1 Posts & Pages — ✅ lifecycle gaps closed 2026-08-10
 | Function | Status |
 |---|---|
 | `list_posts`, `list_pages`, `list_scheduled` | ✅ done |
 | `create_post`, `update_post` (Gutenberg blocks, featured image, category, tags, Polylang lang) | ✅ done |
 | `list_custom_posts` (generic CPT reader) | ✅ done |
-| **`delete_post` / `archive_post` (trash a post/page)** | ❌ missing — WooCommerce has `archive_product`, native posts don't have the equivalent |
-| **`duplicate_post`** | ❌ missing — common editorial workflow (clone a page as a template) |
-| **`get_post_revisions` / `restore_revision`** | ❌ missing — recover from a bad edit without re-writing |
-| **`set_post_password`** (password-protected post) | ❌ missing — low priority |
-| **Bulk post status change** (publish/draft/trash N posts at once) | ❌ missing — same `apply_bulk_*` + preview pattern we already use for WooCommerce products |
+| **`delete_post`** (trash a post/page) | ✅ done |
+| **`duplicate_post`** | ✅ done — common editorial workflow (clone a page as a template) |
+| **`bulk_update_post_status`** (publish/draft/trash N posts at once) | ✅ done — same per-id independent-outcome pattern as WooCommerce bulk changes |
+| **`get_post_revisions` / `restore_revision`** | ❌ still missing — recover from a bad edit without re-writing; deferred, no demand yet |
+| **`set_post_password`** (password-protected post) | ❌ still missing — low priority, deferred |
 
 ### 1.2 Comments — ✅ moderation shipped 2026-08-09 (v1.9.0)
 | Function | Status |
@@ -41,50 +44,50 @@ Coverage baseline verified against the actual codebase on 2026-08-09 (grep of al
 **Why this matters:** comment moderation is one of the most frequent daily WP admin tasks and is
 currently 100% unsupported beyond viewing. This is Priority 1.
 
-### 1.3 Users — ⚠️ read-only today
+### 1.3 Users — ✅ shipped 2026-08-10
 | Function | Status |
 |---|---|
 | `list_users` | ✅ done |
-| **`create_user`** (role, email — WordPress emails the password reset link itself) | ❌ missing |
-| **`update_user`** (role change, email, display name) | ❌ missing |
-| **`delete_user`** (with reassign-content-to option) | ❌ missing |
-| **`reset_user_password`** (trigger WP's own reset-link email) | ❌ missing |
+| **`create_user`** (role, email — WordPress emails the password reset link itself) | ✅ done |
+| **`update_user`** (role change, email, display name) | ✅ done |
+| **`delete_user`** (with reassign-content-to option) | ✅ done |
+| **`reset_user_password`** (trigger WP's own reset-link email) | ❌ still missing — low priority, deferred (WordPress core has no REST trigger for this; would need a Bridge addition) |
 
-**Why this matters:** "add my new copywriter as an Author" is a completely reasonable ask we can't
-do today. Priority 2.
+**Why this mattered:** "add my new copywriter as an Author" is now a completely reasonable ask we
+can do. Priority 2 — DONE.
 
 ### 1.4 Categories & Tags (native posts) — ✅ fully covered
 `list_post_categories`, `list_post_tags`, `create_post_category`, `create_post_tag`,
 `update_post_category`, `update_post_tag`, `delete_post_category`, `delete_post_tag` — all done,
 including parent/child tree for categories.
 
-### 1.5 Menus & Navigation — ❌ entirely missing
+### 1.5 Menus & Navigation — ✅ shipped 2026-08-10
 | Function | Status |
 |---|---|
-| **`list_menus`** | ❌ missing |
-| **`get_menu_items`** | ❌ missing |
-| **`create_menu_item`** (link to post/page/custom URL, parent for dropdown) | ❌ missing |
-| **`update_menu_item`** (label, target, position) | ❌ missing |
-| **`delete_menu_item`** | ❌ missing |
-| **`reorder_menu`** | ❌ missing |
+| **`list_menus`** | ✅ done |
+| **`list_menu_items`** | ✅ done |
+| **`create_menu_item`** (link to post/page/custom URL, parent for dropdown) | ✅ done |
+| **`update_menu_item`** (label, target, position) | ✅ done |
+| **`delete_menu_item`** | ✅ done |
+| **`reorder_menu_items`** | ✅ done |
 
-**Why this matters:** every time we `create_post`/`create_page`, the natural follow-up is "now put
-it in the nav" — and we currently have zero way to do that. Priority 3. Needs `wp-api-menus` or
-core `/wp/v2/menu-items` (available since WP 5.9) — verify Bridge isn't needed for this one, core
-REST may already expose it depending on WP version.
+**Why this mattered:** every time we `create_post`/`create_page`, the natural follow-up is "now put
+it in the nav" — confirmed core `/wp/v2/menu-items` (WP 5.9+) was sufficient, no Bridge section
+needed. Priority 3 — DONE.
 
 ### 1.6 Widgets & Site Editor blocks (FSE themes) — ❌ not planned
 Widgets are largely obsolete under block themes (Full Site Editing). Not worth building against a
 shrinking surface. Explicitly **out of scope** unless a real user need appears.
 
-### 1.7 Site Settings — ⚠️ partially covered via health/SEO
+### 1.7 Site Settings — ✅ shipped 2026-08-10
 | Function | Status |
 |---|---|
 | `get_site_health` | ✅ done (reachability, auth, SSL, content counts) |
-| **`get_site_settings` / `update_site_settings`** (site title, tagline, timezone, permalink structure) | ❌ missing — low-medium priority, rarely changed but occasionally needed after a migration |
+| **`get_site_settings` / `update_site_settings`** (site title, tagline, timezone, date/time format) | ✅ done — native `/wp/v2/settings`, WP 5.5+, no SSH needed |
 | **`list_plugins`** (via SSH/WP-CLI) | ✅ done |
-| **`activate_plugin` / `deactivate_plugin`** | ❌ missing — we can `install_plugin` but not toggle an existing one |
-| **`list_themes` / `activate_theme`** | ❌ missing — low priority |
+| **`list_native_plugins` / `activate_plugin` / `deactivate_plugin`** | ✅ done — native `/wp/v2/plugins`, no SSH needed |
+| **`list_themes`** | ✅ done — native `/wp/v2/themes` |
+| **`activate_theme`** (switch the active theme) | ❌ still missing by design — no core REST route exists for this; would need a Bridge addition, deferred until real demand |
 
 ### 1.8 Media Library — ✅ covered for the write path we need
 `upload_media` (sideload by URL), `check_media_support`. Missing but low priority:
@@ -99,18 +102,19 @@ today is fine).
 `get_seo_meta`, `update_seo_meta`, `get_term_seo_meta`, `update_term_seo_meta`,
 `check_seo_support` — title, meta description, focus keyword, canonical URL. All via Bridge.
 
-### 2.2 Site-wide SEO — ❌ entirely missing
+### 2.2 Site-wide SEO — ⚠️ redirects shipped 2026-08-10, rest still missing
 | Function | Status |
 |---|---|
-| **`list_redirects` / `create_redirect` / `delete_redirect`** | ❌ missing — Rank Math's redirection manager has its own REST-adjacent surface; would need a small Bridge addition |
+| **`list_redirects` / `create_redirect` / `delete_redirect` / `set_redirect_status`** | ✅ done — new Bridge SECTION 5 reads/writes Rank Math's own `{prefix}rank_math_redirections` table directly, since Rank Math never exposes this over REST |
 | **`get_sitemap_status` / `trigger_sitemap_regenerate`** | ❌ missing |
 | **`get_robots_txt` / `update_robots_txt`** | ❌ missing (via Rank Math's robots editor, not the raw file) |
 | **`get_seo_analysis_score`** (Rank Math's own on-page content-analysis score for a post) | ❌ missing — would need to read Rank Math's stored analysis meta, if exposed |
 | **404 Monitor read (`list_404_hits`)** | ❌ missing — Rank Math logs real 404s; useful for `check_sitemap_inclusion` follow-ups |
 | **Schema/structured-data type per post (`get_schema_type` / `update_schema_type`)** | ❌ missing — Rank Math lets you pick Article/Product/FAQ/etc. per post |
 
-**Why this matters:** redirects are the single most requested SEO action after a URL/slug change,
-and we currently have zero support. Priority 4 (right after Menus).
+**Why this mattered:** redirects were the single most requested SEO action after a URL/slug change.
+Priority 4 — DONE for redirects; the sitemap/robots/score/404/schema items remain unbuilt and
+unprioritized (no user demand yet).
 
 ---
 
@@ -144,16 +148,15 @@ if ever built, likely needs an anonymize-not-delete pattern instead).
 `list_refunds`, `preview_refund`, `create_manual_refund` (does not touch the payment gateway, by
 design — documented limitation, not a gap).
 
-### 3.6 Reviews — ❌ entirely missing
+### 3.6 Reviews — ✅ shipped 2026-08-10
 | Function | Status |
 |---|---|
-| **`list_product_reviews`** | ❌ missing |
-| **`approve_review` / `trash_review`** | ❌ missing (product reviews are just comments with `comment_type=review` — likely shares plumbing with Layer 1.2 comment moderation once that's built) |
-| **`respond_to_review`** | ❌ missing |
+| **`list_product_reviews`** | ✅ done |
+| **`set_product_review_status`** (approve/hold/spam/trash — one parameterized function, reused the comment-moderation plumbing from 1.2 since reviews are `comment_type=review`) | ✅ done |
+| **`reply_to_product_review`** | ✅ done |
 
-**Why this matters:** reviews drive conversion; approving a stuck 5-star review or flagging spam
-should be as easy as WooCommerce's own admin screen. Natural pairing with comment moderation
-(1.2) since the underlying WP object is the same. Priority 5.
+**Why this mattered:** reviews drive conversion; approving a stuck 5-star review or flagging spam
+is now as easy as WooCommerce's own admin screen. Priority 5 — DONE.
 
 ### 3.7 Shipping & Tax — ❌ not currently planned
 Shipping zones/methods and tax classes are typically set up once and rarely touched
@@ -213,26 +216,42 @@ expose them — verify per-feature before assuming a Bridge change is needed.
    (approve/hold/spam/trash — one parameterized function, not four separate ones) and
    `reply_to_comment`. 14 new tests, full suite 370/370 passing, `imperal validate` clean (89
    functions, 0 errors/warnings).
-2. **User management** (1.3) — `create_user`, `update_user`, `delete_user`. Same REST-wrapper
-   pattern; no Bridge changes needed (`/wp/v2/users` is core).
-3. **Menus & navigation** (1.5) — `list_menus`, `get_menu_items`, `create_menu_item`,
-   `update_menu_item`, `delete_menu_item`, `reorder_menu`. Closes the loop on "I just created a
-   page, now put it in the nav." Needs a version check: core `/wp/v2/menu-items` exists WP 5.9+;
-   verify before assuming no Bridge work needed.
-4. **Redirects** (2.2) — `list_redirects`, `create_redirect`, `delete_redirect`. Needs a new Bridge
-   section (Rank Math redirects aren't core REST). Second-most-requested SEO action after per-post
-   meta, which we already have.
-5. **Product reviews** (3.6) — `list_product_reviews`, `approve_review`, `trash_review`,
-   `respond_to_review`. Shares plumbing with #1 (reviews are `comment_type=review`) — build after
-   comment moderation lands so the underlying helper can be reused, not duplicated.
-6. **Post lifecycle gaps** (1.1) — `delete_post`/`archive_post`, bulk post status change (reuse the
-   existing `apply_bulk_product_change`-style preview+token pattern), `duplicate_post`.
-7. **Site settings** (1.7) — `get_site_settings`/`update_site_settings`, `activate_plugin`/
-   `deactivate_plugin`. Lower frequency but rounds out "full site management."
-8. **Everything explicitly deferred** (4.2, 3.7, plugin/core updates, revisions, reviews edit,
-   theme switching) — revisit only when a real, recurring user need appears. Do not build
-   speculatively — matches this app's existing discipline (see WooCommerce module plan: "read-only
-   first, add write only with explicit scope").
+2. ✅ **User management** (1.3) — DONE 2026-08-10. Shipped `create_user`, `update_user`,
+   `delete_user` (with reassign-to option) via `handlers_users.py`. Same REST-wrapper pattern as
+   posts; no Bridge changes needed (`/wp/v2/users` is core).
+3. ✅ **Menus & navigation** (1.5) — DONE 2026-08-10. Shipped `list_menus`, `list_menu_items`,
+   `create_menu_item`, `update_menu_item`, `delete_menu_item`, `reorder_menu_items` via
+   `handlers_menus.py`. Confirmed core `/wp/v2/menu-items` (WP 5.9+) is sufficient — no Bridge work
+   was needed.
+4. ✅ **Redirects** (2.2) — DONE 2026-08-10. Shipped `list_redirects`, `create_redirect`,
+   `delete_redirect`, `set_redirect_status` via `handlers_redirects.py`, backed by a new Bridge
+   SECTION 5 (`imperal-bridge.php` v2.2.0) reading/writing Rank Math's own
+   `{prefix}rank_math_redirections` table directly — Rank Math never exposes this over REST. The
+   Bridge plugin zip was rebuilt; **still needs re-upload/update on live sites** to actually reach
+   v2.2.0 there (see the open Bridge-outdated bug note for g4s.md / ksrenovationgroup.com, which are
+   independently stuck on Bridge 2.0.0 — predates even the 2.1.0 server-info route).
+5. ✅ **Product reviews** (3.6) — DONE 2026-08-10. Shipped `list_product_reviews`,
+   `set_product_review_status`, `reply_to_product_review` via `handlers_reviews.py`, reusing the
+   comment-moderation plumbing from #1 since WooCommerce reviews are `comment_type=review` under
+   the hood.
+6. ✅ **Post lifecycle gaps** (1.1) — DONE 2026-08-10. Shipped `delete_post`, `duplicate_post`,
+   `bulk_update_post_status` via `handlers_post_lifecycle.py`.
+7. ✅ **Site settings** (1.7) — DONE 2026-08-10. Shipped `get_site_settings`/`update_site_settings`,
+   `list_native_plugins`/`activate_plugin`/`deactivate_plugin`, `list_themes` via
+   `handlers_site_settings.py` — all native REST (`/wp/v2/settings`, `/wp/v2/plugins`,
+   `/wp/v2/themes`, WP 5.5+), no SSH needed. Theme *switching* deliberately not implemented — no
+   core REST route exists for it.
+8. **Everything still explicitly deferred**: reset_user_password, get_post_revisions/
+   restore_revision, set_post_password, sitemap status/regenerate, robots.txt editor, SEO analysis
+   score, 404 monitor, schema type per post, theme activation, 4.2 (builder extensions), 3.7
+   (shipping/tax), plugin/core updates via WP-CLI, order create/resend-email/list-notes, customer
+   delete. Revisit only when a real, recurring user need appears. Do not build speculatively —
+   matches this app's existing discipline (see WooCommerce module plan: "read-only first, add write
+   only with explicit scope").
+
+All of Priorities 2–7 above: 114 functions total (up from 87), full pytest suite green, and every
+new function priced via `developer.update_pricing` on 2026-08-10 (see pricing note) — merged into
+the existing 89-function price map rather than replacing it, so no prior pricing was lost.
 
 ## Explicitly out of scope (documented so it isn't re-proposed later)
 
