@@ -248,6 +248,28 @@ async def test_center_detail_shows_server_section_without_ssh_when_bridge_data_p
     assert "Add SSH" in s  # SSH button still offered, but not required for this data
 
 
+async def test_center_detail_shows_bridge_outdated_warning_instead_of_no_data():
+    """When get_server_info recorded bridge_outdated (plugin present but too
+    old for /server/info), the detail page must say so with an update
+    prompt -- not the generic 'No server data yet' message, which sends the
+    user hunting for SSH on a site that already has the Bridge."""
+    ctx = MockContext()
+    await storage.save_site_record(ctx, {
+        "id": "x-com", "name": "X", "url": "https://x.com", "username": "admin",
+        "status": "connected", "bridge_outdated": "2.0.0",
+    })
+    await storage.set_credential(ctx, "x-com", "pw")
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/users/me", {"name": "Admin"}, 200)
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/posts", [], 200)
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/pages", [], 200)
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/media", [], 200)
+    node = await panels.center(ctx, view="", site_id="x-com")
+    s = str(node)
+    assert "2.0.0" in s
+    assert "update" in s.lower()
+    assert "No server data yet" not in s
+
+
 async def test_center_store_has_separate_commerce_group():
     ctx = await _store_panel_ctx()
     node = await panels.center(ctx, view="", site_id="shop-com")

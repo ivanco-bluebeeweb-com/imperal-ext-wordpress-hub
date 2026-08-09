@@ -843,6 +843,7 @@ async def list_custom_posts(ctx, params: ListCustomPostsParams) -> ActionResult:
 
 
 BRIDGE_SERVER_INFO_PATH = "/wp-json/imperal/v1/server/info"
+BRIDGE_WHOLE_STATUS_PATH = "/wp-json/imperal/v1/status"
 
 
 async def _server_info_via_bridge(ctx, base_url: str, username: str, pw: str) -> dict | None:
@@ -861,6 +862,27 @@ async def _server_info_via_bridge(ctx, base_url: str, username: str, pw: str) ->
     if r.status_code != 200 or not isinstance(r.body, dict):
         return None
     return r.body
+
+
+async def _bridge_present_but_outdated(ctx, base_url: str, username: str, pw: str) -> str | None:
+    """Distinguish "no Bridge at all" from "Bridge installed, just an older
+    version that predates the /server/info route" -- the /server/info 404
+    alone can't tell them apart, and conflating them sends the user hunting
+    for SSH credentials on a site that already has the plugin.
+
+    Probes the whole-plugin /status route (present since Bridge 2.0.0, which
+    added the /server/info route in 2.1.0). Returns the installed
+    bridge_version string when the plugin answers, or None if it's genuinely
+    not installed/unreachable.
+    """
+    try:
+        r = await wp_get(ctx, base_url, BRIDGE_WHOLE_STATUS_PATH,
+                         username=username, app_password=pw, params={"_": now_iso()})
+    except Exception:
+        return None
+    if r.status_code != 200 or not isinstance(r.body, dict):
+        return None
+    return str(r.body.get("bridge_version", "")) or "unknown"
 
 
 @chat.function(
@@ -895,6 +917,19 @@ async def get_server_info(ctx, params: SiteIdParams) -> ActionResult:
     if info is None:
         cred = await storage.get_ssh_cred(ctx, params.site_id)
         if not cred:
+            bridge_version = await _bridge_present_but_outdated(
+                ctx, record["url"], record["username"], pw)
+            if bridge_version:
+                await storage.save_site_record(ctx, {
+                    **record, "bridge_outdated": bridge_version, "ssh_error": "",
+                })
+                return ActionResult.error(
+                    f"The Imperal Bridge plugin on this site is version {bridge_version}, "
+                    "which predates the /server/info route (added in 2.1.0). Update the "
+                    "plugin to the latest Imperal Bridge build on the site (Plugins → "
+                    "Imperal Bridge → update, or reinstall from the Bridge zip) — SSH is "
+                    "not needed once it's updated.",
+                    retryable=False, code="SERVER_INFO_BRIDGE_OUTDATED")
             return ActionResult.error(
                 "Server info needs either the Imperal Bridge plugin installed on the site, "
                 "or SSH configured with add_ssh — neither is available for this site yet.",

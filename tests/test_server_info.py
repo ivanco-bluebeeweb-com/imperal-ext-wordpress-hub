@@ -13,6 +13,7 @@ import storage
 from models import SiteIdParams
 
 BRIDGE = "https://x.com/wp-json/imperal/v1/server/info"
+WHOLE_STATUS = "https://x.com/wp-json/imperal/v1/status"
 
 
 async def _ctx():
@@ -122,3 +123,52 @@ async def test_get_server_info_ssh_failure_after_bridge_missing_is_reported(monk
 
     assert result.status == "error"
     assert "Permission denied" in result.error
+
+
+async def test_get_server_info_reports_outdated_bridge_instead_of_ssh_confusion():
+    """/server/info 404s but the plugin DOES answer the whole-plugin /status
+    route (an older Bridge that predates 2.1.0) -- the error must say the
+    plugin needs updating, not vaguely blame missing SSH too. This is the
+    real-world case: Bridge is installed on the site, just an older build."""
+    ctx = await _ctx()
+    ctx.http.mock_get(BRIDGE, {"code": "rest_no_route"}, 404)
+    ctx.http.mock_get(WHOLE_STATUS, {
+        "bridge": True, "bridge_version": "2.0.0", "sections": ["seo", "builder", "media"],
+    }, 200)
+
+    result = await hr.get_server_info(ctx, SiteIdParams(site_id="x-com"))
+
+    assert result.status == "error"
+    assert result.error_code == "SERVER_INFO_BRIDGE_OUTDATED"
+    assert "2.0.0" in result.error
+    assert "update" in result.error.lower()
+
+    record = await storage.get_site_record(ctx, "x-com")
+    assert record["bridge_outdated"] == "2.0.0"
+
+
+async def test_get_server_info_outdated_bridge_check_skipped_when_ssh_configured(monkeypatch):
+    """If SSH is already configured, the SSH fallback runs directly -- the
+    /status outdated-bridge probe is only needed when SSH is NOT an option,
+    to give a better error message than a bare 'neither available'."""
+    ctx = await _ctx()
+    ctx.http.mock_get(BRIDGE, {"code": "rest_no_route"}, 404)
+    await storage.set_ssh_cred(ctx, "x-com", {
+        "host": "ssh.x.com", "port": 22, "user": "deploy",
+        "wp_path": "/var/www/html", "key": "test-key",
+    })
+
+    async def fake_get_server_info(_cred):
+        return {
+            "wp_version": "6.4.0", "php_version": "8.1.0",
+            "plugin_updates": 0, "plugin_updates_list": [],
+            "theme_updates": 0, "theme_updates_list": [],
+            "core_update": False, "core_update_version": "",
+            "cron_count": 3, "db_size_mb": "10",
+        }
+
+    monkeypatch.setattr(hr.wp_cli, "get_server_info", fake_get_server_info)
+    result = await hr.get_server_info(ctx, SiteIdParams(site_id="x-com"))
+
+    assert result.status == "success"
+    assert result.data.source == "ssh"

@@ -452,18 +452,38 @@ async def _render_detail(ctx, site_id,
     )
 
     ssh_error = record.get("ssh_error", "")
+    bridge_outdated = record.get("bridge_outdated", "")
     if not wp_ver:
-        msg = ssh_error if ssh_error else (
-            "No server data yet — reads through the Imperal Bridge plugin if it's installed, "
-            "or falls back to SSH."
-        )
-        server_section_children = [
-            ui.Divider(label="Server"),
-            ui.Stack(direction="h", align="center", gap=3, children=[
-                ui.Text(msg),
-                refresh_server_btn,
-            ]),
-        ]
+        if bridge_outdated:
+            server_section_children = [
+                ui.Divider(label="Server"),
+                ui.Alert(
+                    message=(
+                        f"Imperal Bridge on this site is version {bridge_outdated} — too old for "
+                        "server info (added in 2.1.0). Update the plugin on the site (Plugins → "
+                        "Imperal Bridge → update, or reinstall from the zip below); SSH is not "
+                        "needed once it's updated."
+                    ),
+                    type="warning",
+                ),
+                ui.Stack(direction="h", align="center", gap=3, children=[
+                    ui.Button("Download latest Imperal Bridge", icon="Download",
+                              variant="ghost", size="sm", on_click=ui.Open(BRIDGE_DOWNLOAD_URL)),
+                    refresh_server_btn,
+                ]),
+            ]
+        else:
+            msg = ssh_error if ssh_error else (
+                "No server data yet — reads through the Imperal Bridge plugin if it's installed, "
+                "or falls back to SSH."
+            )
+            server_section_children = [
+                ui.Divider(label="Server"),
+                ui.Stack(direction="h", align="center", gap=3, children=[
+                    ui.Text(msg),
+                    refresh_server_btn,
+                ]),
+            ]
     else:
         stat_items = [
             ui.Stat(label="WordPress", value=wp_ver, color="blue"),
