@@ -5,6 +5,32 @@
 
 ---
 
+## 2026-08-10 (cont'd, even later) — Media sub-tab rework: upload form + alt-text editing
+
+**Status:** implemented, tested, deployed. Full suite 498/498 pass (was 494). `imperal validate`
+clean: 123 functions (was 122), 0 errors/0 warnings/1 info. Version 1.12.0 -> 1.13.0.
+
+**Why:** UI/UX pass on the connected-site detail screen (standing user rule) surfaced one real
+remaining gap — the Media sub-tab was still a plain read-only `DataTable` (title + mime type only)
+even though `upload_media` (sideload an image by URL) and `update_media_alt` (fix alt text) already
+existed as fully-built, priced write handlers with zero UI path, exactly the same pattern already
+fixed for Comments/Users/Posts/Reviews/Customers/Orders/Products/Coupons/Categories.
+
+**Shipped:**
+- New `set_single_media_alt` handler + `SetSingleMediaAltParams` model — a thin single-item wrapper
+  around the existing bulk `update_media_alt` (which takes a `items: list[MediaAltItem]`, not
+  representable as a flat panel Form). Always overwrites (unlike the bulk default's skip-if-set),
+  because a human editing one row's text field expects it to save.
+- New `_media_management_block` in panels.py, replacing the media branch of `_render_content_table`:
+  an "Add image from URL" card (`upload_media`) plus a per-row alt-text form pre-filled with the
+  current value, with a "no alt text" meta flag on rows missing it.
+- Updated the now-stale panel test (`test_media_tab_still_uses_plain_table_not_lifecycle_actions`)
+  to actually assert the new write UI is present, plus a new error-state test.
+- 3 new handler tests (`set_single_media_alt` success/unknown-site/server-failure) in
+  `tests/test_media_alt.py`.
+- Roadmap doc corrected: Media Library section now lists `update_media_alt`/`set_single_media_alt`
+  and marks the panel wiring done.
+
 ## 2026-08-10 (cont'd, latest) — edit_comment_content + roadmap cleanup
 
 **Status:** implemented, tested, deployed. Full suite 494/494 pass (was 490). `imperal validate`

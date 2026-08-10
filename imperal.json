@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -1612,6 +1612,165 @@
         "x-sdl": "entity"
       },
       "event": "wordpress-hub.update_media_alt",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "set_single_media_alt",
+      "description": "Set the alt text of ONE media library image — a single-item convenience wrapper around update_media_alt for cases with just one attachment to fix (e.g. a form on the Media panel). Always overwrites, unlike the bulk version's default skip-if-already-set behaviour.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.media_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "description": "Single-item convenience wrapper around update_media_alt — the panel UI can only submit a\nflat form per row, not a nested items[] list, so this feeds one {media_id, alt_text} through.",
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "media_id": {
+            "description": "WordPress media library attachment id, from list_media",
+            "title": "Media Id",
+            "type": "integer"
+          },
+          "alt_text": {
+            "description": "Alt text to store on this attachment — always overwrites",
+            "minLength": 1,
+            "title": "Alt Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "media_id",
+          "alt_text"
+        ],
+        "title": "SetSingleMediaAltParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of one update_media_alt call: what changed, what was left alone.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "skipped_existing": {
+            "default": 0,
+            "title": "Skipped Existing",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "skipped_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Skipped Ids",
+            "type": "array"
+          },
+          "failures": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failures",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "MediaAltResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.set_single_media_alt",
       "background": false,
       "long_running": false,
       "scopes": [],

@@ -407,6 +407,14 @@ class UpdateMediaAltParams(BaseModel):
                      "human's wording is never clobbered. Set true to replace existing alt too."))
 
 
+class SetSingleMediaAltParams(BaseModel):
+    """Single-item convenience wrapper around update_media_alt — the panel UI can only submit a
+    flat form per row, not a nested items[] list, so this feeds one {media_id, alt_text} through."""
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    media_id: int = Field(description="WordPress media library attachment id, from list_media")
+    alt_text: str = Field(min_length=1, description="Alt text to store on this attachment — always overwrites")
+
+
 class _NoParams(BaseModel):
     pass
 

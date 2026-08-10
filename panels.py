@@ -424,6 +424,55 @@ def _posts_management_block(items, tab, site_id):
     return ui.List(items=[_row(it) for it in items])
 
 
+# ── Media library (upload by URL + alt text) ────────────────────────────────────
+# upload_media/update_media_alt existed as chat-tools only; the Media sub-tab
+# was a plain read-only DataTable (title + mime type) despite full write
+# support already being built and priced. set_single_media_alt is a thin
+# per-row wrapper around update_media_alt's items[] shape, since a panel Form
+# can only submit flat fields, not a nested list.
+
+def _media_management_block(items, site_id):
+    upload_form = ui.Card(title="Add image from URL", content=ui.Form(
+        action="upload_media", submit_label="Add to media library",
+        defaults={"site_id": site_id},
+        children=[
+            ui.Input(param_name="source_url", placeholder="https://example.com/image.jpg"),
+            ui.Input(param_name="alt_text", placeholder="Alt text (optional)"),
+            ui.Input(param_name="caption", placeholder="Caption (optional)"),
+        ],
+    ))
+    if items is None:
+        return ui.Stack(gap=3, children=[
+            ui.Alert(message="Could not load media library — check the connection.", type="error"),
+            upload_form,
+        ])
+    if not items:
+        return ui.Stack(gap=3, children=[ui.Empty(message="No media found."), upload_form])
+
+    def _row(it):
+        mid = it.get("id")
+        alt = it.get("alt_text") or ""
+        alt_form = ui.Form(
+            action="set_single_media_alt", submit_label="Save alt text",
+            defaults={"site_id": site_id, "media_id": mid},
+            children=[ui.Input(param_name="alt_text", value=alt,
+                               placeholder="Describe this image for screen readers / Google Images")],
+        )
+        return ui.ListItem(
+            id=str(mid), title=wp_title(it),
+            subtitle=it.get("mime_type", ""),
+            meta=("no alt text" if not alt.strip() else alt[:60]),
+            badge=(ui.Badge(label="missing alt", color="yellow") if not alt.strip() else None),
+            expandable=True,
+            expanded_content=[ui.Card(title="Alt text", content=alt_form)],
+        )
+
+    return ui.Stack(gap=3, children=[
+        ui.List(items=[_row(it) for it in items]),
+        upload_form,
+    ])
+
+
 # ── Product reviews (WooCommerce) moderation ───────────────────────────────────
 # list_product_reviews/set_product_review_status/reply_to_product_review existed
 # as chat-tools only; store owners had no click path to moderate the reviews
@@ -746,12 +795,6 @@ def _render_content_table(items, tab):
                 ui.DataColumn("slug", "Slug", sortable=True)]
         rows = [{"name": it.get("name", ""), "count": str(it.get("count", 0)),
                  "slug": it.get("slug", "")} for it in items]
-        return ui.DataTable(columns=cols, rows=rows)
-
-    if tab == "media":
-        cols = [ui.DataColumn("title", "Title", sortable=True),
-                ui.DataColumn("type",  "Type",  sortable=True)]
-        rows = [{"title": wp_title(it), "type": it.get("mime_type", "")} for it in items]
         return ui.DataTable(columns=cols, rows=rows)
 
     if tab == "comments":
@@ -1572,9 +1615,12 @@ async def _render_detail(ctx, site_id,
             ])
 
     else:  # standard (default)
-        std_body = (_posts_management_block(content_map.get(std_tab), std_tab, site_id)
-                   if std_tab in ("posts", "pages")
-                   else _render_content_table(content_map.get(std_tab), std_tab))
+        if std_tab in ("posts", "pages"):
+            std_body = _posts_management_block(content_map.get(std_tab), std_tab, site_id)
+        elif std_tab == "media":
+            std_body = _media_management_block(content_map.get("media"), site_id)
+        else:
+            std_body = _render_content_table(content_map.get(std_tab), std_tab)
         active_content = ui.Stack(gap=3, children=[
             ui.Stack(direction="h", gap=1, children=[
                 _item_btn("Posts", "posts", std_tab, "std_tab"),

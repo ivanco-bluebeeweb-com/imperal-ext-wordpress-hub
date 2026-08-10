@@ -8,7 +8,8 @@ from models import (_NoParams, Site, ListContentParams, ListMediaParams,
                     EditCommentContentParams,
                     ListCustomPostsParams, Comment, WPUser, Plugin,
                     PurgeCacheParams, CacheActionResult, InstallPluginParams, PluginInstallResult,
-                    ServerInfo, UpdateMediaAltParams, MediaAltResult)
+                    ServerInfo, UpdateMediaAltParams, MediaAltResult,
+                    MediaAltItem, SetSingleMediaAltParams)
 import wp_cli
 from wp_client import wp_get, wp_post, wp_request, wp_error_message, wp_error_code, wp_title, now_iso
 import storage
@@ -328,6 +329,28 @@ async def update_media_alt(ctx, params: UpdateMediaAltParams) -> ActionResult:
             retryable=True, code="MEDIA_ALL_FAILED")
 
     return ActionResult.success(result, summary=", ".join(bits), refresh_panels=["center"])
+
+
+@chat.function(
+    "set_single_media_alt",
+    description=(
+        "Set the alt text of ONE media library image — a single-item convenience "
+        "wrapper around update_media_alt for cases with just one attachment to fix "
+        "(e.g. a form on the Media panel). Always overwrites, unlike the bulk "
+        "version's default skip-if-already-set behaviour."
+    ),
+    action_type="write",
+    data_model=MediaAltResult,
+    effects=["wp.media_update"],
+    event="wordpress-hub.set_single_media_alt",
+)
+async def set_single_media_alt(ctx, params: SetSingleMediaAltParams) -> ActionResult:
+    """Thin wrapper: reuse update_media_alt's single-item, overwrite=True path."""
+    return await update_media_alt(ctx, UpdateMediaAltParams(
+        site_id=params.site_id,
+        items=[MediaAltItem(media_id=params.media_id, alt_text=params.alt_text)],
+        overwrite=True,
+    ))
 
 
 @chat.function("get_site_health", description="Report read-only health for a connected WordPress site.",

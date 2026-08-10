@@ -9,7 +9,8 @@ from imperal_sdk.testing import MockContext
 import app  # noqa: F401
 import handlers_read as hr
 import storage
-from models import ListMediaParams, ListOrdersParams, UpdateMediaAltParams, MediaAltItem
+from models import (ListMediaParams, ListOrdersParams, UpdateMediaAltParams, MediaAltItem,
+                    SetSingleMediaAltParams)
 
 
 async def _connected_ctx():
@@ -139,3 +140,33 @@ async def test_list_orders_keeps_its_own_params_model():
     """Regression: orders once shared ListMediaParams and inherited media fields."""
     assert "missing_alt_only" not in ListOrdersParams.model_fields
     assert "missing_alt_only" in ListMediaParams.model_fields
+
+
+# --- set_single_media_alt (panel per-row wrapper) ---------------------------
+
+async def test_set_single_media_alt_writes_even_over_existing():
+    """Unlike the bulk default, the single-item panel form always overwrites --
+    a human editing one row's alt text field expects it to save, not skip."""
+    ctx = await _connected_ctx()
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/media/9", {"id": 9, "alt_text": "old wording"}, 200)
+    ctx.http.mock_post("https://x.com/wp-json/wp/v2/media/9", {"id": 9, "alt_text": "new wording"}, 200)
+    r = await hr.set_single_media_alt(ctx, SetSingleMediaAltParams(
+        site_id="x-com", media_id=9, alt_text="new wording"))
+    assert r.status == "success"
+    assert r.data.updated == 1 and r.data.updated_ids == [9]
+
+
+async def test_set_single_media_alt_unknown_site_errors():
+    ctx = await _connected_ctx()
+    r = await hr.set_single_media_alt(ctx, SetSingleMediaAltParams(
+        site_id="missing", media_id=9, alt_text="x"))
+    assert r.status == "error"
+
+
+async def test_set_single_media_alt_server_failure_reports_error():
+    ctx = await _connected_ctx()
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/media/9", {"id": 9, "alt_text": ""}, 200)
+    ctx.http.mock_post("https://x.com/wp-json/wp/v2/media/9", {}, 500)
+    r = await hr.set_single_media_alt(ctx, SetSingleMediaAltParams(
+        site_id="x-com", media_id=9, alt_text="x"))
+    assert r.status == "error"

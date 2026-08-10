@@ -583,8 +583,10 @@ async def test_posts_tab_has_publish_duplicate_delete_actions():
     assert "set_post_password" in s
 
 
-async def test_media_tab_still_uses_plain_table_not_lifecycle_actions():
-    """Media has no post lifecycle -- must stay on the plain read-only table."""
+async def test_media_tab_has_upload_form_and_alt_text_editing():
+    """Media used to be a plain read-only DataTable (title + mime type) despite
+    upload_media/update_media_alt already existing as full write handlers --
+    this confirms the rework wires both into the panel."""
     ctx = MockContext()
     await storage.save_site_record(ctx, {"id": "blog-com", "name": "Blog",
                                          "url": "https://blog.com", "username": "admin",
@@ -595,13 +597,36 @@ async def test_media_tab_still_uses_plain_table_not_lifecycle_actions():
     ctx.http.mock_get("https://blog.com/wp-json/wp/v2/posts", [], 200)
     ctx.http.mock_get("https://blog.com/wp-json/wp/v2/pages", [], 200)
     ctx.http.mock_get("https://blog.com/wp-json/wp/v2/media",
-                      [{"id": 5, "title": {"rendered": "logo.png"}, "mime_type": "image/png"}], 200)
+                      [{"id": 5, "title": {"rendered": "logo.png"}, "mime_type": "image/png",
+                        "alt_text": ""}], 200)
     ctx.http.mock_get("https://blog.com/wp-json/wc/v3/orders", {"code": "rest_no_route"}, 404)
     node = await panels.center(ctx, view="", site_id="blog-com",
                                group_tab="standard", std_tab="media")
     s = str(node)
     assert "logo.png" in s
-    assert "duplicate_post" not in s
+    assert "duplicate_post" not in s   # media has no post lifecycle, unlike posts/pages
+    assert "upload_media" in s
+    assert "set_single_media_alt" in s
+    assert "no alt text" in s   # missing-alt indicator on the row itself
+
+
+async def test_media_tab_shows_error_alert_when_load_fails():
+    ctx = MockContext()
+    await storage.save_site_record(ctx, {"id": "blog-com", "name": "Blog",
+                                         "url": "https://blog.com", "username": "admin",
+                                         "status": "connected"})
+    await storage.set_credential(ctx, "blog-com", "pw")
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/types", {}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/taxonomies", {}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/posts", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/pages", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/media", {}, 500)
+    ctx.http.mock_get("https://blog.com/wp-json/wc/v3/orders", {"code": "rest_no_route"}, 404)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="standard", std_tab="media")
+    s = str(node)
+    assert "Could not load media library" in s
+    assert "upload_media" in s   # the upload form still offers a way forward
 
 
 # ── Commerce tab rework: product Reviews moderation ─────────────────────────────

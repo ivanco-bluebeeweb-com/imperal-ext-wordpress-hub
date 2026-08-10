@@ -92,9 +92,11 @@ shrinking surface. Explicitly **out of scope** unless a real user need appears.
 | **`activate_theme`** (switch the active theme) | ❌ still missing by design — no core REST route exists for this; would need a Bridge addition, deferred until real demand |
 
 ### 1.8 Media Library — ✅ covered for the write path we need
-`upload_media` (sideload by URL), `check_media_support`. Missing but low priority:
-**`delete_media`**, **`list_media` filters by mime type** (already returns all, filtering client-side
-today is fine).
+`upload_media` (sideload by URL), `check_media_support`, `update_media_alt`/`set_single_media_alt`
+(alt text). ✅ done 2026-08-10 — the Media sub-tab was a plain read-only table despite full write
+support already existing; it's now a list with an "Add image from URL" form and a per-row alt-text
+form (missing alt flagged inline). Missing but low priority: **`delete_media`**, **`list_media`
+filters by mime type** (already returns all, filtering client-side today is fine).
 
 ---
 
