@@ -6,7 +6,7 @@ from imperal_sdk.testing import MockContext
 import app  # noqa: F401
 import handlers_read as hr
 import storage
-from models import SetCommentStatusParams, ReplyToCommentParams
+from models import SetCommentStatusParams, ReplyToCommentParams, EditCommentContentParams
 
 
 async def _connected_ctx():
@@ -163,4 +163,45 @@ async def test_reply_unknown_site_errors():
     ctx = await _connected_ctx()
     r = await hr.reply_to_comment(ctx, ReplyToCommentParams(
         site_id="missing", comment_id=5, content="hi"))
+    assert r.status == "error"
+
+
+# --- edit_comment_content ---------------------------------------------------
+
+async def test_edit_comment_content_success():
+    ctx = await _connected_ctx()
+    ctx.http.mock_post("https://x.com/wp-json/wp/v2/comments/5",
+                       {"id": 5, "author_name": "Jane", "status": "approved",
+                        "content": {"rendered": "<p>corrected text</p>"}, "post": 3,
+                        "date": "2026-08-09"},
+                       200)
+    r = await hr.edit_comment_content(ctx, EditCommentContentParams(
+        site_id="x-com", comment_id=5, content="corrected text"))
+    assert r.status == "success"
+    assert r.data.id == "5"
+    assert "corrected text" in r.data.snippet
+
+
+async def test_edit_comment_content_not_found():
+    ctx = await _connected_ctx()
+    ctx.http.mock_post("https://x.com/wp-json/wp/v2/comments/999", {}, 404)
+    r = await hr.edit_comment_content(ctx, EditCommentContentParams(
+        site_id="x-com", comment_id=999, content="x"))
+    assert r.status == "error"
+    assert r.error_code == "COMMENT_NOT_FOUND"
+
+
+async def test_edit_comment_content_server_error_is_retryable():
+    ctx = await _connected_ctx()
+    ctx.http.mock_post("https://x.com/wp-json/wp/v2/comments/5", {}, 500)
+    r = await hr.edit_comment_content(ctx, EditCommentContentParams(
+        site_id="x-com", comment_id=5, content="x"))
+    assert r.status == "error"
+    assert r.retryable is True
+
+
+async def test_edit_comment_content_unknown_site_errors():
+    ctx = await _connected_ctx()
+    r = await hr.edit_comment_content(ctx, EditCommentContentParams(
+        site_id="missing", comment_id=5, content="x"))
     assert r.status == "error"

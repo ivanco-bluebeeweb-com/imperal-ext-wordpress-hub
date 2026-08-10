@@ -5,6 +5,7 @@ from app import chat, ext
 from models import (_NoParams, Site, ListContentParams, ListMediaParams,
                     Post, Page, MediaItem, SiteIdParams, SiteHealth, RefreshAllResult,
                     ListCommentsParams, SetCommentStatusParams, ReplyToCommentParams,
+                    EditCommentContentParams,
                     ListCustomPostsParams, Comment, WPUser, Plugin,
                     PurgeCacheParams, CacheActionResult, InstallPluginParams, PluginInstallResult,
                     ServerInfo, UpdateMediaAltParams, MediaAltResult)
@@ -609,6 +610,53 @@ async def reply_to_comment(ctx, params: ReplyToCommentParams) -> ActionResult:
     )
     return ActionResult.success(
         entity, summary=f"Replied to comment #{params.comment_id} (new comment #{entity.id}).",
+        refresh_panels=["center"])
+
+
+@chat.function(
+    "edit_comment_content",
+    description=(
+        "Overwrite the text of an existing comment — fixes a typo, redacts "
+        "something, or corrects a misattributed comment without deleting and "
+        "re-creating it. Use list_comments first to find the comment_id."
+    ),
+    action_type="write",
+    data_model=Comment,
+    effects=["wp.comment_edit"],
+    event="wordpress-hub.edit_comment_content",
+)
+async def edit_comment_content(ctx, params: EditCommentContentParams) -> ActionResult:
+    """Overwrite one comment's content via the native WordPress REST API."""
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return ActionResult.error(err, retryable=False)
+    base_url, username, pw = auth
+
+    try:
+        r = await wp_request(
+            ctx, "post", base_url, f"/wp-json/wp/v2/comments/{params.comment_id}",
+            username=username, app_password=pw, json={"content": params.content})
+    except Exception as e:
+        await ctx.log(f"edit_comment_content request failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True)
+    if r.status_code == 404:
+        return ActionResult.error("That comment does not exist.", retryable=False,
+                                  code="COMMENT_NOT_FOUND")
+    if r.status_code != 200 or not isinstance(r.body, dict):
+        retry = r.status_code >= 500 or r.status_code == 429
+        return ActionResult.error(wp_error_message(r.status_code), retryable=retry,
+                                  code=wp_error_code(r.status_code))
+
+    c = r.body
+    entity = Comment(
+        id=str(c["id"]), title=c.get("author_name", "Anonymous"), kind="wp_comment",
+        status=c.get("status", ""), author=c.get("author_name", ""),
+        snippet=(c.get("content", {}).get("rendered", "") or "")
+                .replace("<p>", "").replace("</p>", "")[:120].strip(),
+        post_id=str(c.get("post", "")), date=c.get("date", ""),
+    )
+    return ActionResult.success(
+        entity, summary=f"Comment #{entity.id} content updated.",
         refresh_panels=["center"])
 
 

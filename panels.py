@@ -288,6 +288,11 @@ def _comments_management_block(items, site_id):
             defaults={"site_id": site_id, "comment_id": comment_id},
             children=[ui.TextArea(param_name="content", placeholder="Write a reply…", rows=3)],
         )
+        edit_form = ui.Form(
+            action="edit_comment_content", submit_label="Save edit",
+            defaults={"site_id": site_id, "comment_id": comment_id, "content": snippet},
+            children=[ui.TextArea(param_name="content", value=snippet, rows=3)],
+        )
         rows.append(ui.ListItem(
             id=str(comment_id),
             title=c.get("author_name", "Anonymous"),
@@ -297,7 +302,12 @@ def _comments_management_block(items, site_id):
                           else "yellow" if status == "hold" else "red")),
             actions=_status_actions(comment_id, status),
             expandable=True,
-            expanded_content=[reply_form],
+            expanded_content=[
+                ui.Stack(gap=2, children=[
+                    ui.Card(title="Reply", content=reply_form),
+                    ui.Card(title="Edit comment text", content=edit_form),
+                ]),
+            ],
         ))
     return ui.List(items=rows)
 

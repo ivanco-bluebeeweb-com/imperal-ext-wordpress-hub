@@ -41,7 +41,7 @@ list_order_notes/delete_customer) shipped 2026-08-10 afternoon).
 | `list_comments` | ✅ done (read-only) |
 | **`set_comment_status`** (approve/hold/spam/trash — one parameterized function, matches the WP REST API's own single-field model) | ✅ done |
 | **`reply_to_comment`** (create a comment as site admin) | ✅ done |
-| **`edit_comment_content`** | ❌ missing (low priority — deferred) |
+| **`edit_comment_content`** | ✅ done 2026-08-10 — wired into the Comments activity sub-tab as a second expandable form ("Edit comment text") alongside Reply, pre-filled with the current text. |
 
 **Why this matters:** comment moderation is one of the most frequent daily WP admin tasks and is
 currently 100% unsupported beyond viewing. This is Priority 1.
@@ -112,7 +112,7 @@ today is fine).
 | **`get_robots_txt` / `update_robots_txt`** | ❌ missing (via Rank Math's robots editor, not the raw file) |
 | **`get_seo_analysis_score`** (Rank Math's own on-page content-analysis score for a post) | ❌ missing — would need to read Rank Math's stored analysis meta, if exposed |
 | **404 Monitor read (`list_404_hits`)** | ❌ missing — Rank Math logs real 404s; useful for `check_sitemap_inclusion` follow-ups |
-| **Schema/structured-data type per post (`get_schema_type` / `update_schema_type`)** | ❌ missing — Rank Math lets you pick Article/Product/FAQ/etc. per post |
+| **Schema/structured-data type per post** | ✅ already covered — the existing `rich_snippet` field on `get_seo_meta`/`update_seo_meta` IS Rank Math's per-post schema type picker (Article/Product/FAQ/etc., free text). No separate `get_schema_type`/`update_schema_type` needed; this roadmap entry was stale. |
 
 **Why this mattered:** redirects were the single most requested SEO action after a URL/slug change.
 Priority 4 — DONE for redirects; the sitemap/robots/score/404/schema items remain unbuilt and

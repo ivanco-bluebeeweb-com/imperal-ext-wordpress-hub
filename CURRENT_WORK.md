@@ -5,6 +5,41 @@
 
 ---
 
+## 2026-08-10 (cont'd, latest) — edit_comment_content + roadmap cleanup
+
+**Status:** implemented, tested, deployed. Full suite 494/494 pass (was 490). `imperal validate`
+clean: 122 functions (was 121), 0 errors/0 warnings/1 info. Version 1.11.0 -> 1.12.0.
+
+**Shipped:**
+- `edit_comment_content` — overwrites an existing comment's text via the native
+  `/wp/v2/comments/<id>` REST endpoint (`content` field). Closes the roadmap's last remaining
+  Priority 1 (comment moderation) gap — fix a typo or redact something without deleting and
+  re-creating the comment. `action_type=write`.
+- **Wired into the panel UI**, not left chat-tool-only: the Comments activity sub-tab's expandable
+  row now shows two forms side by side — "Reply" (existing) and "Edit comment text" (new,
+  pre-filled with the comment's current text via `ui.TextArea(value=snippet)`).
+- 4 new tests (success, 404, 500-retryable, unknown-site) alongside the existing
+  set_comment_status/reply_to_comment suite in `tests/test_comment_moderation.py`.
+- Roadmap doc correction: two stale entries fixed. `edit_comment_content` marked done (was
+  incorrectly still "❌ missing"). The "Schema/structured-data type per post" entry was wrong
+  entirely — `rich_snippet` on `get_seo_meta`/`update_seo_meta` already covers Rank Math's per-post
+  schema-type picker; there was never a real gap there, just a stale doc line suggesting one.
+
+**Full roadmap audit for this session** (cross-checked every remaining "❌" against the actual
+source, not just the doc): everything genuinely still missing needs a NEW Bridge/PHP addition
+(no native WP/WooCommerce REST route exists) and was already a deliberate, documented deferral —
+not an accidental gap:
+- `reset_user_password` (WP core has no REST trigger for this)
+- `activate_theme` (no core REST route for switching)
+- `get_sitemap_status`/`trigger_sitemap_regenerate`, `get_robots_txt`/`update_robots_txt`,
+  `get_seo_analysis_score`, `list_404_hits` (all need Rank Math's own stored data exposed via a
+  Bridge addition)
+- `duplicate_builder_element`, `list_builder_templates` (page-builder risk/scope reasons)
+
+None of these were silently dropped — each carries its own "why deferred" note in the roadmap doc
+already. This session's real remaining work item, `edit_comment_content`, was the one entry that
+had no such justification and no Bridge dependency — so it shipped.
+
 ## 2026-08-10 (cont'd, even later still) — resend_order_email
 
 **Status:** implemented, tested, priced, deployed, resubmitted for review (already back in
