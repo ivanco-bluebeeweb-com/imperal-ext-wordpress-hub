@@ -556,6 +556,7 @@ async def test_activity_users_tab_has_create_and_delete_actions():
     assert "create_user" in s
     assert "delete_user" in s
     assert "update_user" in s
+    assert "reset_user_password" in s
 
 
 # ── Standard tab rework: Posts/Pages lifecycle actions ─────────────────────────

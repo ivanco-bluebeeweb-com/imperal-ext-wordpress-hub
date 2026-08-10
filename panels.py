@@ -365,6 +365,11 @@ def _users_management_block(items, site_id):
             subtitle=", ".join(u.get("roles", [])) or "no role",
             meta=(u.get("registered_date", "") or "")[:10],
             actions=[{
+                "icon": "KeyRound",
+                "on_click": ui.Call("reset_user_password", site_id=site_id, user_id=u.get("id")),
+                "confirm": f"Send a password-reset email to '{u.get('name', '')}'? Requires the "
+                          f"Imperal Bridge plugin on this site.",
+            }, {
                 "icon": "Trash2",
                 "on_click": ui.Call("delete_user", site_id=site_id, user_id=u.get("id")),
                 "confirm": f"Delete user '{u.get('name', '')}'? Their posts will be deleted too "
