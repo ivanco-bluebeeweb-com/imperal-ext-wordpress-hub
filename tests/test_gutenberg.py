@@ -171,3 +171,72 @@ def test_blocks_to_content_renders_faq_block_from_model():
     content = gutenberg.blocks_to_content(blocks)
     assert "Q1" in content
     assert "FAQPage" in content
+
+
+# ─────────── markdown_to_blocks: the missing article-markdown -> blocks link ───────────
+#
+# This is the actual pipeline fix: an article's Markdown (e.g. straight from
+# Article Writer) previously had to be manually retyped into {type, text,
+# level} blocks by a human or an LLM before create_post/update_post could
+# publish it -- an error-prone step that could (and did, on a real published
+# climtec.md article) silently drop the [anchor](url) bracket syntax, so a
+# correctly-written markdown link ended up as plain "anchor text (url)" on
+# the live page. markdown_to_blocks() removes that manual step by converting
+# deterministically, preserving [anchor](url) spans byte-for-byte so
+# blocks_to_content's existing inline-link rendering still catches them.
+
+def test_markdown_to_blocks_drops_h1_title_by_default():
+    blocks = gutenberg.markdown_to_blocks("# The Title\n\nBody text.")
+    assert blocks == [{"type": "paragraph", "text": "Body text."}]
+
+
+def test_markdown_to_blocks_keeps_h1_when_requested():
+    blocks = gutenberg.markdown_to_blocks("# The Title\n\nBody.", skip_h1=False)
+    assert blocks[0] == {"type": "heading", "text": "The Title", "level": 1}
+
+
+def test_markdown_to_blocks_renders_headings_with_level():
+    blocks = gutenberg.markdown_to_blocks("## Section One\n\nSome text.\n\n### Sub section")
+    assert blocks[0] == {"type": "heading", "text": "Section One", "level": 2}
+    assert blocks[-1] == {"type": "heading", "text": "Sub section", "level": 3}
+
+
+def test_markdown_to_blocks_renders_bullets_as_paragraphs():
+    blocks = gutenberg.markdown_to_blocks("- First point\n- Second point")
+    assert blocks == [
+        {"type": "paragraph", "text": "First point"},
+        {"type": "paragraph", "text": "Second point"},
+    ]
+
+
+def test_markdown_to_blocks_preserves_inline_link_syntax_unchanged():
+    """The exact real-world regression: a paragraph mentioning how often to
+    change filters, with a genuine markdown [anchor](url) link, must survive
+    markdown_to_blocks with its bracket syntax intact so blocks_to_content
+    still turns it into a real <a href> -- not into plain 'text (url)'."""
+    md = (
+        "Понимание долгосрочных расходов включает регулярность обслуживания — "
+        "например, [как часто менять фильтры](https://climtec.md/ru/cat-de-des-se-schimba-filtrele-ru/)."
+    )
+    blocks = gutenberg.markdown_to_blocks(md)
+    assert len(blocks) == 1
+    assert "[как часто менять фильтры](https://climtec.md/ru/cat-de-des-se-schimba-filtrele-ru/)" in blocks[0]["text"]
+    # And feeding that block into the existing renderer produces a real link,
+    # never the flattened "anchor (url)" text the live bug produced.
+    content = gutenberg.blocks_to_content(blocks)
+    assert '<a href="https://climtec.md/ru/cat-de-des-se-schimba-filtrele-ru/">как часто менять фильтры</a>' in content
+    assert "фильтры (https://" not in content
+
+
+def test_markdown_to_blocks_skips_blank_lines():
+    blocks = gutenberg.markdown_to_blocks("Para one.\n\n\nPara two.")
+    assert blocks == [
+        {"type": "paragraph", "text": "Para one."},
+        {"type": "paragraph", "text": "Para two."},
+    ]
+
+
+def test_markdown_to_blocks_empty_input_returns_empty_list():
+    assert gutenberg.markdown_to_blocks("") == []
+    assert gutenberg.markdown_to_blocks(None) == []
+

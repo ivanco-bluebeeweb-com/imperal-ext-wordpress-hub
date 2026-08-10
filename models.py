@@ -1188,6 +1188,16 @@ class CreatePostParams(BaseModel):
     blocks: list[PostBlockInput] = Field(
         default_factory=list,
         description="Content as an ordered list of {type, text, level} blocks, rendered into Gutenberg block markup")
+    body_markdown: str | None = Field(
+        default=None,
+        description="ALTERNATIVE to blocks: the full article as Markdown (e.g. straight from Article "
+                    "Writer's read_full_article/export_article_text -- '# Title', '## Heading', "
+                    "blank-line-separated paragraphs, '- ' bullets, inline [anchor text](https://url) "
+                    "links). Converted into the same {type, text, level} blocks automatically -- this is "
+                    "the safe path for internal/external/CTA links written as markdown in the source "
+                    "article: it never requires manually retyping each line into blocks, which is what "
+                    "previously let [anchor](url) syntax get silently flattened into plain 'anchor (url)' "
+                    "text on the live page. Ignored if blocks is also given.")
     excerpt: str | None = Field(default=None, description="Excerpt -- REQUIRED when post_type='post': a short standalone summary Rank Math and social shares fall back to")
     category: str | None = Field(default=None, description="Category name -- REQUIRED when post_type='post'. Resolved to an existing term by name; if none matches, a new category with this name is created automatically so the post is never left uncategorised")
     tags: list[str] = Field(default_factory=list, description="Optional tag names (posts only); resolved to existing terms, never created — names not found are reported back, not silently dropped")
@@ -1220,6 +1230,12 @@ class UpdatePostParams(BaseModel):
     blocks: list[PostBlockInput] | None = Field(
         default=None,
         description="Replace the content with these ordered {type, text, level} blocks; omit to keep existing content")
+    body_markdown: str | None = Field(
+        default=None,
+        description="ALTERNATIVE to blocks: replace the content with this full article Markdown "
+                    "(same shape as create_post's body_markdown -- headings, paragraphs, bullets, "
+                    "inline [anchor text](https://url) links), converted into blocks automatically. "
+                    "Ignored if blocks is also given.")
     excerpt: str | None = Field(default=None, description="New excerpt; omit to keep it")
     category: str | None = Field(default=None, description="New category name (posts only); resolved to an existing term, never created")
     tags: list[str] | None = Field(default=None, description="Replace tag names (posts only); resolved to existing terms, never created; omit to keep existing tags")

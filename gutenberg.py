@@ -145,6 +145,61 @@ def _block_fields(block) -> tuple[str, str, int, int | None, str | None, str | N
             getattr(block, "faq_items", None) or [])
 
 
+_HEADING_LINE_RE = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
+_BULLET_LINE_RE = re.compile(r"^[-*]\s+(.*\S)\s*$")
+
+
+def markdown_to_blocks(markdown_text: str, *, skip_h1: bool = True) -> list[dict]:
+    """Deterministically convert full article Markdown (Article Writer's own
+    export shape: '# Title', '## Heading', blank-line-separated paragraphs,
+    '- ' bullets, inline [anchor](url) links) into the {type, text, level}
+    block dicts create_post/update_post expect.
+
+    THIS is the missing pipeline link that caused internal/external/CTA links
+    written correctly as markdown in an article (e.g. by Article Writer) to
+    end up as plain 'anchor text (https://...)' on the live page instead of
+    a real <a href>: without an automated converter, turning an article's
+    markdown into create_post's blocks[] required a human (or an LLM) to
+    manually retype each line into a block -- an error-prone step that can
+    silently drop the [anchor](url) bracket syntax gutenberg.py already knows
+    how to render. This function removes that manual step entirely: every
+    [anchor](url) span in the source Markdown is passed through UNCHANGED
+    into the resulting block's text, so blocks_to_content's existing inline-
+    link rendering (see _render_inline_links) turns it into a real hyperlink
+    with no re-typing involved.
+
+    skip_h1=True (the default) drops the article's leading '# Title' line --
+    matching the existing WordPress Hub convention that the H1 is the post's
+    title field, not part of post_content.
+
+    Bullet list lines ('- item') become their own paragraph blocks with the
+    leading marker stripped -- this repo does not yet have a dedicated
+    Gutenberg list block type, so a bullet renders as its own paragraph,
+    consistent with how list items already render on published posts.
+    """
+    blocks: list[dict] = []
+    seen_h1 = False
+    for raw_line in (markdown_text or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        heading_match = _HEADING_LINE_RE.match(line)
+        if heading_match:
+            level = len(heading_match.group(1))
+            text = heading_match.group(2)
+            if level == 1 and skip_h1 and not seen_h1:
+                seen_h1 = True
+                continue
+            blocks.append({"type": "heading", "text": text, "level": level})
+            continue
+        bullet_match = _BULLET_LINE_RE.match(line)
+        if bullet_match:
+            blocks.append({"type": "paragraph", "text": bullet_match.group(1)})
+            continue
+        blocks.append({"type": "paragraph", "text": line})
+    return blocks
+
+
 def blocks_to_content(blocks) -> str:
     """Render explicit blocks (list of {type, text, level, media_id, media_url, caption, faq_items})
     into post_content.

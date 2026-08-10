@@ -281,6 +281,78 @@ async def test_update_post_renders_new_blocks_into_content():
     assert "New body" in kwargs["json"]["content"]
 
 
+# ─── body_markdown: the actual pipeline fix ───────────────────────────────
+#
+# Reproduces the real bug: an article's markdown [anchor](url) link, passed
+# straight through instead of manually retyped into blocks, must become a
+# real <a href> in the published content -- not plain "anchor (url)" text.
+
+async def test_create_post_body_markdown_renders_real_links_not_plain_text():
+    ctx = await _ctx()
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    markdown = (
+        "# Стоимость установки рекуператора тепла\n\n"
+        "## Обслуживание\n\n"
+        "Как часто менять фильтры — [читайте здесь](https://climtec.md/ru/filters/) "
+        "и [шумит ли ночью](https://climtec.md/ru/noise/)."
+    )
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello", body_markdown=markdown, **SEO_OK,
+    ))
+    assert result.status == "success"
+    post_call = next(c for c in seen if c[0] == POSTS)
+    content = post_call[1]["json"]["content"]
+    assert '<a href="https://climtec.md/ru/filters/">читайте здесь</a>' in content
+    assert '<a href="https://climtec.md/ru/noise/">шумит ли ночью</a>' in content
+    # the raw markdown bracket/paren syntax must never leak through as plain text
+    assert "(https://climtec.md/ru/filters/)" not in content
+    assert "(https://climtec.md/ru/noise/)" not in content
+    assert "<h2" in content  # ## heading survived, # title was dropped from content
+
+
+async def test_create_post_explicit_blocks_win_over_body_markdown():
+    ctx = await _ctx()
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello",
+        blocks=[PostBlockInput(type="paragraph", text="Explicit wins")],
+        body_markdown="Markdown text should be ignored.",
+        **SEO_OK,
+    ))
+    assert result.status == "success"
+
+
+async def test_update_post_body_markdown_renders_real_link():
+    ctx = await _ctx()
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_post(f"{POSTS}/42", _wp_post(), 200)
+    result = await hp.update_post(ctx, UpdatePostParams(
+        site_id="x-com", post_id=42,
+        body_markdown="See [our guide](https://climtec.md/ru/guide/) for details.",
+    ))
+    assert result.status == "success"
+    _, kwargs = seen[0]
+    assert '<a href="https://climtec.md/ru/guide/">our guide</a>' in kwargs["json"]["content"]
+    assert "(https://climtec.md/ru/guide/)" not in kwargs["json"]["content"]
+
+
 # ─────────── tags ───────────
 
 async def test_create_post_resolves_tags_by_name():

@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -16374,6 +16374,19 @@
             "title": "Blocks",
             "type": "array"
           },
+          "body_markdown": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "ALTERNATIVE to blocks: the full article as Markdown (e.g. straight from Article Writer's read_full_article/export_article_text -- '# Title', '## Heading', blank-line-separated paragraphs, '- ' bullets, inline [anchor text](https://url) links). Converted into the same {type, text, level} blocks automatically -- this is the safe path for internal/external/CTA links written as markdown in the source article: it never requires manually retyping each line into blocks, which is what previously let [anchor](url) syntax get silently flattened into plain 'anchor (url)' text on the live page. Ignored if blocks is also given.",
+            "title": "Body Markdown"
+          },
           "excerpt": {
             "anyOf": [
               {
@@ -16880,6 +16893,19 @@
             "default": null,
             "description": "Replace the content with these ordered {type, text, level} blocks; omit to keep existing content",
             "title": "Blocks"
+          },
+          "body_markdown": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "ALTERNATIVE to blocks: replace the content with this full article Markdown (same shape as create_post's body_markdown -- headings, paragraphs, bullets, inline [anchor text](https://url) links), converted into blocks automatically. Ignored if blocks is also given.",
+            "title": "Body Markdown"
           },
           "excerpt": {
             "anyOf": [

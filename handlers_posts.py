@@ -204,9 +204,18 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
     base_url, username, pw = auth
 
     rest_base = _rest_base(post_type)
+    # body_markdown is the safe path for an already-written article: it is
+    # converted deterministically instead of requiring a human/LLM to
+    # manually retype each markdown line into a block, which is exactly what
+    # previously let [anchor](url) links silently flatten into plain
+    # "anchor (url)" text on the live page. Explicit blocks always win if
+    # both are given -- body_markdown never overrides a caller's own blocks.
+    source_blocks = params.blocks
+    if not source_blocks and params.body_markdown:
+        source_blocks = gutenberg.markdown_to_blocks(params.body_markdown)
     blocks, featured_media_id, image_warnings = await resolve_external_images(
         ctx, base_url, username, pw, external_images=params.external_images,
-        blocks=params.blocks, featured_media_id=params.featured_media_id,
+        blocks=source_blocks, featured_media_id=params.featured_media_id,
     )
     content = gutenberg.blocks_to_content(blocks)
 
@@ -309,7 +318,13 @@ async def update_post(ctx, params: UpdatePostParams) -> ActionResult:
     rest_base = _rest_base(post_type)
 
     featured_media_id = params.featured_media_id
+    # body_markdown is the safe path for an already-edited article -- see
+    # create_post's identical rationale: it avoids manually retyping markdown
+    # lines into blocks, which previously let [anchor](url) links flatten
+    # into plain "anchor (url)" text. Explicit blocks always win.
     blocks = params.blocks
+    if blocks is None and params.body_markdown:
+        blocks = gutenberg.markdown_to_blocks(params.body_markdown)
     image_warnings: list[str] = []
     if params.external_images:
         # params.blocks is None when the caller only wants to change images/
@@ -318,10 +333,10 @@ async def update_post(ctx, params: UpdatePostParams) -> ActionResult:
         # meaning: only a 'featured' role can still apply (it never touches
         # blocks), any inline role warns as unmatched instead of silently
         # requiring blocks to exist.
-        blocks_had_input = params.blocks is not None
+        blocks_had_input = blocks is not None
         resolved_blocks, featured_media_id, image_warnings = await resolve_external_images(
             ctx, base_url, username, pw, external_images=params.external_images,
-            blocks=params.blocks if blocks_had_input else [],
+            blocks=blocks if blocks_had_input else [],
             featured_media_id=featured_media_id,
         )
         blocks = resolved_blocks if blocks_had_input else None
