@@ -5,6 +5,38 @@
 
 ---
 
+## 2026-08-10 (cont'd, even later still) — resend_order_email
+
+**Status:** implemented, tested, priced, deployed, resubmitted for review (already back in
+`pending_review`, no re-submit needed — server rejected a duplicate submit with a clear 400,
+handled honestly rather than treated as a failure). Full suite 490/490 pass. `imperal validate`
+clean: 121 functions (was 120), 0 errors/0 warnings/1 info. Deployed at `5d63137f`, 19/21 (same
+pre-existing file-length/test-secret warning baseline, not a regression).
+
+**Correction to the roadmap doc's earlier assumption:** the doc had `resend_order_email` marked
+deferred with the note "no core/WooCommerce REST route exists for this". That was wrong —
+WooCommerce 9.8+ actually ships a native `POST /orders/<id>/actions/send_order_details` (generic
+invoice/order-details email) and `POST /orders/<id>/actions/send_email` (a specific template id,
+e.g. `customer_completed_order`, `customer_on_hold_order`) REST endpoint. No Bridge PHP addition
+needed. Verified against WooCommerce's own developer docs before implementing, not guessed.
+
+**Shipped:**
+- `resend_order_email(site_id, order_id, template_id="", email="")` — action_type=write. Wired
+  into the Orders panel UI as a form on the existing expandable order row (template dropdown +
+  optional recipient override), alongside the status-change and note forms already there.
+
+**Pricing incident caught and self-corrected this session:** while rebuilding the complete price
+map to include the new function, cross-checked the draft dict against the live manifest's real
+tool list before sending — caught a typo (`get_woocommerce_status_check`, which does not exist)
+and two more wrong names (`update_redirect`, `update_product_category` used instead of the real
+`set_redirect_status`/`update_post_category`... — actually the real gap was two missing real names,
+`update_menu_item` and `upload_media`, plus the fabricated key). Fixed and re-verified byte-for-byte
+against `imperal.json`'s tool list (set equality) before submitting. This is exactly the kind of
+self-check the standing rule about honest, non-fabricated pricing calls for — recorded here rather
+than silently overwritten.
+
+---
+
 ## 2026-08-10 (cont'd, even later) — WP Core lifecycle gaps: get_post_revisions, restore_revision, set_post_password
 
 **Status:** implemented, tested, priced, deployed, resubmitted for review. Full suite 487/487

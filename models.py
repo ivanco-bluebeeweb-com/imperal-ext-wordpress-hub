@@ -439,6 +439,12 @@ class ReplyToCommentParams(BaseModel):
     content: str = Field(min_length=1, max_length=5000, description="Reply text, posted as the connected WordPress user")
 
 
+class EditCommentContentParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    comment_id: int = Field(gt=0, description="Numeric WordPress comment id to edit, from list_comments")
+    content: str = Field(min_length=1, max_length=5000, description="Replacement text for the comment's content — overwrites the existing comment entirely")
+
+
 class ListCustomPostsParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     post_type: str = Field(description="REST base slug of the custom post type, e.g. 'products', 'events', 'portfolio'")

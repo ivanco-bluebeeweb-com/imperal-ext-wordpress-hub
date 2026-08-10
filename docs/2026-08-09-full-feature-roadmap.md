@@ -136,7 +136,7 @@ products and variations (preview-then-apply pattern with state tokens throughout
 | `add_private_order_note`, `add_customer_order_note` | ✅ done |
 | **`create_order`** (manual/phone order entry) | ✅ done — shipped 2026-08-10, Priority 8a |
 | **`list_order_notes`** (read the note thread back, not just add) | ✅ done — shipped 2026-08-10, Priority 8a |
-| **`resend_order_email`** (trigger WooCommerce's own "new order"/"invoice" email) | ❌ missing — no core/WooCommerce REST route exists for this; would need a Bridge addition, deferred |
+| **`resend_order_email`** (trigger WooCommerce's own "new order"/"invoice" email) | ✅ done 2026-08-10 — correction to the earlier note below: WooCommerce 9.8+ DOES expose a native `/orders/<id>/actions/send_order_details` (and `/actions/send_email` for a specific template) REST endpoint, no Bridge addition needed after all. Wired into the Orders panel UI. |
 
 ### 3.3 Customers — ✅ covered
 `list_customers`, `get_customer`, `create_customer`, `update_customer`,
@@ -258,9 +258,13 @@ expose them — verify per-feature before assuming a Bridge change is needed.
    read-with-`context=edit`-then-write-back via `update_post`), `set_post_password` (native
    `password` field, wired into the Posts/Pages panel UI as an expandable form). 120 functions
    total now.
-10. **Everything still explicitly deferred**: reset_user_password, sitemap status/regenerate,
+10. **Shipped 2026-08-10 (even later session):** `resend_order_email` — turned out NOT to need a
+   Bridge addition after all (WooCommerce 9.8+ has a native order-actions REST endpoint); the
+   earlier deferral note above was simply wrong about that, corrected now that it shipped. Wired
+   into the Orders panel UI. 121 functions total now.
+11. **Everything still explicitly deferred**: reset_user_password, sitemap status/regenerate,
    robots.txt editor, SEO analysis score, 404 monitor, schema type per post, theme activation,
-   resend_order_email, 4.2 (builder extensions), 3.7 (shipping/tax), plugin/core updates via
+   4.2 (builder extensions), 3.7 (shipping/tax), plugin/core updates via
    WP-CLI. Revisit only when a real, recurring user need appears. Do not build speculatively —
    matches this app's existing discipline (see WooCommerce module plan: "read-only first, add
    write only with explicit scope").
