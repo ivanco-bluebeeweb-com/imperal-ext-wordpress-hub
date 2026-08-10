@@ -32,8 +32,8 @@ list_order_notes/delete_customer) shipped 2026-08-10 afternoon).
 | **`delete_post`** (trash a post/page) | ✅ done |
 | **`duplicate_post`** | ✅ done — common editorial workflow (clone a page as a template) |
 | **`bulk_update_post_status`** (publish/draft/trash N posts at once) | ✅ done — same per-id independent-outcome pattern as WooCommerce bulk changes |
-| **`get_post_revisions` / `restore_revision`** | ❌ still missing — recover from a bad edit without re-writing; deferred, no demand yet |
-| **`set_post_password`** (password-protected post) | ❌ still missing — low priority, deferred |
+| **`get_post_revisions` / `restore_revision`** | ✅ done 2026-08-10 — restore has no native REST verb, implemented as read-revision(`context=edit`)-then-write-back via `update_post`'s existing path. Chat-tool only for now (no drill-down list-then-act UI pattern exists yet in panels.py). |
+| **`set_post_password`** (password-protected post) | ✅ done 2026-08-10 — wired into the Posts/Pages panel UI as an expandable per-row form. |
 
 ### 1.2 Comments — ✅ moderation shipped 2026-08-09 (v1.9.0)
 | Function | Status |
@@ -253,12 +253,17 @@ expose them — verify per-feature before assuming a Bridge change is needed.
    `create_order`/`list_order_notes` remain chat-tool-only for now (no established repeatable
    line-item-array form widget exists yet in `panels.py` — building one ad hoc for a single
    function risked a fragile one-off; revisit once a second multi-line-item UI need appears).
-9. **Everything still explicitly deferred**: reset_user_password, get_post_revisions/
-   restore_revision, set_post_password, sitemap status/regenerate, robots.txt editor, SEO analysis
-   score, 404 monitor, schema type per post, theme activation, resend_order_email, 4.2 (builder
-   extensions), 3.7 (shipping/tax), plugin/core updates via WP-CLI. Revisit only when a real,
-   recurring user need appears. Do not build speculatively — matches this app's existing
-   discipline (see WooCommerce module plan: "read-only first, add write only with explicit scope").
+9. **Shipped 2026-08-10 (later session):** `get_post_revisions`/`restore_revision` (native
+   `/wp/v2/<type>/<id>/revisions` list; restore has no native REST verb, implemented as
+   read-with-`context=edit`-then-write-back via `update_post`), `set_post_password` (native
+   `password` field, wired into the Posts/Pages panel UI as an expandable form). 120 functions
+   total now.
+10. **Everything still explicitly deferred**: reset_user_password, sitemap status/regenerate,
+   robots.txt editor, SEO analysis score, 404 monitor, schema type per post, theme activation,
+   resend_order_email, 4.2 (builder extensions), 3.7 (shipping/tax), plugin/core updates via
+   WP-CLI. Revisit only when a real, recurring user need appears. Do not build speculatively —
+   matches this app's existing discipline (see WooCommerce module plan: "read-only first, add
+   write only with explicit scope").
 
 All of Priorities 2–7 above: 114 functions total (up from 87); Priority 8a adds 3 more (117
 total). Full pytest suite green (458/458) at every step, and every new function priced via

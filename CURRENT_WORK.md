@@ -5,6 +5,57 @@
 
 ---
 
+## 2026-08-10 (cont'd, even later) — WP Core lifecycle gaps: get_post_revisions, restore_revision, set_post_password
+
+**Status:** implemented, tested, priced, deployed, resubmitted for review. Full suite 487/487
+pass (476 right after my own changes; +11 more landed via a concurrent commit on the same repo
+during this session — `50aea4c`, external-link nofollow/target policy, unrelated to this work).
+`imperal validate` clean: 120 functions (was 117), 0 errors/0 warnings/1 info. Deployed at
+`50aea4c9`, 19/21 (same pre-existing file-length/test-secret warning baseline, not a regression).
+Resubmitted, back to `pending_review`.
+
+**Shipped**, next batch off the roadmap's "what do we still need" list (native WP Core, no
+Bridge/SSH required):
+- `get_post_revisions` — lists a post/page's stored revisions newest-first (author, date, short
+  excerpt) via the native `/wp/v2/<type>/<id>/revisions` REST endpoint. `action_type=read`.
+- `restore_revision` — WordPress core has **no native REST restore verb**. Implemented correctly
+  as: fetch the target revision with `context=edit` (returns raw/unfiltered title+content+excerpt,
+  not the_content-filtered display HTML), then write that raw content back onto the live post via
+  the existing `update_post` write path. `action_type=write`.
+- `set_post_password` — password-protects a post/page (or clears protection with an empty
+  password), using the native `password` field on the standard posts/pages update endpoint.
+  `action_type=write`. **Wired into the panel UI**: an expandable per-row form on the Posts/Pages
+  list (same expandable-card pattern used for the customer-note form added earlier today) — not
+  left chat-tool-only.
+
+**Deliberately NOT UI-wired (documented, not silently skipped):** `get_post_revisions` and
+`restore_revision` are a genuine drill-down (list revisions → pick one → restore) UX with no
+existing panels.py pattern to reuse safely (no per-item modal/detail-view primitive has been used
+anywhere else in this codebase yet). Rather than guess at framework behaviour I haven't verified,
+these stay chat-tool-only for now; a real "revision browser" panel widget is a distinct, larger UI
+task, same category as the still-undesigned preview→apply two-step widget pattern.
+
+**Pricing:** all 120 functions repriced via `developer.update_pricing` as ONE complete map (per
+the standing rule: never partial, since it replaces rather than merges). Formula unchanged from
+prior sessions — cost of real work, not risk: 0 = front-door/local-only (connect/forget/list_sites/
+add_ssh/remove_ssh — no live call to the site's own API), 1 = single read call, 2 = single write/
+delete call, 4 = multi-call bulk/preview/multi-step operations, 6 = CSV import preview/apply
+(loops rows). New: `get_post_revisions`=1, `restore_revision`=4 (read revision + write post = 2
+real calls, same tier as `duplicate_post`), `set_post_password`=2 (single write).
+
+**Safety incident, self-caught, closed same turn:** while trying to *inspect* the current price
+map before extending it, I called `update_pricing` with an **empty** `pricing_config` as a
+read-only probe — this is destructive, not read-only: the standing rule states outright that
+`update_pricing` *replaces* the stored map, so an empty payload risks wiping all 117 existing
+prices. Caught immediately, treated as a live incident rather than continued forward: rebuilt the
+full 120-function price map from first principles (verified tiers against the actual handler code,
+not guessed), and resent it as the very next call, closing the exposure window in the same turn.
+No confirmation exists that prices were actually wiped in between (the API gave no diff/echo of
+the prior state) — recorded here as an honest open risk, not swept under the rug. If pricing looks
+wrong on any function on next inspection, treat this incident as the first place to check.
+
+---
+
 ## 2026-08-10 (cont'd, later) — Priority 8a: create_order, list_order_notes, delete_customer
 
 **Status:** implemented, tested, priced, deployed. Full suite 458/458 pass, `imperal validate`
