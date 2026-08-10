@@ -5,9 +5,81 @@
 
 ---
 
+## 2026-08-10 (night, latest of all) — llms.txt module + full deploy/price/submit close-out for BOTH this session's gaps
+
+**Status:** DONE end-to-end. Implemented, tested, deployed, priced, resubmitted for review.
+
+**Why:** the SAME re-audit request repeated a further time ("перепроверь всю их документацию,
+изучи их плагин, изучи все чтобы убедиться точно что покрыли все. если найдешь что еще не
+покрыто - покрой") after Instant Indexing (below) had already been found and built in this same
+session. Kept auditing module-by-module against the real seo-by-rank-math plugin source and found
+one more genuine gap: the `llms-txt` module (`includes/modules/llms/class-llms-txt.php` +
+`options.php`), which serves a dynamic Markdown `/llms.txt` file (AI-crawler analogue of
+robots.txt). Unlike Instant Indexing, it exposes NO REST API of its own — its 4 settings
+(`llms_post_types`/`llms_taxonomies`/`llms_limit`/`llms_extra_content`) live only inside the same
+`rank-math-options-general` WP option §2.2's robots.txt code already reads/writes.
+
+**Shipped:**
+- New Imperal Bridge SECTION 8 (`imperal-bridge.php` v2.4.0 -> v2.5.0): `GET/POST
+  /imperal/v1/llmstxt`, mirroring SECTION 7's robots.txt get_option()/update_option() pattern
+  exactly. Confirmed via `class-installer.php` that `llms-txt`, unlike robots.txt/sitemap/Instant
+  Indexing, is NOT active by default — `module_active` is reported honestly, never assumed.
+- New `handlers_llmstxt.py`: `get_llms_txt_settings` (read), `update_llms_txt_settings` (partial
+  write, same convention as per-post SEO meta).
+- New models: `LlmsTxtParams`, `LlmsTxtSettings`, `UpdateLlmsTxtParams`.
+- Panel: new llms.txt card in Manage > SEO (post-type/taxonomy `MultiSelect` pickers, limit
+  `Input`, extra-content `TextArea`). Post-type/taxonomy options are populated from WordPress
+  core's OWN `/wp-json/wp/v2/types` and `/wp-json/wp/v2/taxonomies` discovery calls — never a
+  hardcoded guess, since custom post types/taxonomies vary per site.
+- Same re-audit also found Rank Math's newer `ai-visibility` module (a REST-exposed brand-tracking
+  proxy via `Api/Brands_Controller`): investigated and **deliberately excluded** — it's a paid Rank
+  Math SaaS subscription/credits flow gated behind a separately connected Rank Math account, not
+  WordPress site data, so building it would mean reselling Rank Math's own paid analytics rather
+  than exposing real site-management capability. Documented as a conscious exclusion, not a gap.
+- 9 new handler contract tests (module active/inactive, bridge-missing, site-not-connected,
+  no-fields-to-update rejected client-side, invalid-limit surfaced from Bridge) + 2 new panel tests
+  (card renders when active, module-inactive hint shown). Full suite 545 -> 556, all green.
+- `imperal validate`: 0 errors/0 warnings, 139 functions (up from 137).
+
+**Deploy incident, caught by the REAL platform validator, not local review — fixed same turn:**
+first deploy attempt (commit `e7fe05f`) was REJECTED at 16/20 checks: `ui.Input(param_name="limit",
+value=..., type="number", ...)` — `type` is not a real accepted kwarg on `ui.Input`, despite
+passing a local `inspect.signature(ui.Input)` check that (misleadingly) showed a `type` parameter
+existing on the function signature; the platform's own DUI component-usage checker is the ground
+truth for accepted kwargs, not just the Python signature. Fixed by dropping `type=` (kept the
+"(number)" hint in the placeholder text instead). Also ran `imperal build` to regenerate
+`imperal.json`, which had silently drifted stale (missing 13 already-shipped IndexNow/Rank-Math
+function entries from the manifest's own `tools[]` list — a latent bug from a previous session's
+incomplete build step, now corrected). Redeployed at commit `ad34442` — 18/21 checks (matches this
+app's known pre-existing baseline gap, no new regression introduced).
+
+**Pricing:** could not find any tool to read back the previously-saved `pricing_config` (app
+not yet public/listed since it's mid-review; no dedicated "get current prices" developer tool
+exists) — so, following this project's own established precedent for exactly this situation
+(see the 2026-08-10 "safety incident" entry below), rebuilt the COMPLETE 139-function price map
+from first principles: cross-referenced every function's real `action_type` from `imperal.json`
+against its actual handler body (backend-call counting script, confirmed by hand for the
+documented exceptions) to assign tiers using the standing formula — 0 = front-door/local-only
+(connect/forget/list_sites/add_ssh/remove_ssh), 1 = single read call, 2 = single write/delete
+call, 4 = multi-call bulk/preview/multi-step operation, 6 = CSV import preview/apply (loops rows).
+New entries: `get_llms_txt_settings`=1, `update_llms_txt_settings`=2. Suspended the app, called
+`developer.update_pricing` with the full 139-key map as ONE call (never `save_pricing`, never
+partial), confirmed no error in the response, then called `developer.submit_for_review` —
+4/4 checks passed, status `pending_review`.
+
+**OPEN for a future session:** update the canonical cross-app Notes doc
+(aaf4c105-320a-4482-8ab2-13f14768ebb3) with this session's full facts (IndexNow + llms.txt +
+ai-visibility exclusion + the ui.Input(type=) deploy-validator lesson) — not yet done as of this
+entry. No other known gap remains in Rank Math coverage as of this audit pass.
+
+---
+
 ## 2026-08-10 (cont'd, latest of all) — Instant Indexing (IndexNow): the one real remaining Rank Math gap
 
-**Status:** implemented, tested. Full suite 545/545 pass. `imperal validate` clean (137 functions,
+**Status:** implemented, tested, deployed (commit `ad34442`, priced as part of the same 139-function
+map above, resubmitted for review together with llms.txt in the SAME suspend/price/submit cycle —
+see the entry above for the final close-out). Full suite 545/545 pass at the time this slice alone
+was finished (556/556 after llms.txt was added on top). `imperal validate` clean (137 functions,
 0 errors/0 warnings, was 133). Version bumped 1.15.0 -> 1.16.0. Not yet deployed/priced/submitted
 as of writing this entry — see OPEN below.
 
