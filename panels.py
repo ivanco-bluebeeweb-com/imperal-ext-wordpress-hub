@@ -322,7 +322,7 @@ def _users_management_block(items, site_id):
         defaults={"site_id": site_id},
         children=[
             ui.Input(param_name="username", placeholder="Username"),
-            ui.Input(param_name="email", placeholder="Email", type="email"),
+            ui.Input(param_name="email", placeholder="Email"),
             ui.Select(param_name="role", options=role_options, value="subscriber",
                       placeholder="Role"),
             ui.Input(param_name="first_name", placeholder="First name (optional)"),

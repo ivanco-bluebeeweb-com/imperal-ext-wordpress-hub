@@ -3464,7 +3464,7 @@
     },
     {
       "name": "get_server_info",
-      "description": "Get server information for a WordPress site via SSH + WP-CLI: PHP version, WordPress version, available plugin/theme/core updates, cron job count, database size. SSH must be configured first with add_ssh.",
+      "description": "Get server information for a WordPress site: PHP version, WordPress version, available plugin/theme/core updates, cron job count, database size. Reads it through the Imperal Bridge plugin when installed (no SSH needed at all); falls back to SSH + WP-CLI when the Bridge isn't there yet or doesn't answer.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -3603,6 +3603,11 @@
           "db_size_mb": {
             "default": "",
             "title": "Db Size Mb",
+            "type": "string"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
             "type": "string"
           }
         },
@@ -15281,6 +15286,19 @@
             "description": "Optional caption to set on the new attachment",
             "title": "Caption"
           },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional SEO/AEO-optimized base file name (no extension, e.g. 'heat-recovery-ventilator-featured') to save this attachment under on the site. Omitting it falls back to deriving a name from source_url itself, which is often an opaque provider-generated id -- always pass this when the source is a Media Hub generated image (its `filename` field is already SEO/AEO-optimized).",
+            "title": "Filename"
+          },
           "set_featured": {
             "default": false,
             "description": "Set this image as the featured image of post_id (requires post_id)",
@@ -15544,7 +15562,7 @@
       "params_schema": {
         "$defs": {
           "ExternalImageInput": {
-            "description": "One not-yet-uploaded external image, keyed by role -- the exact shape\na Media Hub `get_media_package`/`generate_media_package` asset already\nhas (role, image_url, alt_text, caption). Passing these on create_post/\nupdate_post sideloads each one into this site's media library and wires\nit up automatically: role == \"featured\" sets featured_media_id, any\nother role is resolved against a block whose image_role matches. This is\nthe one-call bridge between an image-generation package and a published\npost -- no manual upload_media + attachment-id bookkeeping needed.",
+            "description": "One not-yet-uploaded external image, keyed by role -- the exact shape\na Media Hub `get_media_package`/`generate_media_package` asset already\nhas (role, image_url, alt_text, caption, filename). Passing these on create_post/\nupdate_post sideloads each one into this site's media library and wires\nit up automatically: role == \"featured\" sets featured_media_id, any\nother role is resolved against a block whose image_role matches. This is\nthe one-call bridge between an image-generation package and a published\npost -- no manual upload_media + attachment-id bookkeeping needed.",
             "properties": {
               "role": {
                 "description": "'featured' or an inline role like 'inline_1' -- must match either this call's featured slot or a block's image_role",
@@ -15566,6 +15584,12 @@
                 "default": "",
                 "description": "Optional caption for the new media library attachment",
                 "title": "Caption",
+                "type": "string"
+              },
+              "filename": {
+                "default": "",
+                "description": "SEO/AEO-optimized base file name (no extension) for the saved attachment, e.g. a Media Hub asset's own `filename` field -- pass it through so the on-site file name is never the image-generation provider's raw opaque id.",
+                "title": "Filename",
                 "type": "string"
               }
             },
@@ -16016,7 +16040,7 @@
       "params_schema": {
         "$defs": {
           "ExternalImageInput": {
-            "description": "One not-yet-uploaded external image, keyed by role -- the exact shape\na Media Hub `get_media_package`/`generate_media_package` asset already\nhas (role, image_url, alt_text, caption). Passing these on create_post/\nupdate_post sideloads each one into this site's media library and wires\nit up automatically: role == \"featured\" sets featured_media_id, any\nother role is resolved against a block whose image_role matches. This is\nthe one-call bridge between an image-generation package and a published\npost -- no manual upload_media + attachment-id bookkeeping needed.",
+            "description": "One not-yet-uploaded external image, keyed by role -- the exact shape\na Media Hub `get_media_package`/`generate_media_package` asset already\nhas (role, image_url, alt_text, caption, filename). Passing these on create_post/\nupdate_post sideloads each one into this site's media library and wires\nit up automatically: role == \"featured\" sets featured_media_id, any\nother role is resolved against a block whose image_role matches. This is\nthe one-call bridge between an image-generation package and a published\npost -- no manual upload_media + attachment-id bookkeeping needed.",
             "properties": {
               "role": {
                 "description": "'featured' or an inline role like 'inline_1' -- must match either this call's featured slot or a block's image_role",
@@ -16038,6 +16062,12 @@
                 "default": "",
                 "description": "Optional caption for the new media library attachment",
                 "title": "Caption",
+                "type": "string"
+              },
+              "filename": {
+                "default": "",
+                "description": "SEO/AEO-optimized base file name (no extension) for the saved attachment, e.g. a Media Hub asset's own `filename` field -- pass it through so the on-site file name is never the image-generation provider's raw opaque id.",
+                "title": "Filename",
                 "type": "string"
               }
             },
@@ -18224,6 +18254,3963 @@
         "x-sdl": "entity"
       },
       "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "create_user",
+      "description": "Create a registered WordPress user with username, email, and role. Passwords are optional -- a strong random one is generated and returned once (WordPress core requires SOME password to create a user, but nothing forces sharing it: an admin can also just email the user a password-reset link).",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.user_create"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "username": {
+            "description": "Login username",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          },
+          "email": {
+            "description": "User's email address",
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "default": "subscriber",
+            "description": "WordPress role: administrator, editor, author, contributor, or subscriber",
+            "title": "Role",
+            "type": "string"
+          },
+          "first_name": {
+            "default": "",
+            "description": "Optional first name",
+            "maxLength": 100,
+            "title": "First Name",
+            "type": "string"
+          },
+          "last_name": {
+            "default": "",
+            "description": "Optional last name",
+            "maxLength": 100,
+            "title": "Last Name",
+            "type": "string"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional login password; a strong random one is generated and returned once if omitted (WordPress core requires a password to create a user)",
+            "title": "Password"
+          }
+        },
+        "required": [
+          "site_id",
+          "username",
+          "email"
+        ],
+        "title": "CreateUserParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Result of create_user -- carries the generated password ONCE, if one was generated.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "role": {
+            "default": "",
+            "title": "Role",
+            "type": "string"
+          },
+          "email": {
+            "default": "",
+            "title": "Email",
+            "type": "string"
+          },
+          "generated_password": {
+            "default": "",
+            "description": "Only set when no password was supplied; shown once and never stored",
+            "title": "Generated Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "UserCreateResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.create_user",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "update_user",
+      "description": "Update an existing WordPress user's role, email, first/last name.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.user_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "user_id": {
+            "description": "Numeric WordPress user id from list_users",
+            "exclusiveMinimum": 0,
+            "title": "User Id",
+            "type": "integer"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New role: administrator, editor, author, contributor, or subscriber",
+            "title": "Role"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New email address",
+            "title": "Email"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New first name",
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New last name",
+            "title": "Last Name"
+          }
+        },
+        "required": [
+          "site_id",
+          "user_id"
+        ],
+        "title": "UpdateUserParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "role": {
+            "default": "",
+            "title": "Role",
+            "type": "string"
+          },
+          "registered": {
+            "default": "",
+            "title": "Registered",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "WPUser",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.update_user",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "delete_user",
+      "description": "Permanently delete a WordPress user. Optionally reassign their posts to another user id -- WordPress requires SOME disposition for the departing user's posts, so omitting reassign_to deletes their posts along with the account.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wp.user_delete"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "user_id": {
+            "description": "Numeric WordPress user id to permanently delete",
+            "exclusiveMinimum": 0,
+            "title": "User Id",
+            "type": "integer"
+          },
+          "reassign_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional user id to reassign this user's posts to; omit to delete their posts too",
+            "title": "Reassign To"
+          }
+        },
+        "required": [
+          "site_id",
+          "user_id"
+        ],
+        "title": "DeleteUserParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "deleted": {
+            "default": false,
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "reassigned_to": {
+            "default": "",
+            "title": "Reassigned To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "UserDeleteResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.delete_user",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_menus",
+      "description": "List navigation menus on a connected WordPress site (requires WordPress 5.9+).",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "Menu": {
+            "description": "One nav_menu taxonomy term -- a named menu, e.g. 'Main Menu'.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "locations": {
+                "default": "",
+                "title": "Locations",
+                "type": "string"
+              },
+              "item_count": {
+                "default": 0,
+                "title": "Item Count",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "Menu",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/Menu"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[Menu]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_menu_items",
+      "description": "List the items inside one navigation menu, in their current order.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "menu_id": {
+            "description": "Numeric menu id from list_menus",
+            "exclusiveMinimum": 0,
+            "title": "Menu Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "menu_id"
+        ],
+        "title": "ListMenuItemsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "MenuItem": {
+            "description": "One item (link/page/category) inside a WordPress navigation menu.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "default": "",
+                "title": "Url",
+                "type": "string"
+              },
+              "menu_id": {
+                "default": 0,
+                "title": "Menu Id",
+                "type": "integer"
+              },
+              "parent_id": {
+                "default": 0,
+                "title": "Parent Id",
+                "type": "integer"
+              },
+              "menu_order": {
+                "default": 0,
+                "title": "Menu Order",
+                "type": "integer"
+              },
+              "object_type": {
+                "default": "",
+                "title": "Object Type",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "MenuItem",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/MenuItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[MenuItem]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "create_menu_item",
+      "description": "Add a new link/item to an existing navigation menu.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.menu_item_create"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "menu_id": {
+            "description": "Numeric menu id from list_menus to add this item to",
+            "exclusiveMinimum": 0,
+            "title": "Menu Id",
+            "type": "integer"
+          },
+          "title": {
+            "description": "Link text shown in the menu",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "description": "Destination URL, e.g. an existing page/post URL or any external https:// link",
+            "title": "Url",
+            "type": "string"
+          },
+          "parent_id": {
+            "default": 0,
+            "description": "Parent menu item id for a submenu item; 0 for top-level",
+            "title": "Parent Id",
+            "type": "integer"
+          },
+          "menu_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional position within the menu (1-based); appended at the end if omitted",
+            "title": "Menu Order"
+          }
+        },
+        "required": [
+          "site_id",
+          "menu_id",
+          "title",
+          "url"
+        ],
+        "title": "CreateMenuItemParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One item (link/page/category) inside a WordPress navigation menu.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "menu_id": {
+            "default": 0,
+            "title": "Menu Id",
+            "type": "integer"
+          },
+          "parent_id": {
+            "default": 0,
+            "title": "Parent Id",
+            "type": "integer"
+          },
+          "menu_order": {
+            "default": 0,
+            "title": "Menu Order",
+            "type": "integer"
+          },
+          "object_type": {
+            "default": "",
+            "title": "Object Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "MenuItem",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.create_menu_item",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "update_menu_item",
+      "description": "Update a menu item's title, URL, parent, or position.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.menu_item_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "menu_item_id": {
+            "description": "Numeric menu item id from list_menu_items",
+            "exclusiveMinimum": 0,
+            "title": "Menu Item Id",
+            "type": "integer"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New link text",
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New destination URL",
+            "title": "Url"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New parent menu item id; 0 moves it to top-level",
+            "title": "Parent Id"
+          },
+          "menu_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New position within the menu",
+            "title": "Menu Order"
+          }
+        },
+        "required": [
+          "site_id",
+          "menu_item_id"
+        ],
+        "title": "UpdateMenuItemParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One item (link/page/category) inside a WordPress navigation menu.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "menu_id": {
+            "default": 0,
+            "title": "Menu Id",
+            "type": "integer"
+          },
+          "parent_id": {
+            "default": 0,
+            "title": "Parent Id",
+            "type": "integer"
+          },
+          "menu_order": {
+            "default": 0,
+            "title": "Menu Order",
+            "type": "integer"
+          },
+          "object_type": {
+            "default": "",
+            "title": "Object Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "MenuItem",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.update_menu_item",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "delete_menu_item",
+      "description": "Permanently remove one item from a navigation menu.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wp.menu_item_delete"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "menu_item_id": {
+            "description": "Numeric menu item id to permanently remove from the menu",
+            "exclusiveMinimum": 0,
+            "title": "Menu Item Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "menu_item_id"
+        ],
+        "title": "DeleteMenuItemParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "deleted": {
+            "default": false,
+            "title": "Deleted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "MenuItemDeleteResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.delete_menu_item",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "reorder_menu_items",
+      "description": "Reorder the top-level items of a menu by giving their ids in the desired top-to-bottom order. Pass ALL top-level item ids for this menu, not a subset.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.menu_item_reorder"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "menu_id": {
+            "description": "Numeric menu id whose items are being reordered",
+            "exclusiveMinimum": 0,
+            "title": "Menu Id",
+            "type": "integer"
+          },
+          "ordered_item_ids": {
+            "description": "ALL top-level menu item ids for this menu, in the desired top-to-bottom order",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Ordered Item Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "site_id",
+          "menu_id",
+          "ordered_item_ids"
+        ],
+        "title": "ReorderMenuItemsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "MenuItem": {
+            "description": "One item (link/page/category) inside a WordPress navigation menu.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "default": "",
+                "title": "Url",
+                "type": "string"
+              },
+              "menu_id": {
+                "default": 0,
+                "title": "Menu Id",
+                "type": "integer"
+              },
+              "parent_id": {
+                "default": 0,
+                "title": "Parent Id",
+                "type": "integer"
+              },
+              "menu_order": {
+                "default": 0,
+                "title": "Menu Order",
+                "type": "integer"
+              },
+              "object_type": {
+                "default": "",
+                "title": "Object Type",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "MenuItem",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/MenuItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[MenuItem]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "wordpress-hub.reorder_menu_items",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "delete_post",
+      "description": "Delete a WordPress post or page. By default moves it to Trash (recoverable in WordPress); pass force=true to permanently delete it instead, bypassing Trash.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wp.post_delete"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "description": "Numeric post/page id from list_posts/list_pages",
+            "exclusiveMinimum": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "post",
+            "description": "'post', 'page', or a custom post type's slug",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "force": {
+            "default": false,
+            "description": "False (default) moves it to Trash, recoverable in WordPress. True permanently deletes it, bypassing Trash — cannot be undone.",
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "site_id",
+          "post_id"
+        ],
+        "title": "DeletePostParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "deleted": {
+            "default": false,
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "trashed": {
+            "default": false,
+            "title": "Trashed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PostDeleteResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.delete_post",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "duplicate_post",
+      "description": "Duplicate an existing WordPress post or page as a new draft, copying its title (with a suffix), content, excerpt, and category. Useful as a starting point for a similar piece of content or a seasonal re-run of an old page.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.post_create"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "description": "Numeric post/page id to duplicate, from list_posts/list_pages",
+            "exclusiveMinimum": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "post",
+            "description": "'post', 'page', or a custom post type's slug",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "title_suffix": {
+            "default": " (Copy)",
+            "description": "Text appended to the duplicated title",
+            "title": "Title Suffix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "post_id"
+        ],
+        "title": "DuplicatePostParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of create_post/update_post: the WordPress post/page that was written.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "link": {
+            "default": "",
+            "title": "Link",
+            "type": "string"
+          },
+          "post_type": {
+            "default": "post",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "slug": {
+            "default": "",
+            "title": "Slug",
+            "type": "string"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Date"
+          },
+          "category_resolved": {
+            "default": true,
+            "title": "Category Resolved",
+            "type": "boolean"
+          },
+          "tags_not_found": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags Not Found",
+            "type": "array"
+          },
+          "featured_media_set": {
+            "default": false,
+            "title": "Featured Media Set",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PostResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.duplicate_post",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "bulk_update_post_status",
+      "description": "Change the status (publish, draft, pending, private, or trash) of several explicit posts/pages at once. All ids must be the same post_type. Partial failures are reported per id, not silently dropped.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.post_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_ids": {
+            "description": "Explicit post/page ids; 1-50, never inferred",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Post Ids",
+            "type": "array"
+          },
+          "post_type": {
+            "default": "post",
+            "description": "'post', 'page', or a custom post type's slug — all ids must share this type",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "status": {
+            "description": "New status for every listed post: publish, draft, pending, private, or trash",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "post_ids",
+          "status"
+        ],
+        "title": "BulkUpdatePostStatusParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "failed_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Failed Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "BulkPostStatusResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.bulk_update_post_status",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_product_reviews",
+      "description": "List WooCommerce product reviews. Use status='hold' to see reviews pending moderation, 'approved' for published, 'spam' for spam. Optionally filter to one product_id.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional product id to filter reviews for one product only",
+            "title": "Product Id"
+          },
+          "status": {
+            "default": "hold",
+            "description": "Review status: 'hold' (pending moderation), 'approved', 'spam', or 'all'",
+            "title": "Status",
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "description": "Max items to return, 1-100",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "ListProductReviewsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "ProductReview": {
+            "description": "One WooCommerce product review -- a comment on the 'product' content type.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "default": "",
+                "title": "Status",
+                "type": "string"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "product_id": {
+                "default": 0,
+                "title": "Product Id",
+                "type": "integer"
+              },
+              "reviewer": {
+                "default": "",
+                "title": "Reviewer",
+                "type": "string"
+              },
+              "reviewer_email": {
+                "default": "",
+                "title": "Reviewer Email",
+                "type": "string"
+              },
+              "rating": {
+                "default": 0,
+                "title": "Rating",
+                "type": "integer"
+              },
+              "snippet": {
+                "default": "",
+                "title": "Snippet",
+                "type": "string"
+              },
+              "date": {
+                "default": "",
+                "title": "Date",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "ProductReview",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/ProductReview"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[ProductReview]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "set_product_review_status",
+      "description": "Change a product review's moderation status: 'approved' (publish it), 'hold' (send back to pending moderation), 'spam', or 'trash'. Use list_product_reviews first to find the review_id.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wc.product_review_status_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "review_id": {
+            "description": "Numeric review id from list_product_reviews",
+            "exclusiveMinimum": 0,
+            "title": "Review Id",
+            "type": "integer"
+          },
+          "status": {
+            "description": "New status: 'approved' (publish), 'hold' (unapprove/pending), 'spam', or 'trash'",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "review_id",
+          "status"
+        ],
+        "title": "SetProductReviewStatusParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One WooCommerce product review -- a comment on the 'product' content type.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "default": "",
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "product_id": {
+            "default": 0,
+            "title": "Product Id",
+            "type": "integer"
+          },
+          "reviewer": {
+            "default": "",
+            "title": "Reviewer",
+            "type": "string"
+          },
+          "reviewer_email": {
+            "default": "",
+            "title": "Reviewer Email",
+            "type": "string"
+          },
+          "rating": {
+            "default": 0,
+            "title": "Rating",
+            "type": "integer"
+          },
+          "snippet": {
+            "default": "",
+            "title": "Snippet",
+            "type": "string"
+          },
+          "date": {
+            "default": "",
+            "title": "Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ProductReview",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.set_product_review_status",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "reply_to_product_review",
+      "description": "Reply to a WooCommerce product review, posted as the connected WordPress user. Use list_product_reviews first to find the review_id.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wc.product_review_reply"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "review_id": {
+            "description": "Numeric review id being replied to, from list_product_reviews",
+            "exclusiveMinimum": 0,
+            "title": "Review Id",
+            "type": "integer"
+          },
+          "content": {
+            "description": "Reply text, posted as the connected WordPress user",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "review_id",
+          "content"
+        ],
+        "title": "ReplyToProductReviewParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "author": {
+            "default": "",
+            "title": "Author",
+            "type": "string"
+          },
+          "snippet": {
+            "default": "",
+            "title": "Snippet",
+            "type": "string"
+          },
+          "post_id": {
+            "default": "",
+            "title": "Post Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Comment",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.reply_to_product_review",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_native_plugins",
+      "description": "List installed plugins via WordPress's own REST API (needs WordPress 5.5+ and an administrator connection) — no SSH required. Use activate_plugin/deactivate_plugin with the returned plugin id to change status.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "NativePlugin": {
+            "description": "One plugin as reported by the native /wp/v2/plugins REST route (requires WP 5.5+).",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "default": "",
+                "title": "Description",
+                "type": "string"
+              },
+              "status": {
+                "default": "",
+                "title": "Status",
+                "type": "string"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "plugin": {
+                "default": "",
+                "title": "Plugin",
+                "type": "string"
+              },
+              "version": {
+                "default": "",
+                "title": "Version",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "NativePlugin",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/NativePlugin"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[NativePlugin]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "activate_plugin",
+      "description": "Activate an installed WordPress plugin via the native REST API (WordPress 5.5+, no SSH needed).",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.plugin_activate"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "plugin": {
+            "description": "Plugin identifier from list_native_plugins, e.g. 'hello-dolly/hello'",
+            "minLength": 1,
+            "title": "Plugin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "plugin"
+        ],
+        "title": "SetPluginStatusParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One plugin as reported by the native /wp/v2/plugins REST route (requires WP 5.5+).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "status": {
+            "default": "",
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "plugin": {
+            "default": "",
+            "title": "Plugin",
+            "type": "string"
+          },
+          "version": {
+            "default": "",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "NativePlugin",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.activate_plugin",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "deactivate_plugin",
+      "description": "Deactivate an installed WordPress plugin via the native REST API (WordPress 5.5+, no SSH needed).",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.plugin_deactivate"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "plugin": {
+            "description": "Plugin identifier from list_native_plugins, e.g. 'hello-dolly/hello'",
+            "minLength": 1,
+            "title": "Plugin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "plugin"
+        ],
+        "title": "SetPluginStatusParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One plugin as reported by the native /wp/v2/plugins REST route (requires WP 5.5+).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "status": {
+            "default": "",
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "plugin": {
+            "default": "",
+            "title": "Plugin",
+            "type": "string"
+          },
+          "version": {
+            "default": "",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "NativePlugin",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.deactivate_plugin",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_themes",
+      "description": "List installed themes via WordPress's own REST API (needs an administrator connection) — shows which one is currently active. Read-only: WordPress core has no REST route to switch the active theme.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "Theme": {
+            "description": "One installed theme as reported by the native /wp/v2/themes REST route.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "default": "",
+                "title": "Status",
+                "type": "string"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "stylesheet": {
+                "default": "",
+                "title": "Stylesheet",
+                "type": "string"
+              },
+              "version": {
+                "default": "",
+                "title": "Version",
+                "type": "string"
+              },
+              "is_block_theme": {
+                "default": false,
+                "title": "Is Block Theme",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "Theme",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/Theme"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[Theme]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "get_site_settings",
+      "description": "Read native WordPress site settings: title, tagline, timezone, date/time format, start of week, and language.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Native WordPress site settings (/wp/v2/settings).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "timezone_string": {
+            "default": "",
+            "title": "Timezone String",
+            "type": "string"
+          },
+          "date_format": {
+            "default": "",
+            "title": "Date Format",
+            "type": "string"
+          },
+          "time_format": {
+            "default": "",
+            "title": "Time Format",
+            "type": "string"
+          },
+          "start_of_week": {
+            "default": 0,
+            "title": "Start Of Week",
+            "type": "integer"
+          },
+          "language": {
+            "default": "",
+            "title": "Language",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SiteSettings",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "update_site_settings",
+      "description": "Update native WordPress site settings: title, tagline, timezone, date/time format, or start of week. Only the fields you pass are changed.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.settings_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New site title",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New site tagline/description",
+            "title": "Description"
+          },
+          "timezone_string": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New timezone, e.g. 'Europe/Chisinau'",
+            "title": "Timezone String"
+          },
+          "date_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New PHP date() format string, e.g. 'F j, Y'",
+            "title": "Date Format"
+          },
+          "time_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New PHP date() time format string, e.g. 'g:i a'",
+            "title": "Time Format"
+          },
+          "start_of_week": {
+            "anyOf": [
+              {
+                "maximum": 6,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New first day of the week: 0=Sunday .. 6=Saturday",
+            "title": "Start Of Week"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "UpdateSiteSettingsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Native WordPress site settings (/wp/v2/settings).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "timezone_string": {
+            "default": "",
+            "title": "Timezone String",
+            "type": "string"
+          },
+          "date_format": {
+            "default": "",
+            "title": "Date Format",
+            "type": "string"
+          },
+          "time_format": {
+            "default": "",
+            "title": "Time Format",
+            "type": "string"
+          },
+          "start_of_week": {
+            "default": 0,
+            "title": "Start Of Week",
+            "type": "integer"
+          },
+          "language": {
+            "default": "",
+            "title": "Language",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SiteSettings",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.update_site_settings",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_redirects",
+      "description": "List Rank Math URL redirects on a site — which old URLs redirect to which new ones, with hit counts. Requires the Imperal Bridge plugin and Rank Math's Redirections module.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "status": {
+            "default": "active",
+            "description": "'active', 'inactive', 'trashed', or 'all'",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "ListRedirectsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "Redirect": {
+            "description": "One Rank Math URL redirection.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "default": "",
+                "title": "Status",
+                "type": "string"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "sources": {
+                "items": {
+                  "$ref": "#/$defs/RedirectSource"
+                },
+                "title": "Sources",
+                "type": "array"
+              },
+              "url_to": {
+                "default": "",
+                "title": "Url To",
+                "type": "string"
+              },
+              "header_code": {
+                "default": 301,
+                "title": "Header Code",
+                "type": "integer"
+              },
+              "hits": {
+                "default": 0,
+                "title": "Hits",
+                "type": "integer"
+              },
+              "created": {
+                "default": "",
+                "title": "Created",
+                "type": "string"
+              },
+              "updated": {
+                "default": "",
+                "title": "Updated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "Redirect",
+            "type": "object",
+            "x-sdl": "entity"
+          },
+          "RedirectSource": {
+            "properties": {
+              "pattern": {
+                "description": "URL path or regex pattern to match, e.g. '/old-page/'",
+                "title": "Pattern",
+                "type": "string"
+              },
+              "comparison": {
+                "default": "exact",
+                "description": "'exact', 'contains', 'start', 'end', or 'regex'",
+                "title": "Comparison",
+                "type": "string"
+              }
+            },
+            "required": [
+              "pattern"
+            ],
+            "title": "RedirectSource",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/Redirect"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[Redirect]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "create_redirect",
+      "description": "Create a Rank Math URL redirect: which URL to redirect FROM (source_pattern), where TO (url_to), and the HTTP status code (301 permanent, 302 temporary, 410 gone). Requires the Imperal Bridge plugin and Rank Math's Redirections module.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.redirect_create"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "source_pattern": {
+            "description": "URL path to redirect FROM, e.g. '/old-page/'",
+            "minLength": 1,
+            "title": "Source Pattern",
+            "type": "string"
+          },
+          "source_comparison": {
+            "default": "exact",
+            "description": "'exact', 'contains', 'start', 'end', or 'regex'",
+            "title": "Source Comparison",
+            "type": "string"
+          },
+          "url_to": {
+            "description": "Destination URL to redirect TO",
+            "minLength": 1,
+            "title": "Url To",
+            "type": "string"
+          },
+          "header_code": {
+            "default": 301,
+            "description": "HTTP redirect status code: 301 (permanent), 302 (temporary), 307, or 410 (gone)",
+            "title": "Header Code",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "source_pattern",
+          "url_to"
+        ],
+        "title": "CreateRedirectParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "RedirectSource": {
+            "properties": {
+              "pattern": {
+                "description": "URL path or regex pattern to match, e.g. '/old-page/'",
+                "title": "Pattern",
+                "type": "string"
+              },
+              "comparison": {
+                "default": "exact",
+                "description": "'exact', 'contains', 'start', 'end', or 'regex'",
+                "title": "Comparison",
+                "type": "string"
+              }
+            },
+            "required": [
+              "pattern"
+            ],
+            "title": "RedirectSource",
+            "type": "object"
+          }
+        },
+        "description": "One Rank Math URL redirection.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "default": "",
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/$defs/RedirectSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "url_to": {
+            "default": "",
+            "title": "Url To",
+            "type": "string"
+          },
+          "header_code": {
+            "default": 301,
+            "title": "Header Code",
+            "type": "integer"
+          },
+          "hits": {
+            "default": 0,
+            "title": "Hits",
+            "type": "integer"
+          },
+          "created": {
+            "default": "",
+            "title": "Created",
+            "type": "string"
+          },
+          "updated": {
+            "default": "",
+            "title": "Updated",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Redirect",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.create_redirect",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "delete_redirect",
+      "description": "Permanently delete a Rank Math URL redirect by id, from list_redirects.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.redirect_delete"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "redirect_id": {
+            "description": "Numeric redirect id from list_redirects",
+            "exclusiveMinimum": 0,
+            "title": "Redirect Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "redirect_id"
+        ],
+        "title": "DeleteRedirectParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "deleted": {
+            "default": false,
+            "title": "Deleted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "RedirectDeleteResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.delete_redirect",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "set_redirect_status",
+      "description": "Change a redirect's status: 'active' (live), 'inactive' (paused, does not redirect), or 'trashed'. Use list_redirects first to find the redirect_id.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.redirect_status_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "redirect_id": {
+            "description": "Numeric redirect id from list_redirects",
+            "exclusiveMinimum": 0,
+            "title": "Redirect Id",
+            "type": "integer"
+          },
+          "status": {
+            "description": "New status: 'active', 'inactive', or 'trashed'",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "redirect_id",
+          "status"
+        ],
+        "title": "SetRedirectStatusParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "RedirectSource": {
+            "properties": {
+              "pattern": {
+                "description": "URL path or regex pattern to match, e.g. '/old-page/'",
+                "title": "Pattern",
+                "type": "string"
+              },
+              "comparison": {
+                "default": "exact",
+                "description": "'exact', 'contains', 'start', 'end', or 'regex'",
+                "title": "Comparison",
+                "type": "string"
+              }
+            },
+            "required": [
+              "pattern"
+            ],
+            "title": "RedirectSource",
+            "type": "object"
+          }
+        },
+        "description": "One Rank Math URL redirection.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "default": "",
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/$defs/RedirectSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "url_to": {
+            "default": "",
+            "title": "Url To",
+            "type": "string"
+          },
+          "header_code": {
+            "default": 301,
+            "title": "Header Code",
+            "type": "integer"
+          },
+          "hits": {
+            "default": 0,
+            "title": "Hits",
+            "type": "integer"
+          },
+          "created": {
+            "default": "",
+            "title": "Created",
+            "type": "string"
+          },
+          "updated": {
+            "default": "",
+            "title": "Updated",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Redirect",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.set_redirect_status",
       "background": false,
       "long_running": false,
       "scopes": [],
