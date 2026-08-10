@@ -5,6 +5,36 @@
 
 ---
 
+## 2026-08-10 (cont'd, latest of all) — Shipped update_plugin/update_core/run_wp_cron (last roadmap SSH/WP-CLI gap)
+
+**Status:** implemented, tested, deployed (commit 3ec6cb0a), priced. Full suite 514/514 pass.
+`imperal validate` clean (127 functions, 0 errors/0 warnings). Functions 124 -> 127.
+
+**Why:** roadmap §5.2 flagged plugin/core updates and forced cron runs as the last remaining real,
+recurring maintenance items, held back pending a safety story. Applied the same bar `install_plugin`
+already set: fixed-shape, non-interpolated WP-CLI command, no shell-injection surface.
+
+**Shipped (new `handlers_maintenance.py` + `wp_cli.py` additions):**
+- `update_plugin` — ONE named plugin only (`wp plugin update <slug>`), slug validated against safe
+  characters, never `--all` (an unattended bulk update across a live site is a materially bigger
+  blast radius than one named plugin).
+- `update_core` — `wp core update`, no version argument (always latest, matches wp-admin's own
+  "Update Now").
+- `run_wp_cron` — forces due cron events to fire, no caller-chosen event name.
+- Wired into the Server section of the connected-site detail screen: each listed plugin update
+  gets an inline update action (sends the WP-CLI slug — the `name` field — never the display
+  title, since `update_plugin`'s own validation rejects spaces), plus "Update WordPress core" /
+  "Run due cron events" list actions when SSH is configured and updates are pending.
+
+**Caught before shipping (real bugs, not hypothetical) via a render-path panel test:**
+`ui.DataTable` has no `row_actions` param and `ui.Button` has no `confirm` param — both were
+fabricated on the first draft. Fixed by using `ui.List`/`ui.ListItem(actions=[...])`, the pattern
+already used everywhere else in this file, confirmed against the real SDK signature.
+
+**Priced:** `update_plugin`, `update_core`, `run_wp_cron` each = 2 (single SSH+WP-CLI call, same
+tier as `install_plugin`/`activate_plugin`). Full 127-key map verified 1:1 against the live
+manifest before sending — no missing, no extra, no fabricated keys.
+
 ## 2026-08-10 (cont'd, latest of all) — Closed 4 more write-tool-with-no-panel-path gaps
 
 **Status:** implemented, tested, deployed. Full suite 498/498 pass. `imperal validate` clean.

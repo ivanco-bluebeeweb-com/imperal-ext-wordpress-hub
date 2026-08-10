@@ -201,13 +201,12 @@ CLAUDE.md: **future bridge capabilities are new sections in this same file, neve
 Menus (1.5) and Redirects (2.2) will likely need new Bridge sections if core REST doesn't already
 expose them — verify per-feature before assuming a Bridge change is needed.
 
-### 5.2 SSH / WP-CLI — ✅ covered, narrow scope by design
+### 5.2 SSH / WP-CLI — ✅ fully covered
 `add_ssh`, `remove_ssh`, `get_server_info`, `list_plugins`, `install_plugin`, `purge_cache`
-(LiteSpeed-specific). Possible additions, low priority:
-- **`update_plugin` / `update_core`** (WP-CLI has `wp plugin update`, `wp core update`) — real value
-  for site maintenance, but higher blast radius than install; needs a strong preview/confirm story.
-- **`run_wp_cron`** (trigger a stuck cron queue manually) — niche but occasionally useful for
-  debugging a site that silently stopped sending emails.
+(LiteSpeed-specific), **`update_plugin`** (ONE named plugin via `wp plugin update <slug>`, never
+`--all`), **`update_core`** (`wp core update`, no version arg — always latest), **`run_wp_cron`**
+(forces due cron events, no caller-chosen event name) — all shipped 2026-08-10, wired into the
+Server section of the connected-site detail screen.
 - **`get_database_size`** already returned by `get_server_info` per CLAUDE.md notes — no separate
   function needed.
 
@@ -265,12 +264,18 @@ expose them — verify per-feature before assuming a Bridge change is needed.
    Bridge addition after all (WooCommerce 9.8+ has a native order-actions REST endpoint); the
    earlier deferral note above was simply wrong about that, corrected now that it shipped. Wired
    into the Orders panel UI. 121 functions total now.
-11. **Everything still explicitly deferred**: sitemap status/regenerate,
+11. **Shipped 2026-08-10 (later session still):** `reset_user_password` — new Bridge SECTION 6
+   (Users), calls WordPress core's own `retrieve_password()` directly since core has no REST route
+   for it (only the wp-login.php form does). Wired into the Users sub-tab as a per-row action.
+   124 functions total now.
+12. **Shipped 2026-08-10 (latest session):** `update_plugin`/`update_core`/`run_wp_cron` — closes
+   §5.2, the last open SSH/WP-CLI gap. See CURRENT_WORK.md for the full writeup. 127 functions
+   total now.
+13. **Everything still explicitly deferred**: sitemap status/regenerate,
    robots.txt editor, SEO analysis score, 404 monitor, schema type per post, theme activation,
-   4.2 (builder extensions), 3.7 (shipping/tax), plugin/core updates via
-   WP-CLI. Revisit only when a real, recurring user need appears. Do not build speculatively —
-   matches this app's existing discipline (see WooCommerce module plan: "read-only first, add
-   write only with explicit scope").
+   4.2 (builder extensions), 3.7 (shipping/tax). Revisit only when a real, recurring user need
+   appears. Do not build speculatively — matches this app's existing discipline (see WooCommerce
+   module plan: "read-only first, add write only with explicit scope").
 
 All of Priorities 2–7 above: 114 functions total (up from 87); Priority 8a adds 3 more (117
 total). Full pytest suite green (458/458) at every step, and every new function priced via
