@@ -5,19 +5,21 @@ Date: 2026-08-09, updated 2026-08-10. Supersedes ad-hoc feature lists; update th
 
 ## Purpose
 
-WordPress Hub now ships 117 functions covering sites, posts/pages (incl. delete/duplicate/bulk
-status), taxonomy, media, SEO (Rank Math per-content + site-wide redirects), page builders
-(Elementor/Bricks point-edits), WooCommerce (incl. product reviews, manual order entry, order note
-thread, customer deletion), native user management, menus/navigation, site settings + native
-plugin/theme listing, and SSH/WP-CLI + Bridge server ops. This document maps EVERY realistic
-capability across WordPress Core, WooCommerce, Rank Math, and our own Bridge/SSH layer — what
-exists today, what's missing, and in what order to build it. Every future "what should we add"
-conversation starts from this file, not from memory.
+WordPress Hub now ships 133 functions covering sites, posts/pages (incl. delete/duplicate/bulk
+status), taxonomy, media, SEO (Rank Math per-content + full site-wide coverage: redirects, robots.txt,
+sitemap status, SEO score, 404 monitor), page builders (Elementor/Bricks point-edits), WooCommerce
+(incl. product reviews, manual order entry, order note thread, customer deletion), native user
+management, menus/navigation, site settings + native plugin/theme listing, and SSH/WP-CLI + Bridge
+server ops. This document maps EVERY realistic capability across WordPress Core, WooCommerce, Rank
+Math, and our own Bridge/SSH layer — what exists today, what's missing, and in what order to build
+it. Every future "what should we add" conversation starts from this file, not from memory.
 
 Coverage baseline verified against the actual codebase on 2026-08-10 (grep of all
-`@chat.function`/`@ext.expose` decorators across `handlers_*.py` — 117 functions confirmed, up from
+`@chat.function`/`@ext.expose` decorators across `handlers_*.py` — 133 functions confirmed, up from
 87 on 2026-08-09 — Priorities 2 through 7 shipped 2026-08-10 morning, Priority 8a (create_order/
-list_order_notes/delete_customer) shipped 2026-08-10 afternoon).
+list_order_notes/delete_customer) shipped 2026-08-10 afternoon, Priority 13 (full Rank Math
+site-wide coverage: robots.txt, sitemap status, SEO score, 404 monitor) shipped 2026-08-10 evening —
+Rank Math is now the ONLY layer in this document with zero remaining ❌ gaps).
 
 ---
 
@@ -106,19 +108,25 @@ filters by mime type** (already returns all, filtering client-side today is fine
 `get_seo_meta`, `update_seo_meta`, `get_term_seo_meta`, `update_term_seo_meta`,
 `check_seo_support` — title, meta description, focus keyword, canonical URL. All via Bridge.
 
-### 2.2 Site-wide SEO — ⚠️ redirects shipped 2026-08-10, rest still missing
+### 2.2 Site-wide SEO — ✅ FULLY COVERED 2026-08-10 — zero remaining gaps
 | Function | Status |
 |---|---|
-| **`list_redirects` / `create_redirect` / `delete_redirect` / `set_redirect_status`** | ✅ done — new Bridge SECTION 5 reads/writes Rank Math's own `{prefix}rank_math_redirections` table directly, since Rank Math never exposes this over REST |
-| **`get_sitemap_status` / `trigger_sitemap_regenerate`** | ❌ missing |
-| **`get_robots_txt` / `update_robots_txt`** | ❌ missing (via Rank Math's robots editor, not the raw file) |
-| **`get_seo_analysis_score`** (Rank Math's own on-page content-analysis score for a post) | ❌ missing — would need to read Rank Math's stored analysis meta, if exposed |
-| **404 Monitor read (`list_404_hits`)** | ❌ missing — Rank Math logs real 404s; useful for `check_sitemap_inclusion` follow-ups |
+| **`list_redirects` / `create_redirect` / `delete_redirect` / `set_redirect_status`** | ✅ done — Bridge SECTION 5 reads/writes Rank Math's own `{prefix}rank_math_redirections` table directly, since Rank Math never exposes this over REST |
+| **`get_sitemap_status`** | ✅ done — Bridge SECTION 7, checks the `rank_math_modules` option (`Conditional::is_module_active()`'s own storage) for the Sitemap module and reports the sitemap index URL. No `trigger_sitemap_regenerate`: verified against Rank Math source that sitemaps are generated dynamically per-request (`Sitemap\Router`), never cached/stored — "regenerate" is not a real operation on this plugin, so it was deliberately NOT built (would have been fabricated). |
+| **`get_robots_txt` / `update_robots_txt`** | ✅ done — Bridge SECTION 7, reads/writes the `robots_txt_content` key inside Rank Math's own `rank-math-options-general` option (`RankMath\Robots_Txt`'s own storage) — this is Rank Math's *override* text, not the raw file on disk |
+| **`get_seo_analysis_score`** (Rank Math's own on-page content-analysis score for a post) | ✅ done — Bridge SECTION 7, reads the plain postmeta key `rank_math_seo_score` (`RankMath\Frontend_SEO_Score`'s own storage) |
+| **404 Monitor (`list_404_hits` / `delete_404_hit`)** | ✅ done — Bridge SECTION 7, reads/deletes rows from Rank Math's own `{prefix}rank_math_404_logs` table (`RankMath\Monitor\DB`'s own storage). Bulk-clear-the-whole-log deliberately NOT exposed — no legitimate workflow needs to wipe 404 diagnostic history in one call with no way back. |
 | **Schema/structured-data type per post** | ✅ already covered — the existing `rich_snippet` field on `get_seo_meta`/`update_seo_meta` IS Rank Math's per-post schema type picker (Article/Product/FAQ/etc., free text). No separate `get_schema_type`/`update_schema_type` needed; this roadmap entry was stale. |
 
-**Why this mattered:** redirects were the single most requested SEO action after a URL/slug change.
-Priority 4 — DONE for redirects; the sitemap/robots/score/404/schema items remain unbuilt and
-unprioritized (no user demand yet).
+**Why this mattered:** redirects were the single most requested SEO action after a URL/slug change
+(Priority 4). The remaining site-wide items (sitemap/robots/score/404) were then explicitly
+requested as "полностью покрыть функционал Rank Math" (Priority 13) — every fact above (table name,
+column names, option name, postmeta key, module-check mechanism) was verified against the actual
+seo-by-rank-math 1.0.275 plugin source before a single line of Bridge/handler code was written; see
+Bridge SECTION 7's own header comment for the exact classes read. Wired into the site detail panel
+as a new Manage > SEO sub-tab (sitemap status card, robots.txt editor form, 404 log list with a
+per-row delete action); `get_seo_analysis_score` stays chat-tool-only since it is per-post like the
+rest of §2.1 and none of that per-post SEO surface has panel UI yet either.
 
 ---
 
@@ -271,16 +279,28 @@ Server section of the connected-site detail screen.
 12. **Shipped 2026-08-10 (latest session):** `update_plugin`/`update_core`/`run_wp_cron` — closes
    §5.2, the last open SSH/WP-CLI gap. See CURRENT_WORK.md for the full writeup. 127 functions
    total now.
-13. **Everything still explicitly deferred**: sitemap status/regenerate,
-   robots.txt editor, SEO analysis score, 404 monitor, schema type per post, theme activation,
-   4.2 (builder extensions), 3.7 (shipping/tax). Revisit only when a real, recurring user need
-   appears. Do not build speculatively — matches this app's existing discipline (see WooCommerce
-   module plan: "read-only first, add write only with explicit scope").
+13. ✅ **Rank Math full site-wide coverage** (2.2) — DONE 2026-08-10, shipped on explicit user
+   request ("давай полностью покроем функционал Rank Math"). New Bridge SECTION 7
+   (`imperal-bridge.php` v2.4.0) + `handlers_rankmath.py` (6 functions): `get_seo_analysis_score`,
+   `get_robots_txt`, `update_robots_txt`, `get_sitemap_status`, `list_404_hits`, `delete_404_hit`.
+   Every DB table/option/postmeta key was verified against the real seo-by-rank-math 1.0.275 plugin
+   source before writing any code (see SECTION 7's own header comment). No `trigger_sitemap_regenerate`
+   was built — verified Rank Math generates sitemaps dynamically per-request with no stored state,
+   so "regenerate" isn't a real operation on this plugin and building it would have been fabricated.
+   Wired into the site detail panel as a new Manage > SEO sub-tab. 15 new handler tests + 2 new
+   panel render-path tests, full suite 531/531 green, `imperal validate` 0 errors/0 warnings (133
+   functions). Rank Math (Layer 2) is now the only layer in this whole document with zero
+   remaining ❌ gaps.
+14. **Everything still explicitly deferred**: theme activation (1.7), 4.2 (builder extensions:
+   duplicate element, template library), 3.7 (shipping/tax classes). Revisit only when a real,
+   recurring user need appears. Do not build speculatively — matches this app's existing discipline
+   (see WooCommerce module plan: "read-only first, add write only with explicit scope").
 
 All of Priorities 2–7 above: 114 functions total (up from 87); Priority 8a adds 3 more (117
-total). Full pytest suite green (458/458) at every step, and every new function priced via
-`developer.update_pricing` — merged into the existing price map each time rather than replacing
-it, so no prior pricing was ever lost.
+total); Priority 13 adds 6 more (133 total, current). Full pytest suite green (531/531) at every
+step, and every new function priced via `developer.update_pricing` — the COMPLETE price map is
+always passed (never a partial merge), verified against the live `@chat.function` name set after
+every pricing call so no function is ever left unpriced or mispriced.
 
 ## Explicitly out of scope (documented so it isn't re-proposed later)
 

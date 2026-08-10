@@ -5,6 +5,131 @@
 
 ---
 
+## 2026-08-10 (cont'd, latest of all) — Instant Indexing (IndexNow): the one real remaining Rank Math gap
+
+**Status:** implemented, tested. Full suite 545/545 pass. `imperal validate` clean (137 functions,
+0 errors/0 warnings, was 133). Version bumped 1.15.0 -> 1.16.0. Not yet deployed/priced/submitted
+as of writing this entry — see OPEN below.
+
+**Why:** explicit re-audit request — "перепроверь всю их документацию, изучи их плагин... если
+найдешь что еще не покрыто - покрой". After the previous session closed every gap tracked in the
+roadmap doc (SEO score, robots.txt, sitemap status, 404 monitor, redirects, per-post SEO meta),
+re-checked the *official* module list at rankmath.com/kb/advanced-mode/ plus the real plugin source
+on plugins.svn.wordpress.org (seo-by-rank-math trunk) against our own coverage, module by module.
+
+**Verification-first discipline (real plugin source read before writing a line):**
+- `includes/module/class-manager.php` confirms `instant-indexing` is a real, distinct Rank Math
+  module (not a UI-only setting), and `includes/class-installer.php`'s `create_misc_options()`
+  confirms it's ACTIVE BY DEFAULT on every fresh Rank Math install (in the same default-`$modules`
+  array as sitemap/seo-analysis/rich-snippet) — so this gap silently affected most sites, not just
+  ones that opted in.
+- `includes/modules/instant-indexing/class-instant-indexing.php`: hooks `rest_api_init` and
+  registers its OWN `Rest` controller directly on WordPress core's REST server — genuinely
+  independent of the Imperal Bridge, unlike every other Rank Math feature this app talks to.
+- `includes/modules/instant-indexing/class-rest.php`: exact route table confirmed — namespace
+  `rankmath/v1/in`, routes `POST /submitUrls` (arg `urls`: string, required — newline/array-joined),
+  `POST /getLog` (arg `filter`: enum all/manual/auto, default all), `POST /clearLog` (same filter
+  arg), `POST /resetKey` (no args). All four gated by the same `has_permission` callback.
+- `includes/modules/instant-indexing/class-api.php`: confirmed exact storage — the log is the
+  `rank_math_indexnow_log` WP option (last 100 entries, each `{url, status, manual_submission,
+  message, time}`), `clear_log()` is a plain `delete_option()`, `reset_key()` generates a fresh
+  UUID4 into `Helper::get_settings('instant_indexing.indexnow_api_key')`.
+- Also checked and deliberately ruled OUT two other candidates found during this same re-audit:
+  (a) Database Tools → "Update SEO Scores" (`class-update-score.php`) — confirmed it runs entirely
+  client-side via `wp_enqueue_script('rank-math-analyzer', .../analyzer.js)` in the browser, no
+  PHP/REST recompute path exists to call from a backend connector — NOT buildable without
+  fabricating a fake op, correctly left uncovered; (b) `llms.txt` module — real dynamic per-request
+  file (not stored state) with settings under a CMB2 options screen, not yet independently
+  confirmed to have any option/postmeta key isolated enough to expose safely — flagged as a
+  possible future slice, NOT built this session (avoiding guesswork per the no-fabrication rule).
+
+**Shipped:**
+- New `handlers_indexnow.py` module (4 `@chat.function`s), talking DIRECTLY to Rank Math's own
+  native REST API (`/wp-json/rankmath/v1/in/...`) with the site's stored Application Password —
+  NO Imperal Bridge involved, the only Rank Math surface in this app that doesn't need it:
+  `submit_urls_to_indexnow`, `list_indexnow_log`, `clear_indexnow_log`, `reset_indexnow_key`.
+- New models.py entries: `SubmitIndexNowUrlsParams`/`IndexNowSubmitResult`, `IndexNowLogParams`/
+  `IndexNowLogEntry`, `ClearIndexNowLogParams`/`ClearIndexNowLogResult`, `ResetIndexNowKeyParams`/
+  `IndexNowKey`.
+- Wired into the connected-site detail panel's Manage → SEO sub-tab as a new "Instant Indexing"
+  card: a submit-URLs form, the last 20 log entries, and a clear-log button — sitting alongside the
+  existing sitemap/robots.txt/404-monitor cards, independently fetched so a Bridge-less site still
+  gets this section while the Bridge-only cards show their own install hint.
+- 12 new handler contract tests (submit single/multiple/invalid-urls, log with filter, clear log,
+  reset key, module-not-active/rest_no_route, site-not-connected) + 2 new panel tests (log+form
+  render, module-disabled hint). Full suite 531 -> 545, all real `ui.*` signatures confirmed via
+  `inspect.signature` before writing (caught and removed one fabricated `ui.Button(confirm=...)`
+  param that doesn't exist on this SDK).
+
+**OPEN (must finish before this slice is "done" per the standing pipeline):**
+- Commit + push to git.
+- `developer.deploy_app` (git pull + validate).
+- `developer.suspend_app` -> `developer.update_pricing` with the COMPLETE 137-key tool_prices map
+  (133 existing + `submit_urls_to_indexnow`=1, `list_indexnow_log`=1, `clear_indexnow_log`=2,
+  `reset_indexnow_key`=2 — matching the existing 1=read/2=write-or-delete tier convention) —
+  verify byte-exact against every real `@chat.function` name, never partial, never via
+  `save_pricing`.
+- `developer.submit_for_review`.
+- Update `docs/2026-08-09-full-feature-roadmap.md` (117->137 functions) and the canonical Notes doc
+  (aaf4c105-320a-4482-8ab2-13f14768ebb3) with these same verified facts.
+- llms.txt module remains a real, confirmed-but-unbuilt candidate for a future slice (needs one
+  more source read to pin down its exact CMB2/option storage before writing any code against it).
+
+## 2026-08-10 (cont'd, latest of all) — Rank Math full site-wide coverage: score, robots.txt, sitemap status, 404 monitor
+
+**Status:** implemented, tested, deployed (commit 54459a49), priced, version bumped 1.14.0 -> 1.15.0.
+Full suite 531/531 pass. `imperal validate` clean (133 functions, 0 errors/0 warnings, was 127).
+
+**Why:** explicit user request — "давай полностью покроем функционал Rank Math" (repeated across
+the session). Roadmap §2.2 flagged sitemap status, robots.txt, SEO score and 404 monitor as the
+only remaining Rank Math gaps after redirects shipped earlier. Closed all four in one slice —
+Rank Math (Layer 2) is now the only layer in the whole roadmap doc with zero remaining ❌ gaps.
+
+**Verification-first discipline (no code written against guessed schema):** every DB table/option/
+postmeta key was confirmed by reading the real seo-by-rank-math 1.0.275 plugin source on GitHub
+before writing a single line of Bridge PHP or Python:
+- `get_seo_analysis_score`: postmeta key `rank_math_seo_score`, a plain integer
+  (`RankMath\Frontend_SEO_Score` reads it with a bare `get_post_meta()`).
+- `get_robots_txt` / `update_robots_txt`: the `robots_txt_content` key inside the
+  `rank-math-options-general` WP option (`RankMath\Robots_Txt`'s own storage) — this is Rank Math's
+  *override* text applied via the `robots_txt` filter, NOT the raw file on disk.
+- `get_sitemap_status`: the `rank_math_modules` option (a plain array of active module ids,
+  `RankMath\Helpers\Conditional::is_module_active()` checks it with `in_array()`). Deliberately did
+  **not** build `trigger_sitemap_regenerate` — verified Rank Math generates sitemaps dynamically
+  per-request (`Sitemap\Router`) with no stored "last generated" state at all, so a regenerate
+  action isn't a real operation on this plugin; building one would have been a fabricated feature.
+- `list_404_hits` / `delete_404_hit`: Rank Math's own `{prefix}rank_math_404_logs` table
+  (id/uri/accessed/times_accessed/referer/user_agent — `RankMath\Monitor\DB`'s own storage).
+  Bulk-clear-the-whole-log deliberately NOT exposed — no legitimate workflow needs to wipe 404
+  diagnostic history in one call with no way back.
+
+**Shipped:**
+- New Imperal Bridge PHP SECTION 7 (`imperal-bridge.php` v2.4.0, `IMPERAL_BRIDGE_VERSION` bumped,
+  `imperal_bridge_status()`'s `sections` array now includes `'rankmath'`): 5 REST routes —
+  `GET /rankmath/score/{id}`, `GET`+`POST /rankmath/robots-txt`, `GET /rankmath/sitemap-status`,
+  `GET /rankmath/404-logs`, `DELETE /rankmath/404-logs/{id}` — following the exact table-exists-guard
+  / permission-callback pattern established by SECTION 5 (Redirects) and SECTION 6 (Users).
+- New `handlers_rankmath.py` (6 `@chat.function`s): `get_seo_analysis_score`, `get_robots_txt`,
+  `update_robots_txt`, `get_sitemap_status`, `list_404_hits`, `delete_404_hit`.
+- New models.py entries: `GetSeoScoreParams`/`SeoScoreResult`, `RobotsTxtParams`/
+  `UpdateRobotsTxtParams`/`RobotsTxt`, `SitemapStatus`, `List404HitsParams`/`Hit404`,
+  `Delete404HitParams`/`Hit404DeleteResult`.
+- Wired into the connected-site detail panel as a new **Manage → SEO** sub-tab: sitemap module
+  status card, a robots.txt override editor form, and a 404-hit list with a per-row delete action.
+  `get_seo_analysis_score` stays chat-tool-only, matching the rest of the per-post SEO surface
+  (§2.1), which has no panel UI yet either.
+- Real render-path panel tests (`ui.*` calls confirmed against `inspect.signature` before writing,
+  same discipline as the earlier `update_plugin` slice that caught two fabricated `ui.*` params).
+- 15 new handler contract tests (success / bridge-missing / not-found / module-not-active cases) +
+  2 new panel tests. Full suite 531/531.
+
+**Priced:** `get_seo_analysis_score`=1, `get_robots_txt`=1, `update_robots_txt`=2,
+`get_sitemap_status`=1, `list_404_hits`=1, `delete_404_hit`=2 (matches the existing tier convention:
+1 = a single read call, 2 = a single write/delete call). Full 133-key map diffed 1:1 against every
+live `@chat.function` name across `handlers_*.py` before sending to `developer.update_pricing` —
+zero missing, zero extra, zero fabricated keys. App was suspended, priced, then resubmitted for
+review (checks passed: git_url_https, display_name_set, description_set, last_deploy_succeeded).
+
 ## 2026-08-10 (cont'd, latest of all) — Shipped update_plugin/update_core/run_wp_cron (last roadmap SSH/WP-CLI gap)
 
 **Status:** implemented, tested, deployed (commit 3ec6cb0a), priced. Full suite 514/514 pass.

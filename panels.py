@@ -3,7 +3,7 @@ from urllib.parse import urlparse
 
 from imperal_sdk import ui
 from app import ext
-from wp_client import wp_get, wp_title
+from wp_client import wp_get, wp_post, wp_title
 import storage
 
 _BUILTIN_TYPES = {
@@ -1147,10 +1147,56 @@ async def _render_redirects_block(ctx, site_id, base_url, username, pw):
 
 async def _render_rankmath_block(ctx, site_id, base_url, username, pw):
     """Rank Math site-wide: sitemap module status, robots.txt override editor,
-    and the 404 Monitor log — Imperal Bridge SECTION 7. Per-post SEO fields
-    (title/description/focus keyword/schema type) live on each post's own
-    edit view via get_seo_meta/update_seo_meta, not here.
+    404 Monitor log (Imperal Bridge SECTION 7), and Instant Indexing / IndexNow
+    (Rank Math's OWN native REST routes, no Bridge required). Per-post SEO
+    fields (title/description/focus keyword/schema type) live on each post's
+    own edit view via get_seo_meta/update_seo_meta, not here.
     """
+    sections = []
+
+    # ── Instant Indexing (IndexNow) — native Rank Math REST, works with or
+    # without the Bridge plugin, so it is fetched and rendered independently.
+    indexnow_r = await wp_post(ctx, base_url, "/wp-json/rankmath/v1/in/getLog",
+                               username=username, app_password=pw, json={"filter": "all"})
+    if indexnow_r is not None and indexnow_r.status_code == 200 and isinstance(indexnow_r.body, dict):
+        entries = indexnow_r.body.get("data", [])
+        submit_form = ui.Form(
+            action="submit_urls_to_indexnow", submit_label="Submit URLs",
+            defaults={"site_id": site_id},
+            children=[
+                ui.TextArea(param_name="urls", placeholder="https://example.com/page-1/\nhttps://example.com/page-2/",
+                            rows=3),
+            ],
+        )
+        if isinstance(entries, list) and entries:
+            log_items = [
+                ui.ListItem(
+                    id=str(idx), title=e.get("url", ""),
+                    subtitle=f"{'manual' if e.get('manual_submission') else 'auto'} · status {e.get('status', '')}",
+                    meta=e.get("time_human_readable", "") or e.get("message", ""),
+                )
+                for idx, e in enumerate(entries[:20])
+            ]
+            log_body = ui.List(items=log_items)
+        else:
+            log_body = ui.Empty(message="No IndexNow submissions logged yet.")
+        sections.append(ui.Card(
+            title="Instant Indexing (IndexNow)",
+            content=ui.Stack(gap=2, children=[
+                ui.Text("Notify Bing, Yandex and other participating search engines the moment "
+                        "a page changes.", variant="caption"),
+                submit_form,
+                ui.Button("Clear log", icon="Trash2", variant="ghost",
+                          on_click=ui.Call("clear_indexnow_log", site_id=site_id, filter="all")),
+                log_body,
+            ]),
+        ))
+    elif indexnow_r is not None and indexnow_r.status_code == 404:
+        sections.append(ui.Alert(
+            message="Instant Indexing needs Rank Math's own Instant Indexing module enabled "
+                    "on this site (Rank Math → Dashboard → Advanced Mode → Instant Indexing).",
+            type="info"))
+
     sitemap_r = await wp_get(ctx, base_url, "/wp-json/imperal/v1/rankmath/sitemap-status",
                              username=username, app_password=pw)
     robots_r = await wp_get(ctx, base_url, "/wp-json/imperal/v1/rankmath/robots-txt",
@@ -1159,14 +1205,15 @@ async def _render_rankmath_block(ctx, site_id, base_url, username, pw):
                           username=username, app_password=pw, params={"limit": 50})
 
     if sitemap_r is None or sitemap_r.status_code == 404:
-        return ui.Alert(
-            message="Rank Math site-wide data needs the Imperal Bridge plugin "
+        sections.append(ui.Alert(
+            message="Sitemap/robots.txt/404 Monitor data needs the Imperal Bridge plugin "
                     "(version 2.4.0+) — install/update it on this site first.",
-            type="info")
+            type="info"))
+        return ui.Stack(gap=3, children=sections) if sections else ui.Empty(
+            message="Could not load Rank Math data — check the connection.")
     if sitemap_r.status_code in (401, 403):
-        return ui.Alert(message="The connected user cannot read Rank Math settings.", type="error")
-
-    sections = []
+        sections.append(ui.Alert(message="The connected user cannot read Rank Math settings.", type="error"))
+        return ui.Stack(gap=3, children=sections)
 
     # ── Sitemap status ──
     if sitemap_r.status_code == 200 and isinstance(sitemap_r.body, dict):

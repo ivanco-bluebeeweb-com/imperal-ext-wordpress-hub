@@ -1619,3 +1619,58 @@ class Delete404HitParams(BaseModel):
 
 class Hit404DeleteResult(sdl.Entity):
     deleted: bool = False
+
+
+# ─────────── Rank Math Instant Indexing (IndexNow) — native REST, no Bridge ───────────
+
+_INDEXNOW_FILTERS = {"all", "manual", "auto"}
+
+
+class SubmitIndexNowUrlsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    urls: list[str] = Field(min_length=1, max_length=10000,
+                             description="One or more full https:// URLs on this site to submit "
+                             "to IndexNow (Bing, Yandex, and other participating search engines) "
+                             "for instant crawling/indexing")
+
+
+class IndexNowSubmitResult(sdl.Entity):
+    """Outcome of submitting URLs to Rank Math's Instant Indexing (IndexNow) API."""
+    submitted_count: int = 0
+    message: str = ""
+
+
+class IndexNowLogParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    filter: str = Field(default="all", description="Which submissions to show: 'all', "
+                         "'manual' (submitted via this function or the Rank Math admin UI), "
+                         "or 'auto' (submitted automatically on publish/update/trash)")
+
+
+class IndexNowLogEntry(sdl.Entity):
+    """One past IndexNow submission from Rank Math's own log (newest first, last 100 kept)."""
+    url: str = ""
+    status: int = 0
+    manual_submission: bool = False
+    message: str = ""
+    time_formatted: str = ""
+    time_human_readable: str = ""
+
+
+class ClearIndexNowLogParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    filter: str = Field(default="all", description="Which submissions to clear: 'all', 'manual', or 'auto'")
+
+
+class ClearIndexNowLogResult(sdl.Entity):
+    cleared: bool = False
+
+
+class ResetIndexNowKeyParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+
+
+class IndexNowKey(sdl.Entity):
+    """Rank Math's own IndexNow API key, hosted and served dynamically by the site itself."""
+    key: str = ""
+    location: str = ""

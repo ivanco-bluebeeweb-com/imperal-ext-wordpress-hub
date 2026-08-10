@@ -565,6 +565,42 @@ async def test_manage_tab_seo_shows_bridge_hint_when_missing():
     assert "Imperal Bridge" in str(node)
 
 
+async def test_manage_tab_seo_shows_indexnow_section_with_log_and_submit_form():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_post("https://blog.com/wp-json/rankmath/v1/in/getLog",
+                       {"data": [{"url": "https://blog.com/post-1/", "status": 200,
+                                  "manual_submission": True, "message": "URL submitted successfully.",
+                                  "time_human_readable": "2 hours ago"}]}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/sitemap-status",
+                      {"module_active": True, "sitemap_url": "https://blog.com/sitemap_index.xml"}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/robots-txt",
+                      {"content": "", "is_active": False, "site_is_public": True}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/404-logs", {"hits": []}, 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="seo")
+    s = str(node)
+    assert "Instant Indexing" in s
+    assert "submit_urls_to_indexnow" in s
+    assert "clear_indexnow_log" in s
+    assert "post-1" in s
+
+
+async def test_manage_tab_seo_shows_indexnow_module_disabled_hint():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_post("https://blog.com/wp-json/rankmath/v1/in/getLog",
+                       {"code": "rest_no_route"}, 404)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/sitemap-status",
+                      {"module_active": True, "sitemap_url": "https://blog.com/sitemap_index.xml"}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/robots-txt",
+                      {"content": "", "is_active": False, "site_is_public": True}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/404-logs", {"hits": []}, 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="seo")
+    s = str(node)
+    assert "Instant Indexing" in s
+    assert "Advanced Mode" in s
+
+
 async def test_manage_tab_settings_shows_editable_form():
     ctx = await _base_panel_ctx()
     ctx.http.mock_get("https://blog.com/wp-json/wp/v2/settings",
