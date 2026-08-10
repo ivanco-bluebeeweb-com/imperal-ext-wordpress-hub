@@ -462,6 +462,200 @@ def _render_reviews_block(items, site_id):
     ])
 
 
+# ── Customers (WooCommerce) ─────────────────────────────────────────────────────
+# list_customers/create_customer existed as chat-tools only, priced but with no
+# click path anywhere on the detail screen -- store owners had to know to ask
+# for a customer list by name instead of just clicking a tab.
+
+def _render_customers_block(items, site_id):
+    if items is None:
+        return ui.Alert(message="Could not load customers — check the connected "
+                                "user's permissions.", type="info")
+    create_form = ui.Card(title="New customer", content=ui.Form(
+        action="create_customer", submit_label="Create customer",
+        defaults={"site_id": site_id},
+        children=[
+            ui.Input(param_name="email", placeholder="Email"),
+            ui.Input(param_name="first_name", placeholder="First name (optional)"),
+            ui.Input(param_name="last_name", placeholder="Last name (optional)"),
+        ],
+    ))
+    if not items:
+        return ui.Stack(gap=3, children=[ui.Empty(message="No customers found."), create_form])
+
+    rows = [
+        ui.ListItem(
+            id=str(it.get("id", "")),
+            title=" ".join(p for p in (it.get("first_name", ""), it.get("last_name", "")) if p)
+                  or it.get("username", "Customer"),
+            subtitle=it.get("email", ""),
+            meta=f"{it.get('orders_count', 0)} order(s) · {it.get('total_spent', '')}",
+        )
+        for it in items
+    ]
+    return ui.Stack(gap=3, children=[ui.List(items=rows), create_form])
+
+
+# ── Orders (WooCommerce) ─────────────────────────────────────────────────────────
+# update_order_status/update_order_status_risky/add_private_order_note/
+# add_customer_order_note existed as chat-tools only -- the Orders sub-tab was
+# a plain read-only DataTable despite full order-management write support.
+# Risky statuses (cancelled/failed/refunded) route through the destructive
+# confirmation gate automatically -- update_order_status_risky is only ever
+# offered for those three, never for the routine ones.
+
+_ORDER_STATUS_OPTIONS = [
+    {"value": "pending", "label": "Pending payment"},
+    {"value": "on-hold", "label": "On hold"},
+    {"value": "processing", "label": "Processing"},
+    {"value": "completed", "label": "Completed"},
+    {"value": "cancelled", "label": "Cancelled"},
+    {"value": "failed", "label": "Failed"},
+    {"value": "refunded", "label": "Refunded"},
+]
+_RISKY_ORDER_STATUSES = {"cancelled", "failed", "refunded"}
+
+
+def _render_orders_block(items, site_id):
+    if items is None:
+        return ui.Alert(message="Could not load WooCommerce orders — check the "
+                                "connected user's permissions.", type="info")
+    if not items:
+        return ui.Empty(message="No orders found.")
+
+    def _row(it):
+        oid = it.get("id")
+        status = it.get("status", "")
+        status_form = ui.Form(
+            action="update_order_status", submit_label="Update status",
+            defaults={"site_id": site_id, "order_id": oid},
+            children=[
+                ui.Select(param_name="status", value=status, placeholder="New status",
+                         options=[o for o in _ORDER_STATUS_OPTIONS
+                                  if o["value"] not in _RISKY_ORDER_STATUSES]),
+            ],
+        )
+        risky_form = ui.Form(
+            action="update_order_status_risky", submit_label="Apply (confirm required)",
+            defaults={"site_id": site_id, "order_id": oid},
+            children=[
+                ui.Select(param_name="status", placeholder="Cancel / fail / refund",
+                         options=[o for o in _ORDER_STATUS_OPTIONS
+                                  if o["value"] in _RISKY_ORDER_STATUSES]),
+            ],
+        )
+        note_form = ui.Form(
+            action="add_private_order_note", submit_label="Add note",
+            defaults={"site_id": site_id, "order_id": oid},
+            children=[ui.Input(param_name="note", placeholder="Internal note (not seen by customer)")],
+        )
+        return ui.ListItem(
+            id=str(oid), title=f"Order #{oid}",
+            subtitle=f"{it.get('total', '')} {it.get('currency', '')}".strip(),
+            meta=f"{status} · {(it.get('date_created', '') or '')[:10]}",
+            expandable=True,
+            expanded_content=[
+                ui.Stack(gap=2, children=[
+                    ui.Card(title="Change status", content=status_form),
+                    ui.Card(title="Cancel / fail / refund status", content=risky_form),
+                    ui.Card(title="Add private note", content=note_form),
+                ]),
+            ],
+        )
+
+    return ui.List(items=[_row(it) for it in items])
+
+
+# ── Coupons (WooCommerce) ────────────────────────────────────────────────────────
+# list_coupons/create_coupon/archive_coupon existed as chat-tools only -- same
+# gap as customers above, closed the same way (list with a per-row action,
+# create form underneath).
+
+# ── Products (WooCommerce) ───────────────────────────────────────────────────────
+# create_product/archive_product existed as chat-tools only -- the Products
+# sub-tab was a plain read-only DataTable despite full catalogue write support.
+
+def _render_products_block(items, site_id):
+    if items is None:
+        return ui.Alert(message="Could not load WooCommerce products — check the "
+                                "connected user's permissions.", type="info")
+    create_form = ui.Card(title="New product", content=ui.Form(
+        action="create_product", submit_label="Create product",
+        defaults={"site_id": site_id, "status": "draft"},
+        children=[
+            ui.Input(param_name="name", placeholder="Product name"),
+            ui.Input(param_name="regular_price", placeholder="Regular price (optional)"),
+            ui.Input(param_name="sku", placeholder="SKU (optional)"),
+            ui.Select(param_name="status", placeholder="Status", value="draft", options=[
+                {"value": "draft", "label": "Draft"},
+                {"value": "publish", "label": "Publish"},
+                {"value": "pending", "label": "Pending review"},
+                {"value": "private", "label": "Private"},
+            ]),
+        ],
+    ))
+    if not items:
+        return ui.Stack(gap=3, children=[ui.Empty(message="No products found."), create_form])
+
+    def _row(it):
+        pid = it.get("id")
+        status = it.get("status", "")
+        actions = []
+        if status != "trash":
+            actions.append({"icon": "Trash2", "label": "Archive",
+                            "on_click": ui.Call("archive_product", site_id=site_id, product_id=pid),
+                            "confirm": f"Move product '{it.get('name', '')}' to Trash?"})
+        return ui.ListItem(
+            id=str(pid), title=it.get("name", ""),
+            subtitle=f"SKU {it.get('sku', '') or '—'} · {it.get('price', '')}",
+            meta=f"{status} · {it.get('stock_status', '')} ({it.get('stock_quantity', 0) or 0})",
+            actions=actions,
+        )
+
+    return ui.Stack(gap=3, children=[ui.List(items=[_row(it) for it in items]), create_form])
+
+
+def _render_coupons_block(items, site_id):
+    if items is None:
+        return ui.Alert(message="Could not load coupons — check the connected "
+                                "user's permissions.", type="info")
+    create_form = ui.Card(title="New coupon", content=ui.Form(
+        action="create_coupon", submit_label="Create coupon",
+        defaults={"site_id": site_id},
+        children=[
+            ui.Input(param_name="code", placeholder="Coupon code, e.g. SUMMER10"),
+            ui.Select(param_name="discount_type", options=[
+                {"value": "percent", "label": "Percentage"},
+                {"value": "fixed_cart", "label": "Fixed amount off cart"},
+                {"value": "fixed_product", "label": "Fixed amount off product"},
+            ], value="percent", placeholder="Discount type"),
+            ui.Input(param_name="amount", placeholder="Amount, e.g. 10"),
+        ],
+    ))
+    if not items:
+        return ui.Stack(gap=3, children=[ui.Empty(message="No coupons found."), create_form])
+
+    def _row(it):
+        cid = it.get("id")
+        status = it.get("status", "")
+        discount = f"{it.get('amount', '')}"
+        if it.get("discount_type") == "percent":
+            discount += "%"
+        actions = []
+        if status != "trash":
+            actions.append({"icon": "Trash2", "label": "Archive",
+                            "on_click": ui.Call("archive_coupon", site_id=site_id, coupon_id=cid),
+                            "confirm": f"Move coupon '{it.get('code', '')}' to Trash?"})
+        return ui.ListItem(
+            id=str(cid), title=it.get("code", ""),
+            subtitle=f"{discount} off · used {it.get('usage_count', 0)} time(s)",
+            meta=(f"expires {it.get('date_expires', '')}" if it.get("date_expires") else status),
+            actions=actions,
+        )
+
+    return ui.Stack(gap=3, children=[ui.List(items=[_row(it) for it in items]), create_form])
+
+
 def _render_content_table(items, tab):
     if items is None:
         if tab == "orders":
@@ -1215,6 +1409,8 @@ async def _render_detail(ctx, site_id,
             _item_btn("Overview", "overview", commerce_tab, "commerce_tab"),
             _item_btn("Orders", "orders", commerce_tab, "commerce_tab"),
             _item_btn("Products", "products", commerce_tab, "commerce_tab"),
+            _item_btn("Customers", "customers", commerce_tab, "commerce_tab"),
+            _item_btn("Coupons", "coupons", commerce_tab, "commerce_tab"),
             _item_btn("Reviews", "reviews", commerce_tab, "commerce_tab"),
         ]
         if commerce_tab == "reviews":
@@ -1223,37 +1419,26 @@ async def _render_detail(ctx, site_id,
                 {"per_page": 50, "orderby": "date", "order": "desc"},
             )
             commerce_body = _render_reviews_block(reviews_data, site_id)
+        elif commerce_tab == "customers":
+            customers_data = await _list(
+                "/wp-json/wc/v3/customers",
+                {"per_page": 50, "orderby": "registered_date", "order": "desc"},
+            )
+            commerce_body = _render_customers_block(customers_data, site_id)
+        elif commerce_tab == "coupons":
+            coupons_data = await _list(
+                "/wp-json/wc/v3/coupons",
+                {"per_page": 50, "orderby": "date", "order": "desc"},
+            )
+            commerce_body = _render_coupons_block(coupons_data, site_id)
         elif commerce_tab == "products":
             products_data = await _list(
                 "/wp-json/wc/v3/products",
                 {"per_page": 20, "orderby": "date", "order": "desc"},
             )
-            if products_data is None:
-                commerce_body = ui.Alert(
-                    message="Could not load WooCommerce products — check the connected user's permissions.",
-                    type="info",
-                )
-            elif not products_data:
-                commerce_body = ui.Empty(message="No products found.")
-            else:
-                commerce_body = ui.DataTable(
-                    columns=[
-                        ui.DataColumn("name", "Product", sortable=True),
-                        ui.DataColumn("sku", "SKU", sortable=True),
-                        ui.DataColumn("price", "Price", sortable=True),
-                        ui.DataColumn("stock", "Stock", sortable=True),
-                        ui.DataColumn("quantity", "Quantity", sortable=True),
-                    ],
-                    rows=[{
-                        "name": item.get("name", ""),
-                        "sku": item.get("sku", ""),
-                        "price": item.get("price", ""),
-                        "stock": item.get("stock_status", ""),
-                        "quantity": item.get("stock_quantity") if item.get("stock_quantity") is not None else "—",
-                    } for item in products_data],
-                )
+            commerce_body = _render_products_block(products_data, site_id)
         elif commerce_tab == "orders":
-            commerce_body = _render_content_table(orders_data, "orders")
+            commerce_body = _render_orders_block(orders_data, site_id)
         else:
             report_data = await _list("/wp-json/wc/v3/reports/sales", {"period": "month"})
             if report_data is None:
@@ -1271,7 +1456,7 @@ async def _render_detail(ctx, site_id,
                         ui.Stat(label="Average order", value=f"{report.get('average_sales', '')} {currency}".strip(), color="blue"),
                         ui.Stat(label="Refunds", value=f"{report.get('total_refunds', '')} {currency}".strip(), color="yellow"),
                     ]),
-                    ui.Text("WooCommerce summary for the current month. All commerce actions are read-only.", variant="caption"),
+                    ui.Text("WooCommerce summary for the current month.", variant="caption"),
                 ])
         active_content = ui.Stack(gap=3, children=[
             ui.Stack(direction="h", gap=1, wrap=True, children=commerce_btns),

@@ -294,7 +294,6 @@ async def test_center_commerce_overview_renders_store_stats():
                                group_tab="commerce", commerce_tab="overview")
     s = str(node)
     assert "Net sales" in s and "350.00 USD" in s
-    assert "read-only" in s
 
 
 async def test_center_commerce_products_renders_stock_table():
@@ -307,6 +306,21 @@ async def test_center_commerce_products_renders_stock_table():
                                group_tab="commerce", commerce_tab="products")
     s = str(node)
     assert "Blue mug" in s and "MUG-B" in s and "instock" in s
+    assert "create_product" in s
+    assert "archive_product" in s
+
+
+async def test_center_commerce_orders_has_status_change_and_note_forms():
+    """Orders sub-tab used to be a plain read-only DataTable -- confirm the
+    rework wires update_order_status/update_order_status_risky/notes."""
+    ctx = await _store_panel_ctx()
+    node = await panels.center(ctx, view="", site_id="shop-com",
+                               group_tab="commerce", commerce_tab="orders")
+    s = str(node)
+    assert "Order #8" in s
+    assert "update_order_status" in s
+    assert "update_order_status_risky" in s
+    assert "add_private_order_note" in s
 
 
 async def test_center_detail_shows_alert_on_missing_credential():
@@ -588,3 +602,35 @@ async def test_commerce_tab_has_reviews_subtab_with_moderation_actions():
     assert "Bob" in s
     assert "set_product_review_status" in s
     assert "reply_to_product_review" in s
+
+
+# ── Commerce tab rework: Customers + Coupons (list_customers/list_coupons had
+# no click path anywhere on the detail screen despite full backend CRUD) ────────
+
+async def test_commerce_tab_has_customers_subtab_with_create_form():
+    ctx = await _store_panel_ctx(woocommerce=True)
+    ctx.http.mock_get("https://shop.com/wp-json/wc/v3/customers",
+                      [{"id": 3, "first_name": "Ana", "last_name": "Pop",
+                        "email": "ana@example.com", "orders_count": 2,
+                        "total_spent": "150.00"}], 200)
+    node = await panels.center(ctx, view="", site_id="shop-com",
+                               group_tab="commerce", commerce_tab="customers")
+    s = str(node)
+    assert "'label': 'Customers'" in s
+    assert "Ana" in s
+    assert "ana@example.com" in s
+    assert "create_customer" in s
+
+
+async def test_commerce_tab_has_coupons_subtab_with_create_and_archive_actions():
+    ctx = await _store_panel_ctx(woocommerce=True)
+    ctx.http.mock_get("https://shop.com/wp-json/wc/v3/coupons",
+                      [{"id": 11, "code": "SUMMER10", "amount": "10", "discount_type": "percent",
+                        "usage_count": 3, "date_expires": "2026-09-01T00:00:00"}], 200)
+    node = await panels.center(ctx, view="", site_id="shop-com",
+                               group_tab="commerce", commerce_tab="coupons")
+    s = str(node)
+    assert "'label': 'Coupons'" in s
+    assert "SUMMER10" in s
+    assert "create_coupon" in s
+    assert "archive_coupon" in s
