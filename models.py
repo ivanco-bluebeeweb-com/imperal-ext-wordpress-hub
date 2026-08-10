@@ -1300,6 +1300,35 @@ class BulkPostStatusResult(sdl.Entity):
     failed_ids: list[int] = Field(default_factory=list)
 
 
+class GetPostRevisionsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(gt=0, description="Numeric post/page id from list_posts/list_pages")
+    post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug")
+    limit: int = Field(default=20, ge=1, le=100, description="Maximum revisions to return, newest first")
+
+
+class Revision(sdl.Entity):
+    """One stored WordPress revision of a post/page."""
+    post_id: int = 0
+    author: str = ""
+    date: str | None = None
+    excerpt_preview: str = ""
+
+
+class RestoreRevisionParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(gt=0, description="Numeric post/page id the revision belongs to")
+    revision_id: int = Field(gt=0, description="Revision id from get_post_revisions to restore")
+    post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug")
+
+
+class SetPostPasswordParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(gt=0, description="Numeric post/page id from list_posts/list_pages")
+    post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug")
+    password: str = Field(default="", max_length=255, description="Password required to view the post; empty string removes password protection")
+
+
 # ─────────── WooCommerce product reviews (/wc/v3/products/reviews) ───────────
 
 class ProductReview(sdl.Entity):

@@ -7,7 +7,7 @@ create_post/update_post covered writing content; there was no way back out
 three are common everyday WP Core actions on the native /wp/v2 REST API,
 no Bridge/SSH needed.
 """
-from imperal_sdk import ActionResult
+from imperal_sdk import ActionResult, sdl
 
 from app import chat
 from models import (
@@ -15,8 +15,12 @@ from models import (
     BulkUpdatePostStatusParams,
     DeletePostParams,
     DuplicatePostParams,
+    GetPostRevisionsParams,
     PostDeleteResult,
     PostResult,
+    RestoreRevisionParams,
+    Revision,
+    SetPostPasswordParams,
 )
 import storage
 from wp_client import (
@@ -213,3 +217,152 @@ async def bulk_update_post_status(ctx, params: BulkUpdatePostStatusParams) -> Ac
     if failed_ids:
         summary += f" — {len(failed_ids)} failed: {failed_ids}"
     return ActionResult.success(result, summary=summary, refresh_panels=["center"])
+
+
+@chat.function(
+    "get_post_revisions",
+    description=(
+        "List the stored revisions of a post/page, newest first -- author, date, and a short "
+        "excerpt preview of each. Native /wp/v2 revisions endpoint, no Bridge/SSH needed."
+    ),
+    action_type="read",
+    data_model=sdl.EntityList[Revision],
+)
+async def get_post_revisions(ctx, params: GetPostRevisionsParams) -> ActionResult:
+    """Read the revision history of one post/page."""
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+    rest_base = _rest_base(params.post_type.strip() or "post")
+
+    try:
+        r = await wp_get(ctx, base_url, f"/wp-json/wp/v2/{rest_base}/{params.post_id}/revisions",
+                         username=username, app_password=pw, params={"per_page": params.limit})
+    except Exception as e:
+        await ctx.log(f"get_post_revisions failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True)
+    if not 200 <= r.status_code < 300:
+        return _failure(r.status_code, r.body)
+    if not isinstance(r.body, list):
+        return ActionResult.error("WordPress returned an unexpected response.",
+                                  retryable=False, code="WP_RESPONSE_UNEXPECTED")
+
+    items = []
+    for rev in r.body:
+        excerpt = rev.get("excerpt", {}).get("rendered", "") if isinstance(rev.get("excerpt"), dict) else ""
+        items.append(Revision(
+            id=str(rev.get("id", "")), title=wp_title(rev), kind="wp_revision",
+            post_id=params.post_id, author=str(rev.get("author", "")),
+            date=rev.get("date"), excerpt_preview=excerpt[:200],
+        ))
+    return ActionResult.success(
+        sdl.EntityList[Revision](items=items),
+        summary=f"{len(items)} revision(s) for post #{params.post_id}")
+
+
+@chat.function(
+    "restore_revision",
+    description=(
+        "Restore a post/page's content and title to a previous revision. WordPress core has no "
+        "native REST 'restore' verb, so this reads the chosen revision's content/title/excerpt "
+        "and writes them back onto the live post as a normal update -- the live post's own "
+        "revision history still records this as a new change, nothing is silently rewritten."
+    ),
+    action_type="write",
+    data_model=PostResult,
+    effects=["wp.post_update"],
+    event="wordpress-hub.restore_revision",
+)
+async def restore_revision(ctx, params: RestoreRevisionParams) -> ActionResult:
+    """Copy one stored revision's content/title/excerpt onto the live post."""
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+    rest_base = _rest_base(params.post_type.strip() or "post")
+
+    try:
+        rev_r = await wp_get(
+            ctx, base_url, f"/wp-json/wp/v2/{rest_base}/{params.post_id}/revisions/{params.revision_id}",
+            username=username, app_password=pw, params={"context": "edit"})
+    except Exception as e:
+        await ctx.log(f"restore_revision fetch failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True)
+    if not 200 <= rev_r.status_code < 300:
+        return _failure(rev_r.status_code, rev_r.body)
+    revision = rev_r.body if isinstance(rev_r.body, dict) else {}
+
+    # context=edit returns raw (unfiltered) fields -- the actual stored Gutenberg block
+    # markup, not the_content-filtered display HTML. Falls back to rendered if a site's
+    # edit-context response ever omits raw (shouldn't happen with a valid Application Password).
+    def _raw_or_rendered(field):
+        v = revision.get(field)
+        if isinstance(v, dict):
+            return v.get("raw", v.get("rendered", ""))
+        return ""
+
+    title = _raw_or_rendered("title")
+    content = _raw_or_rendered("content")
+    excerpt = _raw_or_rendered("excerpt")
+
+    try:
+        update_r = await wp_update_post(
+            ctx, base_url, username, pw, post_id=params.post_id, post_type=rest_base,
+            title=title, content=content, excerpt=excerpt)
+    except Exception as e:
+        await ctx.log(f"restore_revision update failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True)
+    if not 200 <= update_r.status_code < 300:
+        return _failure(update_r.status_code, update_r.body)
+
+    updated = update_r.body if isinstance(update_r.body, dict) else {}
+    link = updated.get("link", "")
+    result = PostResult(
+        id=str(params.post_id), title=wp_title(updated), kind=f"wp_{params.post_type}",
+        url=link, link=link, post_type=params.post_type, slug=updated.get("slug", ""),
+        status=updated.get("status"), date=updated.get("date"),
+    )
+    return ActionResult.success(
+        result, summary=f"Restored post #{params.post_id} to revision #{params.revision_id}",
+        refresh_panels=["center"])
+
+
+@chat.function(
+    "set_post_password",
+    description=(
+        "Password-protect a post/page (visitors must enter the password to view it), or remove "
+        "protection by passing an empty password. Native WordPress core field, no Bridge needed."
+    ),
+    action_type="write",
+    data_model=PostResult,
+    effects=["wp.post_update"],
+    event="wordpress-hub.set_post_password",
+)
+async def set_post_password(ctx, params: SetPostPasswordParams) -> ActionResult:
+    """Set or clear a post/page's view password."""
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+    rest_base = _rest_base(params.post_type.strip() or "post")
+
+    try:
+        r = await wp_update_post(ctx, base_url, username, pw, post_id=params.post_id,
+                                 post_type=rest_base, password=params.password)
+    except Exception as e:
+        await ctx.log(f"set_post_password failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True)
+    if not 200 <= r.status_code < 300:
+        return _failure(r.status_code, r.body)
+
+    updated = r.body if isinstance(r.body, dict) else {}
+    link = updated.get("link", "")
+    result = PostResult(
+        id=str(params.post_id), title=wp_title(updated), kind=f"wp_{params.post_type}",
+        url=link, link=link, post_type=params.post_type, slug=updated.get("slug", ""),
+        status=updated.get("status"), date=updated.get("date"),
+    )
+    verb = "protected with a password" if params.password else "password protection removed"
+    return ActionResult.success(result, summary=f"Post #{params.post_id} {verb}",
+                                 refresh_panels=["center"])

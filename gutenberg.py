@@ -11,6 +11,7 @@ from __future__ import annotations
 import html
 import json
 import re
+from urllib.parse import urlparse
 
 
 # Matches markdown-style [anchor text](url) so callers can embed a REAL link
@@ -25,31 +26,70 @@ import re
 _INLINE_LINK_RE = re.compile(r"\[([^\]\[]+)\]\((https?://[^\s()]+)\)")
 
 
-def _render_inline_links(text: str) -> str:
+def _registrable_domain(url_or_domain: str) -> str:
+    """Normalise a URL or bare domain to a comparable host: strip scheme,
+    'www.' prefix, port and trailing slash, lowercase. Used ONLY to decide
+    same-site vs external -- not a full public-suffix-list eTLD+1 parse,
+    which this pipeline has never needed (site domains are known, single
+    connected sites, not arbitrary third-party URLs)."""
+    if not url_or_domain:
+        return ""
+    parsed = urlparse(url_or_domain if "://" in url_or_domain else f"//{url_or_domain}")
+    host = (parsed.netloc or parsed.path or "").lower()
+    host = host.split(":")[0]  # drop a port if present
+    if host.startswith("www."):
+        host = host[4:]
+    return host
+
+
+def _is_external_link(url: str, site_domain: str | None) -> bool:
+    """A link is external when its host differs from the connected site's own
+    host. Without a site_domain (no caller passed one) nothing can be judged
+    external, so callers that skip it get the old plain-link behaviour."""
+    if not site_domain:
+        return False
+    return _registrable_domain(url) != _registrable_domain(site_domain)
+
+
+def _render_inline_links(text: str, site_domain: str | None = None) -> str:
     """Escape ``text`` for safe HTML output, EXCEPT for [anchor](https://url)
     spans, which become real <a href> tags with the anchor text and URL each
     individually escaped. Anything that isn't inside that exact syntax is
     escaped exactly as before -- this is additive, not a relaxation of the
-    existing escaping guarantee."""
+    existing escaping guarantee.
+
+    Pipeline rule (applies to every article published through this module):
+    a link whose host differs from the connected site's own host -- i.e. an
+    external link -- always opens in a new tab and is marked nofollow. This
+    keeps the reader on the site's own tab and never hands page-rank equity
+    to a destination this pipeline doesn't control or vet per-link. A link
+    to the site's own domain is a normal, followed, same-tab link.
+    """
     pieces = []
     last_end = 0
     for match in _INLINE_LINK_RE.finditer(text):
         pieces.append(html.escape(text[last_end:match.start()]))
         anchor_text, url = match.group(1), match.group(2)
-        pieces.append(
-            f'<a href="{html.escape(url, quote=True)}">{html.escape(anchor_text)}</a>'
-        )
+        escaped_url = html.escape(url, quote=True)
+        escaped_anchor = html.escape(anchor_text)
+        if _is_external_link(url, site_domain):
+            pieces.append(
+                f'<a href="{escaped_url}" target="_blank" '
+                f'rel="nofollow noopener noreferrer">{escaped_anchor}</a>'
+            )
+        else:
+            pieces.append(f'<a href="{escaped_url}">{escaped_anchor}</a>')
         last_end = match.end()
     pieces.append(html.escape(text[last_end:]))
     return "".join(pieces)
 
 
-def paragraph_block(text: str) -> str:
-    return f"<!-- wp:paragraph --><p>{_render_inline_links(text)}</p><!-- /wp:paragraph -->"
+def paragraph_block(text: str, site_domain: str | None = None) -> str:
+    return f"<!-- wp:paragraph --><p>{_render_inline_links(text, site_domain)}</p><!-- /wp:paragraph -->"
 
 
-def heading_block(text: str, level: int = 2) -> str:
-    escaped = _render_inline_links(text)
+def heading_block(text: str, level: int = 2, site_domain: str | None = None) -> str:
+    escaped = _render_inline_links(text, site_domain)
     return (
         f'<!-- wp:heading {{"level":{level}}} -->'
         f'<h{level} class="wp-block-heading">{escaped}</h{level}>'
@@ -200,7 +240,7 @@ def markdown_to_blocks(markdown_text: str, *, skip_h1: bool = True) -> list[dict
     return blocks
 
 
-def blocks_to_content(blocks) -> str:
+def blocks_to_content(blocks, site_domain: str | None = None) -> str:
     """Render explicit blocks (list of {type, text, level, media_id, media_url, caption, faq_items})
     into post_content.
 
@@ -210,6 +250,15 @@ def blocks_to_content(blocks) -> str:
     render); type == "faq" renders a visible Q&A list plus FAQPage JSON-LD
     schema (skipped if faq_items is empty); anything else (including the
     default "paragraph") renders a plain paragraph block.
+
+    site_domain (the connected site's own domain, e.g. from list_sites) is
+    the pipeline's link policy switch: any inline [anchor](url) link whose
+    host does NOT match it gets target="_blank" rel="nofollow noopener
+    noreferrer" automatically -- external links always open in a new tab and
+    never pass link equity, without a caller having to remember to mark each
+    one by hand. A link to the site's own domain stays a normal same-tab,
+    followed link. Omit site_domain to keep the old behaviour (no link ever
+    gets marked external).
 
     NOTE on image_role: a block whose image_role names an external_images
     entry gets its media_id/media_url filled in by the caller (see
@@ -232,7 +281,7 @@ def blocks_to_content(blocks) -> str:
         if not text.strip():
             continue
         if btype == "heading":
-            rendered.append(heading_block(text, level))
+            rendered.append(heading_block(text, level, site_domain))
         else:
-            rendered.append(paragraph_block(text))
+            rendered.append(paragraph_block(text, site_domain))
     return "\n".join(rendered)

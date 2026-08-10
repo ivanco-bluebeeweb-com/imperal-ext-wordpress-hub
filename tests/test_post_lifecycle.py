@@ -5,7 +5,14 @@ from imperal_sdk.testing import MockContext
 import app  # noqa: F401
 import handlers_post_lifecycle as hpl
 import storage
-from models import BulkUpdatePostStatusParams, DeletePostParams, DuplicatePostParams
+from models import (
+    BulkUpdatePostStatusParams,
+    DeletePostParams,
+    DuplicatePostParams,
+    GetPostRevisionsParams,
+    RestoreRevisionParams,
+    SetPostPasswordParams,
+)
 
 BASE = "https://blog.test/wp-json/wp/v2"
 
@@ -119,3 +126,82 @@ async def test_bulk_update_post_status_rejects_invalid_status():
         site_id="blog-test", post_ids=[1], status="not-a-status"))
     assert result.status == "error"
     assert result.error_code == "POST_INVALID_STATUS"
+
+
+def _revision(rev_id=50, **over):
+    data = {
+        "id": rev_id, "parent": 7, "author": "3",
+        "date": "2026-01-01T09:00:00",
+        "title": {"rendered": "Older title", "raw": "Older title"},
+        "content": {"rendered": "<p>Older body</p>", "raw": "<p>Older body</p>"},
+        "excerpt": {"rendered": "Older excerpt", "raw": "Older excerpt"},
+    }
+    data.update(over)
+    return data
+
+
+async def test_get_post_revisions_lists_newest_first():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/posts/7/revisions", [_revision(50), _revision(49)])
+    result = await hpl.get_post_revisions(ctx, GetPostRevisionsParams(site_id="blog-test", post_id=7))
+    assert result.status == "success"
+    assert len(result.data.items) == 2
+    assert result.data.items[0].id == "50"
+    assert result.data.items[0].post_id == 7
+
+
+async def test_get_post_revisions_not_found():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/posts/999/revisions", {"code": "rest_post_invalid_id"}, 404)
+    result = await hpl.get_post_revisions(ctx, GetPostRevisionsParams(site_id="blog-test", post_id=999))
+    assert result.status == "error"
+    assert result.error_code == "WP_POST_NOT_FOUND"
+
+
+async def test_restore_revision_writes_revision_content_back_onto_live_post():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/posts/7/revisions/50", _revision(50))
+    ctx.http.mock_post(f"{BASE}/posts/7", _post(
+        pid=7, title={"rendered": "Older title"}, content={"rendered": "<p>Older body</p>"},
+        excerpt={"rendered": "Older excerpt"}))
+    result = await hpl.restore_revision(ctx, RestoreRevisionParams(
+        site_id="blog-test", post_id=7, revision_id=50))
+    assert result.status == "success"
+    assert result.data.title == "Older title"
+    assert "50" in result.summary
+
+
+async def test_restore_revision_missing_revision():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/posts/7/revisions/999", {"code": "rest_post_invalid_id"}, 404)
+    result = await hpl.restore_revision(ctx, RestoreRevisionParams(
+        site_id="blog-test", post_id=7, revision_id=999))
+    assert result.status == "error"
+    assert result.error_code == "WP_POST_NOT_FOUND"
+
+
+async def test_set_post_password_protects_post():
+    ctx = await _ctx()
+    ctx.http.mock_post(f"{BASE}/posts/7", _post(pid=7))
+    result = await hpl.set_post_password(ctx, SetPostPasswordParams(
+        site_id="blog-test", post_id=7, password="hunter2"))
+    assert result.status == "success"
+    assert "protected" in result.summary.lower()
+
+
+async def test_set_post_password_empty_removes_protection():
+    ctx = await _ctx()
+    ctx.http.mock_post(f"{BASE}/posts/7", _post(pid=7))
+    result = await hpl.set_post_password(ctx, SetPostPasswordParams(
+        site_id="blog-test", post_id=7, password=""))
+    assert result.status == "success"
+    assert "removed" in result.summary.lower()
+
+
+async def test_set_post_password_not_found():
+    ctx = await _ctx()
+    ctx.http.mock_post(f"{BASE}/posts/999", {"code": "rest_post_invalid_id"}, 404)
+    result = await hpl.set_post_password(ctx, SetPostPasswordParams(
+        site_id="blog-test", post_id=999, password="x"))
+    assert result.status == "error"
+    assert result.error_code == "WP_POST_NOT_FOUND"

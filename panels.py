@@ -397,10 +397,18 @@ def _posts_management_block(items, tab, site_id):
                         "on_click": ui.Call("delete_post", site_id=site_id, post_id=pid,
                                             post_type=post_type),
                         "confirm": f"Move \"{wp_title(it)}\" to Trash?"})
+        password_form = ui.Form(
+            action="set_post_password", submit_label="Set/clear password",
+            defaults={"site_id": site_id, "post_id": pid, "post_type": post_type},
+            children=[ui.Input(param_name="password",
+                               placeholder="Password to view this — leave empty to remove protection")],
+        )
         return ui.ListItem(
             id=str(pid), title=wp_title(it),
             subtitle=status, meta=(it.get("date", "") or "")[:10],
             actions=actions,
+            expandable=True,
+            expanded_content=[ui.Card(title="Password protection", content=password_form)],
         )
 
     return ui.List(items=[_row(it) for it in items])

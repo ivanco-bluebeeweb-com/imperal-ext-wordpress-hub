@@ -217,7 +217,12 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
         ctx, base_url, username, pw, external_images=params.external_images,
         blocks=source_blocks, featured_media_id=params.featured_media_id,
     )
-    content = gutenberg.blocks_to_content(blocks)
+    # site_domain drives the link policy: any inline link whose host differs
+    # from this connected site's own domain automatically gets
+    # target="_blank" rel="nofollow noopener noreferrer" -- external links
+    # always open in a new tab and never pass link equity, with no manual
+    # per-link marking required from whoever wrote the article.
+    content = gutenberg.blocks_to_content(blocks, site_domain=base_url)
 
     category_id = None
     category_resolved = True
@@ -349,7 +354,7 @@ async def update_post(ctx, params: UpdatePostParams) -> ActionResult:
     if params.slug is not None:
         fields["slug"] = params.slug
     if blocks is not None:
-        fields["content"] = gutenberg.blocks_to_content(blocks)
+        fields["content"] = gutenberg.blocks_to_content(blocks, site_domain=base_url)
     if params.excerpt is not None:
         fields["excerpt"] = params.excerpt
     if params.date is not None:

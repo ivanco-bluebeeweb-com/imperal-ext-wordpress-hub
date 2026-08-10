@@ -579,6 +579,7 @@ async def test_posts_tab_has_publish_duplicate_delete_actions():
     assert "duplicate_post" in s
     assert "delete_post" in s
     assert "'label': 'Publish'" in s
+    assert "set_post_password" in s
 
 
 async def test_media_tab_still_uses_plain_table_not_lifecycle_actions():
