@@ -308,6 +308,7 @@ async def test_center_commerce_products_renders_stock_table():
     assert "Blue mug" in s and "MUG-B" in s and "instock" in s
     assert "create_product" in s
     assert "archive_product" in s
+    assert "update_product" in s   # per-row edit form (name/price/sku/stock/status)
 
 
 async def test_center_commerce_orders_has_status_change_and_note_forms():
@@ -472,6 +473,7 @@ async def test_manage_tab_menus_lists_menu_and_add_item_form():
     assert "Home" in s
     assert "create_menu_item" in s
     assert "delete_menu_item" in s
+    assert "update_menu_item" in s   # per-row edit form (title/url)
 
 
 async def test_manage_tab_menus_empty_state_when_no_menus():
@@ -662,6 +664,7 @@ async def test_commerce_tab_has_customers_subtab_with_create_form():
     assert "ana@example.com" in s
     assert "create_customer" in s
     assert "delete_customer" in s
+    assert "update_customer" in s   # per-row edit form
 
 
 async def test_commerce_tab_has_coupons_subtab_with_create_and_archive_actions():
@@ -676,3 +679,4 @@ async def test_commerce_tab_has_coupons_subtab_with_create_and_archive_actions()
     assert "SUMMER10" in s
     assert "create_coupon" in s
     assert "archive_coupon" in s
+    assert "update_coupon" in s   # per-row edit form (amount/expiry)

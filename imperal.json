@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -19832,6 +19832,126 @@
         "x-sdl": "entity"
       },
       "event": "wordpress-hub.delete_user",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "reset_user_password",
+      "description": "Trigger WordPress's own native password-reset email for one user -- the same email wp-admin's Users list sends when an admin clicks 'Send password reset'. WordPress core has no REST route for this (only the wp-login.php form does), so this reads through the Imperal Bridge plugin -- install it on the site first.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.user_password_reset"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "user_id": {
+            "description": "Numeric WordPress user id from list_users",
+            "exclusiveMinimum": 0,
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "user_id"
+        ],
+        "title": "PasswordResetParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "email_sent": {
+            "default": false,
+            "title": "Email Sent",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PasswordResetResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.reset_user_password",
       "background": false,
       "long_running": false,
       "scopes": [],

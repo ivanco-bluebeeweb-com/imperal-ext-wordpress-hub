@@ -69,7 +69,7 @@ including parent/child tree for categories.
 | **`list_menus`** | ✅ done |
 | **`list_menu_items`** | ✅ done |
 | **`create_menu_item`** (link to post/page/custom URL, parent for dropdown) | ✅ done |
-| **`update_menu_item`** (label, target, position) | ✅ done |
+| **`update_menu_item`** (label, target, position) | ✅ done — panel-wired 2026-08-10 as a per-row expandable edit form on the Menus manage tab |
 | **`delete_menu_item`** | ✅ done |
 | **`reorder_menu_items`** | ✅ done |
 
@@ -125,7 +125,8 @@ unprioritized (no user demand yet).
 ## Layer 3 — WooCommerce
 
 ### 3.1 Catalog — ✅ strong coverage
-`list_products`, `get_product`, `create_product`, `update_product`, `archive_product`,
+`list_products`, `get_product`, `create_product`, `update_product` (panel-wired 2026-08-10 as a
+per-row edit form), `archive_product`,
 `list_product_categories`, `create_product_category`, `list_product_variations`,
 `create_product_variation`, `update_product_variation`, bulk change + CSV import/export for both
 products and variations (preview-then-apply pattern with state tokens throughout).
@@ -141,13 +142,13 @@ products and variations (preview-then-apply pattern with state tokens throughout
 | **`resend_order_email`** (trigger WooCommerce's own "new order"/"invoice" email) | ✅ done 2026-08-10 — correction to the earlier note below: WooCommerce 9.8+ DOES expose a native `/orders/<id>/actions/send_order_details` (and `/actions/send_email` for a specific template) REST endpoint, no Bridge addition needed after all. Wired into the Orders panel UI. |
 
 ### 3.3 Customers — ✅ covered
-`list_customers`, `get_customer`, `create_customer`, `update_customer`,
+`list_customers`, `get_customer`, `create_customer`, `update_customer` (panel-wired 2026-08-10),
 `list_customer_orders`, **`delete_customer`** (shipped 2026-08-10, Priority 8a — permanent delete
 with optional order reassignment via `?reassign=`, mirrors `delete_user`'s pattern; wired into the
 Customers UI sub-tab with a destructive confirm gate, not just a chat-tool).
 
 ### 3.4 Coupons — ✅ covered
-`list_coupons`, `create_coupon`, `update_coupon`, `archive_coupon`.
+`list_coupons`, `create_coupon`, `update_coupon` (panel-wired 2026-08-10), `archive_coupon`.
 
 ### 3.5 Refunds — ✅ covered
 `list_refunds`, `preview_refund`, `create_manual_refund` (does not touch the payment gateway, by

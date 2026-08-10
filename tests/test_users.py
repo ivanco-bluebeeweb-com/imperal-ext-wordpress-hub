@@ -5,7 +5,7 @@ from imperal_sdk.testing import MockContext
 import app  # noqa: F401
 import handlers_users as hu
 import storage
-from models import CreateUserParams, DeleteUserParams, UpdateUserParams
+from models import CreateUserParams, DeleteUserParams, PasswordResetParams, UpdateUserParams
 
 BASE = "https://blog.test/wp-json/wp/v2"
 
@@ -123,3 +123,41 @@ async def test_user_actions_require_connected_site():
         site_id="ghost", username="x", email="x@x.com"))
     assert result.status == "error"
     assert result.error_code == "SITE_NOT_CONNECTED"
+
+
+async def test_reset_user_password_sends_email_via_bridge():
+    ctx = await _ctx()
+    ctx.http.mock_post("https://blog.test/wp-json/imperal/v1/users/12/reset-password",
+                       {"email_sent": True}, 200)
+    result = await hu.reset_user_password(ctx, PasswordResetParams(site_id="blog-test", user_id=12))
+    assert result.status == "success"
+    assert result.data.email_sent is True
+    assert "12" in result.summary
+
+
+async def test_reset_user_password_missing_bridge():
+    ctx = await _ctx()
+    ctx.http.mock_post("https://blog.test/wp-json/imperal/v1/users/12/reset-password",
+                       {"code": "rest_no_route"}, 404)
+    result = await hu.reset_user_password(ctx, PasswordResetParams(site_id="blog-test", user_id=12))
+    assert result.status == "error"
+    assert result.error_code == "USERS_BRIDGE_MISSING"
+
+
+async def test_reset_user_password_user_not_found():
+    ctx = await _ctx()
+    ctx.http.mock_post("https://blog.test/wp-json/imperal/v1/users/999/reset-password",
+                       {"code": "imperal_users_not_found"}, 404)
+    result = await hu.reset_user_password(ctx, PasswordResetParams(site_id="blog-test", user_id=999))
+    assert result.status == "error"
+    assert result.error_code == "WP_USER_NOT_FOUND"
+
+
+async def test_reset_user_password_mail_send_failure():
+    ctx = await _ctx()
+    ctx.http.mock_post("https://blog.test/wp-json/imperal/v1/users/12/reset-password",
+                       {"code": "imperal_users_reset_failed", "message": "wp_mail failed"}, 500)
+    result = await hu.reset_user_password(ctx, PasswordResetParams(site_id="blog-test", user_id=12))
+    assert result.status == "error"
+    assert result.error_code == "WP_USER_RESET_FAILED"
+    assert result.retryable is True

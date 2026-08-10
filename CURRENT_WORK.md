@@ -5,6 +5,31 @@
 
 ---
 
+## 2026-08-10 (cont'd, latest of all) — Closed 4 more write-tool-with-no-panel-path gaps
+
+**Status:** implemented, tested, deployed. Full suite 498/498 pass. `imperal validate` clean.
+Version 1.13.0 -> 1.14.0.
+
+**Why:** systematic audit of every `action_type="write"`/`"destructive"` chat.function against
+panels.py string-search turned up 12 with zero panel presence. 6 are the known preview→apply
+two-step family (`apply_order_line_changes`, `apply_bulk_product_change`,
+`apply_bulk_variation_change`, `apply_csv_catalog_import`, `apply_csv_variation_import`,
+`create_manual_refund`) — deliberately deferred, since that confirm-with-server-token UX pattern
+doesn't exist anywhere in this app's panel yet (a real future slice, not a quick add). 2 more
+(`create_product_variation`, `update_product_variation`) need a whole new variations sub-tab and
+were left for the same reason. The remaining 4 were plain flat-field edits with no excuse to skip:
+
+**Shipped (per-row expandable "Edit" form, same pattern as Comments/Posts):**
+- `update_menu_item` — title/url edit form on each menu-item row (Manage → Menus).
+- `update_customer` — email/first/last name edit form on each customer row (Commerce → Customers).
+- `update_coupon` — amount/expiry edit form on each coupon row (Commerce → Coupons).
+- `update_product` — name/price/sku/stock/status edit form on each product row (Commerce →
+  Products).
+- Extended the relevant existing panel tests to assert each new form's action name is present.
+
+**Still open (intentionally, documented, not silent gaps):** the preview→apply family (6 tools)
+and product variations sub-tab (2 tools) — both need new UX patterns this app doesn't have yet.
+
 ## 2026-08-10 (cont'd, even later) — Media sub-tab rework: upload form + alt-text editing
 
 **Status:** implemented, tested, deployed. Full suite 498/498 pass (was 494). `imperal validate`

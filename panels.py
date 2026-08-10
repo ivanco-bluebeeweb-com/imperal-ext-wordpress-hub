@@ -552,6 +552,15 @@ def _render_customers_block(items, site_id):
 
     def _row(it):
         cid = it.get("id")
+        edit_form = ui.Form(
+            action="update_customer", submit_label="Save",
+            defaults={"site_id": site_id, "customer_id": cid},
+            children=[
+                ui.Input(param_name="email", value=it.get("email", ""), placeholder="Email"),
+                ui.Input(param_name="first_name", value=it.get("first_name", ""), placeholder="First name"),
+                ui.Input(param_name="last_name", value=it.get("last_name", ""), placeholder="Last name"),
+            ],
+        )
         return ui.ListItem(
             id=str(cid),
             title=" ".join(p for p in (it.get("first_name", ""), it.get("last_name", "")) if p)
@@ -562,6 +571,8 @@ def _render_customers_block(items, site_id):
                       "on_click": ui.Call("delete_customer", site_id=site_id, customer_id=cid),
                       "confirm": f"Permanently delete customer '{it.get('email', cid)}'? "
                                  "Their past orders keep their own stored billing snapshot."}],
+            expandable=True,
+            expanded_content=[ui.Card(title="Edit customer", content=edit_form)],
         )
 
     return ui.Stack(gap=3, children=[ui.List(items=[_row(it) for it in items]), create_form])
@@ -698,11 +709,31 @@ def _render_products_block(items, site_id):
             actions.append({"icon": "Trash2", "label": "Archive",
                             "on_click": ui.Call("archive_product", site_id=site_id, product_id=pid),
                             "confirm": f"Move product '{it.get('name', '')}' to Trash?"})
+        edit_form = ui.Form(
+            action="update_product", submit_label="Save",
+            defaults={"site_id": site_id, "product_id": pid},
+            children=[
+                ui.Input(param_name="name", value=it.get("name", ""), placeholder="Product name"),
+                ui.Input(param_name="regular_price", value=it.get("regular_price", "") or "",
+                         placeholder="Regular price"),
+                ui.Input(param_name="sku", value=it.get("sku", "") or "", placeholder="SKU"),
+                ui.Input(param_name="stock_quantity", value=str(it.get("stock_quantity", "") or ""),
+                         placeholder="Stock quantity"),
+                ui.Select(param_name="status", value=status or "draft", placeholder="Status", options=[
+                    {"value": "draft", "label": "Draft"},
+                    {"value": "publish", "label": "Publish"},
+                    {"value": "pending", "label": "Pending review"},
+                    {"value": "private", "label": "Private"},
+                ]),
+            ],
+        )
         return ui.ListItem(
             id=str(pid), title=it.get("name", ""),
             subtitle=f"SKU {it.get('sku', '') or '—'} · {it.get('price', '')}",
             meta=f"{status} · {it.get('stock_status', '')} ({it.get('stock_quantity', 0) or 0})",
             actions=actions,
+            expandable=True,
+            expanded_content=[ui.Card(title="Edit product", content=edit_form)],
         )
 
     return ui.Stack(gap=3, children=[ui.List(items=[_row(it) for it in items]), create_form])
@@ -739,11 +770,22 @@ def _render_coupons_block(items, site_id):
             actions.append({"icon": "Trash2", "label": "Archive",
                             "on_click": ui.Call("archive_coupon", site_id=site_id, coupon_id=cid),
                             "confirm": f"Move coupon '{it.get('code', '')}' to Trash?"})
+        edit_form = ui.Form(
+            action="update_coupon", submit_label="Save",
+            defaults={"site_id": site_id, "coupon_id": cid},
+            children=[
+                ui.Input(param_name="amount", value=it.get("amount", ""), placeholder="Amount"),
+                ui.Input(param_name="date_expires", value=it.get("date_expires", "") or "",
+                         placeholder="Expiry YYYY-MM-DD (empty clears it)"),
+            ],
+        )
         return ui.ListItem(
             id=str(cid), title=it.get("code", ""),
             subtitle=f"{discount} off · used {it.get('usage_count', 0)} time(s)",
             meta=(f"expires {it.get('date_expires', '')}" if it.get("date_expires") else status),
             actions=actions,
+            expandable=True,
+            expanded_content=[ui.Card(title="Edit coupon", content=edit_form)],
         )
 
     return ui.Stack(gap=3, children=[ui.List(items=[_row(it) for it in items]), create_form])
@@ -992,15 +1034,27 @@ async def _render_menus_block(ctx, site_id, base_url, username, pw, menu_sel, ca
 
     item_rows = []
     for it in sorted(items, key=lambda x: x.get("menu_order", 0)):
+        mi_id = it.get("id")
+        mi_title = it.get("title", {}).get("rendered", "") if isinstance(it.get("title"), dict) else str(it.get("title", ""))
+        edit_form = ui.Form(
+            action="update_menu_item", submit_label="Save",
+            defaults={"site_id": site_id, "menu_item_id": mi_id},
+            children=[
+                ui.Input(param_name="title", value=mi_title, placeholder="Link text"),
+                ui.Input(param_name="url", value=it.get("url", ""), placeholder="Destination URL"),
+            ],
+        )
         item_rows.append(ui.ListItem(
-            id=str(it.get("id", "")),
-            title=it.get("title", {}).get("rendered", "") if isinstance(it.get("title"), dict) else str(it.get("title", "")),
+            id=str(mi_id),
+            title=mi_title,
             subtitle=it.get("url", ""),
             actions=[
                 {"icon": "Trash2", "label": "Remove",
-                 "on_click": ui.Call("delete_menu_item", site_id=site_id, menu_item_id=it.get("id")),
+                 "on_click": ui.Call("delete_menu_item", site_id=site_id, menu_item_id=mi_id),
                  "confirm": "Remove this item from the menu?"},
             ],
+            expandable=True,
+            expanded_content=[ui.Card(title="Edit item", content=edit_form)],
         ))
     items_list = ui.List(items=item_rows) if item_rows else ui.Empty(message="This menu has no items yet.")
 

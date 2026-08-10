@@ -638,6 +638,15 @@ class UserCreateResult(sdl.Entity):
         default="", description="Only set when no password was supplied; shown once and never stored")
 
 
+class PasswordResetParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    user_id: int = Field(gt=0, description="Numeric WordPress user id from list_users")
+
+
+class PasswordResetResult(sdl.Entity):
+    email_sent: bool = False
+
+
 class UserDeleteResult(sdl.Entity):
     deleted: bool = False
     reassigned_to: str = ""

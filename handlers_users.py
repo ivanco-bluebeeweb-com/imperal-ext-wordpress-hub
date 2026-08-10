@@ -15,6 +15,8 @@ from app import chat
 from models import (
     CreateUserParams,
     DeleteUserParams,
+    PasswordResetParams,
+    PasswordResetResult,
     UpdateUserParams,
     UserCreateResult,
     UserDeleteResult,
@@ -206,4 +208,67 @@ async def delete_user(ctx, params: DeleteUserParams) -> ActionResult:
         summary=f"Deleted user #{params.user_id}"
                 + (f", posts reassigned to #{params.reassign_to}" if params.reassign_to else ""),
         refresh_panels=["center"],
+    )
+
+
+BRIDGE_RESET_PASSWORD_PATH = "/wp-json/imperal/v1/users/{id}/reset-password"
+
+
+def _reset_password_failure(status_code, body):
+    wp_code = str(body.get("code", "")) if isinstance(body, dict) else ""
+    wp_message = body.get("message", "") if isinstance(body, dict) else ""
+    if wp_code == "rest_no_route":
+        return ActionResult.error(
+            "This site does not have the Imperal Bridge plugin installed, or it is older "
+            "than the version that adds password reset. Install the Imperal Bridge plugin "
+            "on the site (bridge/imperal-bridge in the connector repo).",
+            retryable=False, code="USERS_BRIDGE_MISSING")
+    if wp_code == "imperal_users_not_found":
+        return ActionResult.error(
+            wp_message or "That user does not exist.", retryable=False, code="WP_USER_NOT_FOUND")
+    if wp_code == "imperal_users_reset_failed":
+        return ActionResult.error(
+            wp_message or "WordPress could not send the reset email — check that the site "
+            "can send mail at all.", retryable=True, code="WP_USER_RESET_FAILED")
+    if status_code in (401, 403):
+        return ActionResult.error(
+            "The connected WordPress user cannot manage users. Reconnect with an "
+            "administrator Application Password.",
+            retryable=False, code="WP_USER_FORBIDDEN")
+    retryable = status_code == 429 or status_code >= 500
+    return ActionResult.error(
+        wp_error_message(status_code), retryable=retryable, code=wp_error_code(status_code))
+
+
+@chat.function(
+    "reset_user_password",
+    description=(
+        "Trigger WordPress's own native password-reset email for one user -- the same "
+        "email wp-admin's Users list sends when an admin clicks 'Send password reset'. "
+        "WordPress core has no REST route for this (only the wp-login.php form does), so "
+        "this reads through the Imperal Bridge plugin -- install it on the site first."
+    ),
+    action_type="write", data_model=PasswordResetResult,
+    effects=["wp.user_password_reset"], event="wordpress-hub.reset_user_password",
+)
+async def reset_user_password(ctx, params: PasswordResetParams) -> ActionResult:
+    """POST /imperal/v1/users/{id}/reset-password via the Imperal Bridge plugin."""
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+    path = BRIDGE_RESET_PASSWORD_PATH.format(id=params.user_id)
+    try:
+        r = await wp_post(ctx, base_url, path, username=username, app_password=pw, json={})
+    except Exception as e:
+        await ctx.log(f"reset_user_password request failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")
+    if not 200 <= r.status_code < 300:
+        return _reset_password_failure(r.status_code, r.body)
+    return ActionResult.success(
+        PasswordResetResult(
+            id=str(params.user_id), title=f"user #{params.user_id}", kind="wp_password_reset",
+            email_sent=True,
+        ),
+        summary=f"Password-reset email sent to user #{params.user_id}",
     )

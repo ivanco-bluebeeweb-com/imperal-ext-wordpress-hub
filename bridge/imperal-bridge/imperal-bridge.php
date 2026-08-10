@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, and server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.2.0
+ * Version:           2.3.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.2.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.3.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users' ),
 		)
 	);
 }
@@ -2659,3 +2659,77 @@ function imperal_redirects_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_redirects_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 6 — USERS (password reset)
+ *
+ * WordPress core has a complete, working password-reset flow -- retrieve_password()
+ * validates the user, generates a reset key via get_password_reset_key(), and emails
+ * WordPress's own native "click here to reset your password" link via wp_mail(). It is
+ * exactly what an admin clicking "Send password reset" in wp-admin's Users list
+ * triggers. But it is only ever reachable through wp-login.php?action=lostpassword
+ * (a form POST, not a REST route) -- there is no core REST endpoint that calls it.
+ * This section is a thin wrapper: one function call, no direct database writes of our
+ * own (get_password_reset_key() manages WordPress's own user_activation_key column).
+ * ============================================================================= */
+
+define( 'IMPERAL_USERS_BRIDGE_NAMESPACE', 'imperal/v1' );
+define( 'IMPERAL_USERS_BRIDGE_VERSION', '1.0.0' );
+
+/**
+ * POST /imperal/v1/users/{id}/reset-password — trigger WordPress's own native
+ * password-reset email for one user, via core's retrieve_password().
+ *
+ * @param WP_REST_Request $request Incoming request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_users_bridge_reset_password( $request ) {
+	$user_id = (int) $request->get_param( 'id' );
+	$user    = get_userdata( $user_id );
+	if ( ! $user ) {
+		return new WP_Error(
+			'imperal_users_not_found',
+			__( 'That user does not exist.', 'imperal-bridge' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	require_once ABSPATH . WPINC . '/user.php';
+	$result = retrieve_password( $user->user_login );
+
+	if ( is_wp_error( $result ) ) {
+		return new WP_Error(
+			'imperal_users_reset_failed',
+			$result->get_error_message(),
+			array( 'status' => 500 )
+		);
+	}
+
+	return rest_ensure_response(
+		array(
+			'id'      => $user_id,
+			'email'   => $user->user_email,
+			'sent'    => true,
+		)
+	);
+}
+
+/**
+ * Register the users REST routes. Gated behind edit_users -- the same core
+ * capability WordPress itself requires to see the "Send password reset" row
+ * action in wp-admin's Users list table.
+ */
+function imperal_users_bridge_register_routes() {
+	register_rest_route(
+		IMPERAL_USERS_BRIDGE_NAMESPACE,
+		'/users/(?P<id>\d+)/reset-password',
+		array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => 'imperal_users_bridge_reset_password',
+			'permission_callback' => function () {
+				return current_user_can( 'edit_users' );
+			},
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_users_bridge_register_routes' );
