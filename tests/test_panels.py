@@ -397,3 +397,194 @@ async def test_taxonomy_manage_block_create_only_when_no_terms_yet():
     # No terms yet -- nothing to rename or delete.
     assert "update_post_category" not in s
     assert "delete_post_category" not in s
+
+
+# ── Manage tab: menus / redirects / settings / plugins ─────────────────────────
+# These write handlers (create_menu_item, create_redirect, update_site_settings,
+# activate_plugin, ...) existed and were priced but had NO UI wiring anywhere on
+# the detail screen before this -- the whole point of this test block is to
+# lock in that they are now reachable from a real click path, not just chat.
+
+async def _base_panel_ctx(site_id="blog-com", url="https://blog.com",
+                          comments=None, users=None):
+    ctx = MockContext()
+    await storage.save_site_record(ctx, {"id": site_id, "name": "Blog", "url": url,
+                                         "username": "admin", "status": "connected"})
+    await storage.set_credential(ctx, site_id, "pw")
+    ctx.http.mock_get(f"{url}/wp-json/wp/v2/types", {}, 200)
+    ctx.http.mock_get(f"{url}/wp-json/wp/v2/taxonomies", {}, 200)
+    ctx.http.mock_get(f"{url}/wp-json/wp/v2/posts", [], 200)
+    ctx.http.mock_get(f"{url}/wp-json/wp/v2/pages", [], 200)
+    ctx.http.mock_get(f"{url}/wp-json/wp/v2/media", [], 200)
+    ctx.http.mock_get(f"{url}/wp-json/wp/v2/comments", comments if comments is not None else [], 200)
+    ctx.http.mock_get(f"{url}/wp-json/wp/v2/users", users if users is not None else [], 200)
+    ctx.http.mock_get(f"{url}/wp-json/wc/v3/orders", {"code": "rest_no_route"}, 404)
+    return ctx
+
+
+async def test_group_tab_bar_includes_manage():
+    ctx = await _base_panel_ctx()
+    node = await panels.center(ctx, view="", site_id="blog-com")
+    s = str(node)
+    assert "'label': 'Manage'" in s
+
+
+async def test_manage_tab_menus_lists_menu_and_add_item_form():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/menus",
+                      [{"id": 1, "name": "Main Menu", "locations": ["primary"], "count": 1}], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/menu-items",
+                      [{"id": 10, "title": {"rendered": "Home"}, "url": "https://blog.com/",
+                        "parent": 0, "menus": 1}], 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="menus")
+    s = str(node)
+    assert "Main Menu" in s
+    assert "Home" in s
+    assert "create_menu_item" in s
+    assert "delete_menu_item" in s
+
+
+async def test_manage_tab_menus_empty_state_when_no_menus():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/menus", [], 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="menus")
+    assert "No navigation menus found" in str(node)
+
+
+async def test_manage_tab_redirects_lists_items_with_status_actions():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/redirects",
+                      [{"id": 5, "sources": [{"pattern": "/old/", "comparison": "exact"}],
+                        "url_to": "/new/", "header_code": 301, "hits": 3, "status": "active"}], 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="redirects")
+    s = str(node)
+    assert "/old/" in s
+    assert "create_redirect" in s
+    assert "set_redirect_status" in s
+    assert "delete_redirect" in s
+
+
+async def test_manage_tab_redirects_shows_bridge_hint_on_404():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/redirects", {"code": "rest_no_route"}, 404)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="redirects")
+    assert "Imperal Bridge" in str(node)
+
+
+async def test_manage_tab_settings_shows_editable_form():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/settings",
+                      {"title": "My Blog", "description": "Just musings",
+                       "timezone_string": "Europe/Chisinau"}, 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="settings")
+    s = str(node)
+    assert "My Blog" in s
+    assert "update_site_settings" in s
+
+
+async def test_manage_tab_plugins_lists_with_activate_action():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/plugins",
+                      [{"plugin": "hello-dolly/hello", "name": "Hello Dolly",
+                        "status": "inactive", "version": "1.7.2"}], 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="plugins")
+    s = str(node)
+    assert "Hello Dolly" in s
+    assert "activate_plugin" in s
+
+
+# ── Activity tab rework: Comments moderation + Users management ───────────────
+
+async def test_activity_comments_tab_has_moderation_actions_not_plain_table():
+    ctx = await _base_panel_ctx(comments=[
+        {"id": 1, "author_name": "Alice", "status": "hold",
+         "content": {"rendered": "<p>Nice post</p>"}, "post": 5,
+         "date": "2026-01-01"}])
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="activity", act_tab="comments")
+    s = str(node)
+    assert "Alice" in s
+    assert "set_comment_status" in s
+    assert "reply_to_comment" in s
+    assert "'label': 'Approve'" in s
+
+
+async def test_activity_users_tab_has_create_and_delete_actions():
+    ctx = await _base_panel_ctx(users=[
+        {"id": 2, "name": "Editor Jane", "slug": "jane", "roles": ["editor"]}])
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="activity", act_tab="users")
+    s = str(node)
+    assert "Editor Jane" in s
+    assert "create_user" in s
+    assert "delete_user" in s
+    assert "update_user" in s
+
+
+# ── Standard tab rework: Posts/Pages lifecycle actions ─────────────────────────
+
+async def test_posts_tab_has_publish_duplicate_delete_actions():
+    ctx = MockContext()
+    await storage.save_site_record(ctx, {"id": "blog-com", "name": "Blog",
+                                         "url": "https://blog.com", "username": "admin",
+                                         "status": "connected"})
+    await storage.set_credential(ctx, "blog-com", "pw")
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/types", {}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/taxonomies", {}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/posts",
+                      [{"id": 42, "title": {"rendered": "Draft post"}, "status": "draft",
+                        "date": "2026-01-01"}], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/pages", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/media", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wc/v3/orders", {"code": "rest_no_route"}, 404)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="standard", std_tab="posts")
+    s = str(node)
+    assert "Draft post" in s
+    assert "update_post" in s   # Publish/Draft toggle
+    assert "duplicate_post" in s
+    assert "delete_post" in s
+    assert "'label': 'Publish'" in s
+
+
+async def test_media_tab_still_uses_plain_table_not_lifecycle_actions():
+    """Media has no post lifecycle -- must stay on the plain read-only table."""
+    ctx = MockContext()
+    await storage.save_site_record(ctx, {"id": "blog-com", "name": "Blog",
+                                         "url": "https://blog.com", "username": "admin",
+                                         "status": "connected"})
+    await storage.set_credential(ctx, "blog-com", "pw")
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/types", {}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/taxonomies", {}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/posts", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/pages", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/media",
+                      [{"id": 5, "title": {"rendered": "logo.png"}, "mime_type": "image/png"}], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wc/v3/orders", {"code": "rest_no_route"}, 404)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="standard", std_tab="media")
+    s = str(node)
+    assert "logo.png" in s
+    assert "duplicate_post" not in s
+
+
+# ── Commerce tab rework: product Reviews moderation ─────────────────────────────
+
+async def test_commerce_tab_has_reviews_subtab_with_moderation_actions():
+    ctx = await _store_panel_ctx(woocommerce=True)
+    ctx.http.mock_get("https://shop.com/wp-json/wc/v3/products/reviews",
+                      [{"id": 9, "reviewer": "Bob", "rating": 4, "status": "hold",
+                        "review": "<p>Great product!</p>", "date_created": "2026-01-01"}], 200)
+    node = await panels.center(ctx, view="", site_id="shop-com",
+                               group_tab="commerce", commerce_tab="reviews")
+    s = str(node)
+    assert "'label': 'Reviews'" in s
+    assert "Bob" in s
+    assert "set_product_review_status" in s
+    assert "reply_to_product_review" in s

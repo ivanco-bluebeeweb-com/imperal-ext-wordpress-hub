@@ -143,7 +143,8 @@ async def set_product_review_status(ctx, params: SetProductReviewStatusParams) -
         return _failure(r.status_code, r.body)
 
     entity = _review_entity(r.body if isinstance(r.body, dict) else {})
-    return ActionResult.success(entity, summary=f"Review {params.review_id} set to '{status}'")
+    return ActionResult.success(entity, summary=f"Review {params.review_id} set to '{status}'",
+                                 refresh_panels=["center"])
 
 
 @chat.function(
@@ -202,4 +203,5 @@ async def reply_to_product_review(ctx, params: ReplyToProductReviewParams) -> Ac
                 .replace("<p>", "").replace("</p>", "")[:120].strip(),
         post_id=str(body.get("post", "")), date=body.get("date", ""),
     )
-    return ActionResult.success(entity, summary=f"Replied to review {params.review_id}")
+    return ActionResult.success(entity, summary=f"Replied to review {params.review_id}",
+                                 refresh_panels=["center"])

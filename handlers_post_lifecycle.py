@@ -100,7 +100,8 @@ async def delete_post(ctx, params: DeletePostParams) -> ActionResult:
         deleted=True, trashed=trashed,
     )
     verb = "moved to Trash" if trashed else "permanently deleted"
-    return ActionResult.success(entity, summary=f"Post {params.post_id} {verb}")
+    return ActionResult.success(entity, summary=f"Post {params.post_id} {verb}",
+                                 refresh_panels=["center"])
 
 
 @chat.function(
@@ -158,7 +159,8 @@ async def duplicate_post(ctx, params: DuplicatePostParams) -> ActionResult:
         url=link, link=link, post_type=params.post_type, slug=new_item.get("slug", ""),
         status=new_item.get("status"), date=new_item.get("date"),
     )
-    return ActionResult.success(result, summary=f"Duplicated as draft '{result.title}' (id {result.id})")
+    return ActionResult.success(result, summary=f"Duplicated as draft '{result.title}' (id {result.id})",
+                                 refresh_panels=["center"])
 
 
 @chat.function(
@@ -210,4 +212,4 @@ async def bulk_update_post_status(ctx, params: BulkUpdatePostStatusParams) -> Ac
     summary = f"{len(updated_ids)}/{len(params.post_ids)} updated to '{status}'"
     if failed_ids:
         summary += f" — {len(failed_ids)} failed: {failed_ids}"
-    return ActionResult.success(result, summary=summary)
+    return ActionResult.success(result, summary=summary, refresh_panels=["center"])

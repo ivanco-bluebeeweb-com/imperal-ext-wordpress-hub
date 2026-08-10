@@ -148,7 +148,8 @@ async def create_redirect(ctx, params: CreateRedirectParams) -> ActionResult:
         return _failure(r.status_code, r.body)
     body = r.body if isinstance(r.body, dict) else {}
     return ActionResult.success(
-        _redirect_entity(body), summary=f"Redirect created: {params.source_pattern} → {params.url_to}")
+        _redirect_entity(body), summary=f"Redirect created: {params.source_pattern} → {params.url_to}",
+        refresh_panels=["center"])
 
 
 @chat.function(
@@ -175,7 +176,7 @@ async def delete_redirect(ctx, params: DeleteRedirectParams) -> ActionResult:
     return ActionResult.success(
         RedirectDeleteResult(id=str(params.redirect_id), title=str(params.redirect_id),
                              kind="wp_redirect_delete", deleted=True),
-        summary=f"Redirect {params.redirect_id} deleted")
+        summary=f"Redirect {params.redirect_id} deleted", refresh_panels=["center"])
 
 
 @chat.function(
@@ -210,4 +211,5 @@ async def set_redirect_status(ctx, params: SetRedirectStatusParams) -> ActionRes
     body = r.body if isinstance(r.body, dict) else {}
     result = _redirect_entity(body) if body else Redirect(
         id=str(params.redirect_id), title=str(params.redirect_id), kind="wp_redirect", status=status)
-    return ActionResult.success(result, summary=f"Redirect {params.redirect_id} is now {status}")
+    return ActionResult.success(result, summary=f"Redirect {params.redirect_id} is now {status}",
+                                 refresh_panels=["center"])

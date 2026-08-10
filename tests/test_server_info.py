@@ -145,6 +145,31 @@ async def test_get_server_info_reports_outdated_bridge_instead_of_ssh_confusion(
 
     record = await storage.get_site_record(ctx, "x-com")
     assert record["bridge_outdated"] == "2.0.0"
+    # Regression: ActionResult.error() has no refresh_panels param, so this
+    # branch used to persist the fix to storage but never repaint the panel
+    # -- clicking "Refresh server info" looked like it did nothing. The
+    # handler must construct ActionResult directly with refresh_panels set.
+    assert result.refresh_panels == ["center"]
+
+
+async def test_get_server_info_ssh_failure_persists_and_refreshes_panel(monkeypatch):
+    """Same refresh_panels regression as the bridge_outdated case above, but
+    for the SSH/WP-CLI failure branch, which also persists ssh_error."""
+    ctx = await _ctx()
+    ctx.http.mock_get(BRIDGE, {"code": "rest_no_route"}, 404)
+    await storage.set_ssh_cred(ctx, "x-com", {
+        "host": "ssh.x.com", "port": 22, "user": "deploy",
+        "wp_path": "/var/www/html", "key": "test-key",
+    })
+
+    async def fake_get_server_info(_cred):
+        return {"error": "Permission denied"}
+
+    monkeypatch.setattr(hr.wp_cli, "get_server_info", fake_get_server_info)
+    result = await hr.get_server_info(ctx, SiteIdParams(site_id="x-com"))
+
+    assert result.status == "error"
+    assert result.refresh_panels == ["center"]
 
 
 async def test_get_server_info_outdated_bridge_check_skipped_when_ssh_configured(monkeypatch):

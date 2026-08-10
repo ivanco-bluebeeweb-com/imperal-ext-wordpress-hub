@@ -178,19 +178,19 @@ async def sidebar(ctx, active_site_id="", **kwargs):
 async def center(ctx, view="", site_id="",
                  group_tab="standard",
                  std_tab="posts", act_tab="comments", commerce_tab="overview",
-                 cpt_tab="", tax_tab="",
+                 cpt_tab="", tax_tab="", manage_tab="menus", menu_sel="",
                  **kwargs):
     if view == "connect":
         return _render_connect_form()
     if view == "add_ssh" and site_id:
         if await storage.has_ssh(ctx, site_id):
             return await _render_detail(ctx, site_id, group_tab, std_tab, act_tab,
-                                        commerce_tab, cpt_tab, tax_tab)
+                                        commerce_tab, cpt_tab, tax_tab, manage_tab, menu_sel)
         await storage.set_pending_ssh_site(ctx, site_id)
         return _render_add_ssh_form(site_id)
     if site_id:
         return await _render_detail(ctx, site_id, group_tab, std_tab, act_tab,
-                                    commerce_tab, cpt_tab, tax_tab)
+                                    commerce_tab, cpt_tab, tax_tab, manage_tab, menu_sel)
     return ui.Empty(message="Select a site from the list to view its dashboard.")
 
 
@@ -243,6 +243,224 @@ def _render_add_ssh_form(site_id):
 
 
 # ── Content tables ────────────────────────────────────────────────────────────
+
+def _comments_management_block(items, site_id):
+    """Rich moderation view for comments: per-comment status actions + reply.
+
+    Replaces the old plain DataTable for the Comments activity sub-tab so
+    moderation (approve/hold/spam/trash) and replying are actually possible
+    from the detail screen instead of read-only.
+    """
+    if items is None:
+        return ui.Alert(message="Could not load comments — check the connection.", type="error")
+    if not items:
+        return ui.Empty(message="No comments found.")
+
+    def _status_actions(comment_id, status):
+        actions = []
+        if status != "approved":
+            actions.append({"icon": "Check", "label": "Approve",
+                            "on_click": ui.Call("set_comment_status", site_id=site_id,
+                                                comment_id=comment_id, status="approved")})
+        if status != "hold":
+            actions.append({"icon": "Clock", "label": "Hold",
+                            "on_click": ui.Call("set_comment_status", site_id=site_id,
+                                                comment_id=comment_id, status="hold")})
+        if status != "spam":
+            actions.append({"icon": "AlertTriangle", "label": "Spam",
+                            "on_click": ui.Call("set_comment_status", site_id=site_id,
+                                                comment_id=comment_id, status="spam"),
+                            "confirm": "Mark this comment as spam?"})
+        actions.append({"icon": "Trash2", "label": "Trash",
+                        "on_click": ui.Call("set_comment_status", site_id=site_id,
+                                            comment_id=comment_id, status="trash"),
+                        "confirm": "Move this comment to trash?"})
+        return actions
+
+    rows = []
+    for c in items:
+        comment_id = c.get("id")
+        status = c.get("status", "")
+        snippet = (c.get("content", {}).get("rendered", "") or "") \
+                  .replace("<p>", "").replace("</p>", "").strip()
+        reply_form = ui.Form(
+            action="reply_to_comment", submit_label="Reply",
+            defaults={"site_id": site_id, "comment_id": comment_id},
+            children=[ui.TextArea(param_name="content", placeholder="Write a reply…", rows=3)],
+        )
+        rows.append(ui.ListItem(
+            id=str(comment_id),
+            title=c.get("author_name", "Anonymous"),
+            subtitle=snippet[:140],
+            meta=f"{status} · {(c.get('date', '') or '')[:10]}",
+            badge=ui.Badge(label=status, color=("green" if status == "approved"
+                          else "yellow" if status == "hold" else "red")),
+            actions=_status_actions(comment_id, status),
+            expandable=True,
+            expanded_content=[reply_form],
+        ))
+    return ui.List(items=rows)
+
+
+def _users_management_block(items, site_id):
+    """Rich management view for users: delete action + create-user form.
+
+    Replaces the old plain DataTable for the Users activity sub-tab -- the
+    connector already has create_user/update_user/delete_user, this just
+    wires them into the screen the same way taxonomies are managed below
+    their own read-only table.
+    """
+    role_options = [
+        {"value": "administrator", "label": "Administrator"},
+        {"value": "editor", "label": "Editor"},
+        {"value": "author", "label": "Author"},
+        {"value": "contributor", "label": "Contributor"},
+        {"value": "subscriber", "label": "Subscriber"},
+    ]
+    create_form = ui.Card(title="New user", content=ui.Form(
+        action="create_user", submit_label="Create user",
+        defaults={"site_id": site_id},
+        children=[
+            ui.Input(param_name="username", placeholder="Username"),
+            ui.Input(param_name="email", placeholder="Email", type="email"),
+            ui.Select(param_name="role", options=role_options, value="subscriber",
+                      placeholder="Role"),
+            ui.Input(param_name="first_name", placeholder="First name (optional)"),
+            ui.Input(param_name="last_name", placeholder="Last name (optional)"),
+        ],
+    ))
+
+    if items is None:
+        return ui.Stack(gap=3, children=[
+            ui.Alert(message="Could not load users — check the connection.", type="error"),
+            create_form,
+        ])
+    if not items:
+        return ui.Stack(gap=3, children=[ui.Empty(message="No users found."), create_form])
+
+    user_options = [{"value": str(u.get("id", "")), "label": u.get("name", "")} for u in items]
+    role_update_form = ui.Card(title="Change role", content=ui.Form(
+        action="update_user", submit_label="Update role",
+        defaults={"site_id": site_id},
+        children=[
+            ui.Select(param_name="user_id", options=user_options, placeholder="Choose a user"),
+            ui.Select(param_name="role", options=role_options, placeholder="New role"),
+        ],
+    ))
+
+    rows = [
+        ui.ListItem(
+            id=str(u.get("id", "")),
+            title=u.get("name", ""),
+            subtitle=", ".join(u.get("roles", [])) or "no role",
+            meta=(u.get("registered_date", "") or "")[:10],
+            actions=[{
+                "icon": "Trash2",
+                "on_click": ui.Call("delete_user", site_id=site_id, user_id=u.get("id")),
+                "confirm": f"Delete user '{u.get('name', '')}'? Their posts will be deleted too "
+                          f"unless reassigned separately via chat.",
+            }],
+        )
+        for u in items
+    ]
+    return ui.Stack(gap=3, children=[ui.List(items=rows), role_update_form, create_form])
+
+
+# ── Post/page lifecycle management (publish/draft/duplicate/delete) ────────────
+# update_post/duplicate_post/delete_post existed as chat-tools only, priced but
+# never reachable from a click on the detail screen -- this closes that gap for
+# the two content types that matter most day-to-day.
+
+def _posts_management_block(items, tab, site_id):
+    post_type = "page" if tab == "pages" else "post"
+    if items is None:
+        return ui.Alert(message="Could not load — check the connection.", type="error")
+    if not items:
+        return ui.Empty(message=f"No {tab} found.")
+
+    def _row(it):
+        pid = it.get("id")
+        status = it.get("status", "")
+        actions = []
+        if status != "publish":
+            actions.append({"icon": "Send", "label": "Publish",
+                            "on_click": ui.Call("update_post", site_id=site_id, post_id=pid,
+                                                post_type=post_type, status="publish")})
+        if status != "draft":
+            actions.append({"icon": "FileText", "label": "Draft",
+                            "on_click": ui.Call("update_post", site_id=site_id, post_id=pid,
+                                                post_type=post_type, status="draft")})
+        actions.append({"icon": "Copy", "label": "Duplicate",
+                        "on_click": ui.Call("duplicate_post", site_id=site_id, post_id=pid,
+                                            post_type=post_type)})
+        actions.append({"icon": "Trash2", "label": "Delete",
+                        "on_click": ui.Call("delete_post", site_id=site_id, post_id=pid,
+                                            post_type=post_type),
+                        "confirm": f"Move \"{wp_title(it)}\" to Trash?"})
+        return ui.ListItem(
+            id=str(pid), title=wp_title(it),
+            subtitle=status, meta=(it.get("date", "") or "")[:10],
+            actions=actions,
+        )
+
+    return ui.List(items=[_row(it) for it in items])
+
+
+# ── Product reviews (WooCommerce) moderation ───────────────────────────────────
+# list_product_reviews/set_product_review_status/reply_to_product_review existed
+# as chat-tools only; store owners had no click path to moderate the reviews
+# actually driving purchase decisions on their catalogue.
+
+def _render_reviews_block(items, site_id):
+    if items is None:
+        return ui.Alert(message="Could not load product reviews — check the connected "
+                                "user's permissions.", type="info")
+    if not items:
+        return ui.Empty(message="No product reviews found.")
+
+    def _row(it):
+        rid = it.get("id")
+        status = it.get("status", "")
+        rating = it.get("rating", 0) or 0
+        stars = "★" * int(rating) + "☆" * (5 - int(rating))
+        snippet = (it.get("review", "") or "").replace("<p>", "").replace("</p>", "")[:160].strip()
+        actions = []
+        if status != "approved":
+            actions.append({"icon": "Check", "label": "Approve",
+                            "on_click": ui.Call("set_product_review_status", site_id=site_id,
+                                                review_id=rid, status="approved")})
+        if status != "hold":
+            actions.append({"icon": "Clock", "label": "Hold",
+                            "on_click": ui.Call("set_product_review_status", site_id=site_id,
+                                                review_id=rid, status="hold")})
+        if status != "spam":
+            actions.append({"icon": "AlertTriangle", "label": "Spam",
+                            "on_click": ui.Call("set_product_review_status", site_id=site_id,
+                                                review_id=rid, status="spam"),
+                            "confirm": "Mark this review as spam?"})
+        actions.append({"icon": "Trash2", "label": "Trash",
+                        "on_click": ui.Call("set_product_review_status", site_id=site_id,
+                                            review_id=rid, status="trash"),
+                        "confirm": "Move this review to Trash?"})
+        return ui.ListItem(
+            id=str(rid), title=f"{it.get('reviewer', 'Anonymous')} — {stars}",
+            subtitle=snippet, meta=f"{status} · product #{it.get('product_id', '')}",
+            actions=actions,
+        )
+
+    reply_form = ui.Form(
+        action="reply_to_product_review", submit_label="Send reply",
+        defaults={"site_id": site_id},
+        children=[
+            ui.Input(param_name="review_id", placeholder="Review id"),
+            ui.Input(param_name="content", placeholder="Reply text"),
+        ],
+    )
+    return ui.Stack(gap=3, children=[
+        ui.List(items=[_row(it) for it in items]),
+        ui.Card(title="Reply to a review", content=reply_form),
+    ])
+
 
 def _render_content_table(items, tab):
     if items is None:
@@ -383,12 +601,243 @@ def _taxonomy_manage_block(items: list, site_id: str, tax_slug: str):
     ])
 
 
+# ── Manage tab (menus / redirects / settings / plugins) ────────────────────────
+
+async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, menu_sel, call):
+    """Site management: nav menus, Rank Math redirects, native settings, plugins.
+
+    All four sections talk to write handlers that were built and priced but,
+    until now, had no UI wiring anywhere on the detail screen — this closes
+    that gap. Fetched live (low-traffic admin section, no cache needed).
+    """
+    async def _get(path, params=None):
+        try:
+            r = await wp_get(ctx, base_url, path, username=username, app_password=pw,
+                             params=params or {})
+            return r
+        except Exception:
+            return None
+
+    def _manage_btn(label, key):
+        return ui.Button(label, variant="secondary" if manage_tab == key else "ghost",
+                         size="sm", on_click=call(manage_tab=key))
+
+    manage_btns = [
+        _manage_btn("Menus", "menus"),
+        _manage_btn("Redirects", "redirects"),
+        _manage_btn("Settings", "settings"),
+        _manage_btn("Plugins", "plugins"),
+    ]
+
+    if manage_tab == "redirects":
+        body = await _render_redirects_block(ctx, site_id, base_url, username, pw)
+    elif manage_tab == "settings":
+        body = await _render_settings_block(ctx, site_id, base_url, username, pw)
+    elif manage_tab == "plugins":
+        body = await _render_plugins_block(ctx, site_id, base_url, username, pw)
+    else:
+        body = await _render_menus_block(ctx, site_id, base_url, username, pw, menu_sel, call)
+
+    return ui.Stack(gap=3, children=[
+        ui.Stack(direction="h", gap=1, wrap=True, children=manage_btns),
+        body,
+    ])
+
+
+async def _render_menus_block(ctx, site_id, base_url, username, pw, menu_sel, call):
+    r = await wp_get(ctx, base_url, "/wp-json/wp/v2/menus", username=username, app_password=pw,
+                     params={"per_page": 50})
+    if r is None or r.status_code == 404:
+        return ui.Alert(
+            message="This site's WordPress version doesn't expose the menus REST API "
+                    "(needs WordPress 5.9+).",
+            type="info")
+    if r.status_code in (401, 403):
+        return ui.Alert(message="The connected user cannot manage menus.", type="error")
+    if r.status_code != 200 or not isinstance(r.body, list):
+        return ui.Alert(message="Could not load menus — check the connection.", type="error")
+    menus = r.body
+    if not menus:
+        return ui.Empty(message="No navigation menus found on this site.")
+
+    menu_options = [{"value": str(m.get("id", "")), "label": m.get("name", "")} for m in menus]
+    active_menu_id = menu_sel or menu_options[0]["value"]
+
+    menus_table = ui.DataTable(
+        columns=[ui.DataColumn("name", "Menu", sortable=True),
+                 ui.DataColumn("locations", "Locations", sortable=False),
+                 ui.DataColumn("items", "Items", sortable=True)],
+        rows=[{"name": m.get("name", ""),
+               "locations": ", ".join(m.get("locations", []) or []) or "—",
+               "items": str(m.get("count", 0))} for m in menus],
+        on_row_click=None,
+    )
+
+    items_r = await wp_get(ctx, base_url, "/wp-json/wp/v2/menu-items",
+                           username=username, app_password=pw,
+                           params={"menus": active_menu_id, "per_page": 100})
+    items = items_r.body if items_r and items_r.status_code == 200 and isinstance(items_r.body, list) else []
+
+    item_rows = []
+    for it in sorted(items, key=lambda x: x.get("menu_order", 0)):
+        item_rows.append(ui.ListItem(
+            id=str(it.get("id", "")),
+            title=it.get("title", {}).get("rendered", "") if isinstance(it.get("title"), dict) else str(it.get("title", "")),
+            subtitle=it.get("url", ""),
+            actions=[
+                {"icon": "Trash2", "label": "Remove",
+                 "on_click": ui.Call("delete_menu_item", site_id=site_id, menu_item_id=it.get("id")),
+                 "confirm": "Remove this item from the menu?"},
+            ],
+        ))
+    items_list = ui.List(items=item_rows) if item_rows else ui.Empty(message="This menu has no items yet.")
+
+    add_item_form = ui.Form(
+        action="create_menu_item", submit_label="Add item",
+        defaults={"site_id": site_id, "menu_id": active_menu_id},
+        children=[
+            ui.Input(param_name="title", placeholder="Link text, e.g. Contact"),
+            ui.Input(param_name="url", placeholder="https:// or existing page URL"),
+        ],
+    )
+
+    return ui.Stack(gap=3, children=[
+        menus_table,
+        ui.Select(param_name="menu_sel", options=menu_options, value=active_menu_id,
+                  placeholder="Choose a menu",
+                  on_change=call(menu_sel="{{value}}")),
+        ui.Card(title=f"Items in \"{next((o['label'] for o in menu_options if o['value'] == active_menu_id), '')}\"",
+               content=items_list),
+        ui.Card(title="Add menu item", content=add_item_form),
+    ])
+
+
+async def _render_redirects_block(ctx, site_id, base_url, username, pw):
+    r = await wp_get(ctx, base_url, "/wp-json/imperal/v1/redirects", username=username,
+                     app_password=pw, params={"status": "all"})
+    if r is None or r.status_code == 404:
+        return ui.Alert(
+            message="Redirects need the Imperal Bridge plugin (with Rank Math's Redirections "
+                    "module enabled) — install/update it on this site first.",
+            type="info")
+    if r.status_code in (401, 403):
+        return ui.Alert(message="The connected user cannot manage redirects.", type="error")
+    if r.status_code != 200:
+        return ui.Alert(message="Could not load redirects — check the connection.", type="error")
+    data = r.body if isinstance(r.body, list) else (r.body or {}).get("redirects", [])
+    if not isinstance(data, list):
+        data = []
+
+    rows_ui = []
+    for item in data:
+        sources = item.get("sources", []) or []
+        pattern = sources[0].get("pattern", "") if sources else ""
+        status = item.get("status", "active")
+        rid = item.get("id")
+        rows_ui.append(ui.ListItem(
+            id=str(rid),
+            title=pattern or "(no pattern)",
+            subtitle=f"→ {item.get('url_to', '')}  [{item.get('header_code', 301)}]",
+            meta=f"{status} · {item.get('hits', 0)} hit(s)",
+            actions=[
+                {"icon": "Pause" if status == "active" else "Play",
+                 "label": "Deactivate" if status == "active" else "Activate",
+                 "on_click": ui.Call("set_redirect_status", site_id=site_id, redirect_id=rid,
+                                     status="inactive" if status == "active" else "active")},
+                {"icon": "Trash2", "label": "Delete",
+                 "on_click": ui.Call("delete_redirect", site_id=site_id, redirect_id=rid),
+                 "confirm": "Delete this redirect?"},
+            ],
+        ))
+    redirects_list = ui.List(items=rows_ui) if rows_ui else ui.Empty(message="No redirects yet.")
+
+    create_form = ui.Form(
+        action="create_redirect", submit_label="Create redirect",
+        defaults={"site_id": site_id},
+        children=[
+            ui.Input(param_name="source_pattern", placeholder="/old-page/"),
+            ui.Input(param_name="url_to", placeholder="https://example.com/new-page/"),
+            ui.Select(param_name="header_code",
+                     options=[{"value": "301", "label": "301 Permanent"},
+                              {"value": "302", "label": "302 Temporary"},
+                              {"value": "410", "label": "410 Gone"}],
+                     value="301"),
+        ],
+    )
+
+    return ui.Stack(gap=3, children=[
+        redirects_list,
+        ui.Card(title="New redirect", content=create_form),
+    ])
+
+
+async def _render_settings_block(ctx, site_id, base_url, username, pw):
+    r = await wp_get(ctx, base_url, "/wp-json/wp/v2/settings", username=username, app_password=pw)
+    if r is None or r.status_code == 404:
+        return ui.Alert(message="This site's WordPress version doesn't expose /wp/v2/settings "
+                                "(needs WordPress 5.5+).", type="info")
+    if r.status_code in (401, 403):
+        return ui.Alert(message="The connected user cannot manage site settings — "
+                                "reconnect with an administrator Application Password.", type="error")
+    if r.status_code != 200 or not isinstance(r.body, dict):
+        return ui.Alert(message="Could not load site settings — check the connection.", type="error")
+    s = r.body
+
+    form = ui.Form(
+        action="update_site_settings", submit_label="Save settings",
+        defaults={"site_id": site_id},
+        children=[
+            ui.Input(param_name="title", value=s.get("title", ""), placeholder="Site title"),
+            ui.Input(param_name="description", value=s.get("description", ""),
+                     placeholder="Tagline"),
+            ui.Input(param_name="timezone_string", value=s.get("timezone_string", ""),
+                     placeholder="Europe/Chisinau"),
+        ],
+    )
+    return ui.Card(title="Site settings", content=form)
+
+
+async def _render_plugins_block(ctx, site_id, base_url, username, pw):
+    r = await wp_get(ctx, base_url, "/wp-json/wp/v2/plugins", username=username, app_password=pw,
+                     params={"per_page": 100})
+    if r is None or r.status_code == 404:
+        return ui.Alert(message="This site's WordPress version doesn't expose /wp/v2/plugins "
+                                "(needs WordPress 5.5+).", type="info")
+    if r.status_code in (401, 403):
+        return ui.Alert(message="The connected user cannot manage plugins — "
+                                "reconnect with an administrator Application Password.", type="error")
+    if r.status_code != 200 or not isinstance(r.body, list):
+        return ui.Alert(message="Could not load plugins — check the connection.", type="error")
+    plugins = r.body
+    if not plugins:
+        return ui.Empty(message="No plugins found.")
+
+    rows_ui = []
+    for p in plugins:
+        plugin_id = p.get("plugin", "")
+        name = p.get("name", plugin_id)
+        if isinstance(name, dict):
+            name = name.get("rendered", plugin_id)
+        status = p.get("status", "inactive")
+        rows_ui.append(ui.ListItem(
+            id=plugin_id, title=name or plugin_id,
+            subtitle=f"v{p.get('version', '')}", meta=status,
+            actions=[
+                {"icon": "Power" if status != "active" else "PowerOff",
+                 "label": "Activate" if status != "active" else "Deactivate",
+                 "on_click": ui.Call("deactivate_plugin" if status == "active" else "activate_plugin",
+                                     site_id=site_id, plugin=plugin_id)},
+            ],
+        ))
+    return ui.List(items=rows_ui)
+
+
 # ── Site detail ───────────────────────────────────────────────────────────────
 
 async def _render_detail(ctx, site_id,
                          group_tab="standard",
                          std_tab="posts", act_tab="comments", commerce_tab="overview",
-                         cpt_tab="", tax_tab=""):
+                         cpt_tab="", tax_tab="", manage_tab="menus", menu_sel=""):
     record = await storage.get_site_record(ctx, site_id) or {}
     if not record:
         return ui.Empty(message="Site not found — it may have been removed.")
@@ -660,7 +1109,7 @@ async def _render_detail(ctx, site_id,
             _list("/wp-json/wp/v2/posts",
                   {"per_page": 20, "status": "future", "orderby": "date", "order": "asc"}),
             _list("/wp-json/wp/v2/users",
-                  {"per_page": 20, "orderby": "registered", "order": "desc"}),
+                  {"per_page": 20, "orderby": "registered_date", "order": "desc"}),
             _orders(),
         ]
         cpt_tasks = [_list(f"/wp-json/wp/v2/{custom_cpts[s]['rest_base']}") for s in cpt_slugs]
@@ -712,7 +1161,7 @@ async def _render_detail(ctx, site_id,
         kw = dict(view="", site_id=site_id,
                   group_tab=group_tab, std_tab=std_tab,
                   act_tab=act_tab, commerce_tab=commerce_tab,
-                  cpt_tab=cpt_tab, tax_tab=tax_tab)
+                  cpt_tab=cpt_tab, tax_tab=tax_tab, manage_tab=manage_tab, menu_sel=menu_sel)
         kw.update(override)
         return ui.Call("__panel__center", **kw)
 
@@ -739,6 +1188,7 @@ async def _render_detail(ctx, site_id,
         group_btns.append(_group_btn("Custom Types", "cpt"))
     if tax_meta:
         group_btns.append(_group_btn("Taxonomies", "tax"))
+    group_btns.append(_group_btn("Manage", "manage"))
 
     group_nav = ui.Stack(direction="h", gap=1, sticky=True, children=group_btns)
 
@@ -749,9 +1199,15 @@ async def _render_detail(ctx, site_id,
             _item_btn("Scheduled", "scheduled", act_tab, "act_tab"),
             _item_btn("Users",     "users",     act_tab, "act_tab"),
         ]
+        if act_tab == "comments":
+            act_body = _comments_management_block(content_map.get("comments"), site_id)
+        elif act_tab == "users":
+            act_body = _users_management_block(content_map.get("users"), site_id)
+        else:
+            act_body = _render_content_table(content_map.get(act_tab), act_tab)
         active_content = ui.Stack(gap=3, children=[
             ui.Stack(direction="h", gap=1, wrap=True, children=act_btns),
-            _render_content_table(content_map.get(act_tab), act_tab),
+            act_body,
         ])
 
     elif group_tab == "commerce" and orders_data is not None:
@@ -759,8 +1215,15 @@ async def _render_detail(ctx, site_id,
             _item_btn("Overview", "overview", commerce_tab, "commerce_tab"),
             _item_btn("Orders", "orders", commerce_tab, "commerce_tab"),
             _item_btn("Products", "products", commerce_tab, "commerce_tab"),
+            _item_btn("Reviews", "reviews", commerce_tab, "commerce_tab"),
         ]
-        if commerce_tab == "products":
+        if commerce_tab == "reviews":
+            reviews_data = await _list(
+                "/wp-json/wc/v3/products/reviews",
+                {"per_page": 50, "orderby": "date", "order": "desc"},
+            )
+            commerce_body = _render_reviews_block(reviews_data, site_id)
+        elif commerce_tab == "products":
             products_data = await _list(
                 "/wp-json/wc/v3/products",
                 {"per_page": 20, "orderby": "date", "order": "desc"},
@@ -842,14 +1305,21 @@ async def _render_detail(ctx, site_id,
             ])
 
     else:  # standard (default)
+        std_body = (_posts_management_block(content_map.get(std_tab), std_tab, site_id)
+                   if std_tab in ("posts", "pages")
+                   else _render_content_table(content_map.get(std_tab), std_tab))
         active_content = ui.Stack(gap=3, children=[
             ui.Stack(direction="h", gap=1, children=[
                 _item_btn("Posts", "posts", std_tab, "std_tab"),
                 _item_btn("Pages", "pages", std_tab, "std_tab"),
                 _item_btn("Media", "media", std_tab, "std_tab"),
             ]),
-            _render_content_table(content_map.get(std_tab), std_tab),
+            std_body,
         ])
+
+    if group_tab == "manage":
+        active_content = await _render_manage_tab(
+            ctx, site_id, base_url, username, pw, manage_tab, menu_sel, _call)
 
     # ── Assemble page ─────────────────────────────────
     page_children = [

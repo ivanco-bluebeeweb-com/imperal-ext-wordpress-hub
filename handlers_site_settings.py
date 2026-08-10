@@ -136,7 +136,8 @@ async def _set_plugin_status(ctx, params: SetPluginStatusParams, status: str) ->
     body = r.body if isinstance(r.body, dict) else {}
     result = _plugin_entity(body) if body else NativePlugin(
         id=params.plugin, title=params.plugin, kind="wp_plugin", plugin=params.plugin, status=status)
-    return ActionResult.success(result, summary=f"Plugin '{params.plugin}' is now {status}")
+    return ActionResult.success(result, summary=f"Plugin '{params.plugin}' is now {status}",
+                                 refresh_panels=["center"])
 
 
 @chat.function(
@@ -247,4 +248,5 @@ async def update_site_settings(ctx, params: UpdateSiteSettingsParams) -> ActionR
     if not 200 <= r.status_code < 300:
         return _failure(r.status_code, r.body)
     body = r.body if isinstance(r.body, dict) else {}
-    return ActionResult.success(_settings_entity(body), summary="Site settings updated")
+    return ActionResult.success(_settings_entity(body), summary="Site settings updated",
+                                 refresh_panels=["center"])

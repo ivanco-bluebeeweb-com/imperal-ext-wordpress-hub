@@ -923,13 +923,25 @@ async def get_server_info(ctx, params: SiteIdParams) -> ActionResult:
                 await storage.save_site_record(ctx, {
                     **record, "bridge_outdated": bridge_version, "ssh_error": "",
                 })
-                return ActionResult.error(
-                    f"The Imperal Bridge plugin on this site is version {bridge_version}, "
-                    "which predates the /server/info route (added in 2.1.0). Update the "
-                    "plugin to the latest Imperal Bridge build on the site (Plugins → "
-                    "Imperal Bridge → update, or reinstall from the Bridge zip) — SSH is "
-                    "not needed once it's updated.",
-                    retryable=False, code="SERVER_INFO_BRIDGE_OUTDATED")
+                # ActionResult.error() has no refresh_panels param, but the
+                # detail screen's "Server" section reads bridge_outdated from
+                # storage — without forcing a repaint here, clicking "Refresh
+                # server info" on an outdated-Bridge site silently persists
+                # the fix while the panel keeps showing the stale generic
+                # "No server data yet" text until some unrelated action
+                # refreshes it. Construct ActionResult directly to carry it.
+                return ActionResult(
+                    status="error", data={}, summary="",
+                    error=(
+                        f"The Imperal Bridge plugin on this site is version {bridge_version}, "
+                        "which predates the /server/info route (added in 2.1.0). Update the "
+                        "plugin to the latest Imperal Bridge build on the site (Plugins → "
+                        "Imperal Bridge → update, or reinstall from the Bridge zip) — SSH is "
+                        "not needed once it's updated."
+                    ),
+                    retryable=False, error_code="SERVER_INFO_BRIDGE_OUTDATED",
+                    refresh_panels=["center"],
+                )
             return ActionResult.error(
                 "Server info needs either the Imperal Bridge plugin installed on the site, "
                 "or SSH configured with add_ssh — neither is available for this site yet.",
@@ -942,7 +954,14 @@ async def get_server_info(ctx, params: SiteIdParams) -> ActionResult:
 
         if "error" in info:
             await storage.save_site_record(ctx, {**record, "ssh_error": info["error"]})
-            return ActionResult.error(f"SSH/WP-CLI error: {info['error']}", retryable=True)
+            # Same reasoning as the bridge_outdated branch above: this path
+            # persists ssh_error to storage (which the Server section reads),
+            # so the panel needs an explicit refresh_panels to show it.
+            return ActionResult(
+                status="error", data={}, summary="",
+                error=f"SSH/WP-CLI error: {info['error']}",
+                retryable=True, refresh_panels=["center"],
+            )
         source = "ssh"
 
     result = ServerInfo(

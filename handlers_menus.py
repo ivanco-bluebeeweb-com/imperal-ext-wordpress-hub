@@ -144,7 +144,8 @@ async def create_menu_item(ctx, params: CreateMenuItemParams) -> ActionResult:
     if not 200 <= response.status_code < 300:
         return _failure(response.status_code, response.body)
     entity = _menu_item_entity(response.body)
-    return ActionResult.success(entity, summary=f"Added '{entity.title}' to menu {params.menu_id}")
+    return ActionResult.success(entity, summary=f"Added '{entity.title}' to menu {params.menu_id}",
+                                 refresh_panels=["center"])
 
 
 @chat.function(
@@ -175,7 +176,8 @@ async def update_menu_item(ctx, params: UpdateMenuItemParams) -> ActionResult:
     if not 200 <= response.status_code < 300:
         return _failure(response.status_code, response.body)
     entity = _menu_item_entity(response.body)
-    return ActionResult.success(entity, summary=f"Updated menu item '{entity.title}'")
+    return ActionResult.success(entity, summary=f"Updated menu item '{entity.title}'",
+                                 refresh_panels=["center"])
 
 
 @chat.function(
@@ -194,7 +196,7 @@ async def delete_menu_item(ctx, params: DeleteMenuItemParams) -> ActionResult:
     if not 200 <= response.status_code < 300:
         return _failure(response.status_code, response.body)
     return ActionResult.success(MenuItemDeleteResult(id=str(params.menu_item_id), title="", kind="wp_menu_item", deleted=True),
-                                 summary="Menu item deleted")
+                                 summary="Menu item deleted", refresh_panels=["center"])
 
 
 @chat.function(
@@ -220,4 +222,4 @@ async def reorder_menu_items(ctx, params: ReorderMenuItemsParams) -> ActionResul
             return _failure(response.status_code, response.body)
         updated.append(_menu_item_entity(response.body))
     return ActionResult.success(sdl.EntityList[MenuItem](items=updated),
-                                 summary=f"Reordered {len(updated)} item(s)")
+                                 summary=f"Reordered {len(updated)} item(s)", refresh_panels=["center"])
