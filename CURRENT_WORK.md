@@ -5,6 +5,60 @@
 
 ---
 
+## 2026-08-10 (cont'd) — Detail-screen rework: Customers/Coupons/Orders/Products wired to UI
+
+**Status:** implemented, tested, deployed (450/450 tests pass, `imperal validate` clean 0/0/1-info,
+commit `cf4f0ae`, `developer.deploy_app` succeeded 19/21 checks -- same baseline as before, not a
+regression). Continuation of the same session/request as the entry below.
+
+**Gap found while systematically auditing the connected-site detail screen:** `list_customers`/
+`create_customer`/`list_coupons`/`create_coupon`/`archive_coupon` existed only as chat-tools --
+zero click path on the detail screen. Orders and Products sub-tabs were plain read-only
+`DataTable`s despite the backend fully supporting `update_order_status`,
+`update_order_status_risky`, `add_private_order_note`, `create_product`, `archive_product`.
+
+**Shipped in `panels.py`:**
+- `_render_customers_block` -- list + `create_customer` form. New "Customers" commerce sub-tab.
+- `_render_coupons_block` -- list with per-row Archive (Trash) action + `create_coupon` form. New
+  "Coupons" commerce sub-tab.
+- `_render_orders_block` -- replaces the old plain table. Expandable list rows: status-change
+  form (routine statuses only), a separate risky-status form (cancelled/failed/refunded --
+  routes through `update_order_status_risky`'s destructive confirm gate, never offered for
+  routine statuses), and a private-note form (`add_private_order_note`).
+- `_render_products_block` -- replaces the old plain table. List with per-row Archive action
+  (`archive_product`) plus a `create_product` form.
+- Removed the now-false "All commerce actions are read-only" caption from the Overview sub-tab.
+
+Added 4 regression tests (customers/coupons/orders/products) asserting the actual chat-function
+names appear wired into each rendered block, not just that data displays.
+
+**Bridge "No server data yet" bug -- verified live, not fixed further (already fixed):** called
+the deployed `get_server_info` chat-tool against all 3 real connected sites. climtec.md (Bridge
+2.2.0) returns full server data via Bridge as expected. g4s.md and ksrenovationgroup.com both
+return the precise `SERVER_INFO_BRIDGE_OUTDATED` error (Bridge stuck on 2.0.0, `/server/info`
+route needs 2.1.0+) -- confirming the code-level fix from the prior session (`5526375`, `a607450`,
+`dd6ac67`) is deployed and working correctly. The panel already renders a distinct warning alert
+with a "Download latest Imperal Bridge" button for this exact case, not the generic dead-end
+message. Root cause for the user's remaining symptom is external: the Bridge plugin file on
+g4s.md/ksrenovationgroup.com itself is old and needs a manual update on those two sites (no SSH
+available there) -- not a code defect in WordPress Hub.
+
+**Pricing:** no new chat-functions were added this pass (only UI wiring of existing ones), so no
+new `developer.update_pricing` call was required per the standing rule. Confirmed via
+`get_earnings_by_app` that the app record exists and is active; confirmed via
+`marketplace.get_app_details` that it correctly does not appear in the public Marketplace (own
+dev app, expected). Accidentally called `update_pricing` with an empty config while trying to
+*read* current pricing (it has no pure-read mode) -- this only dumps the manifest, is a no-op on
+actual prices, but does force a suspend/resubmit cycle; resubmitted immediately after, app is back
+to `pending_review`. Lesson recorded: don't call `update_pricing` just to inspect state.
+
+**UI/UX test pass:** full pytest (450/450), `imperal validate` (0/0/1-info), and live production
+verification via the deployed API (`list_sites`, `get_server_info` x3) -- this is code-path +
+ground-truth verification, not a literal browser click-through (no browser tooling available on
+this terminal surface this session). Recorded honestly, not claimed as done.
+
+---
+
 ## 2026-08-10 — Shipped Priorities 2-7 from the full feature roadmap (87 to 114 functions)
 
 **Status:** implemented and verified (434/434 Python tests pass; PHP `php -l` clean on the updated
