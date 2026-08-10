@@ -1674,3 +1674,34 @@ class IndexNowKey(sdl.Entity):
     """Rank Math's own IndexNow API key, hosted and served dynamically by the site itself."""
     key: str = ""
     location: str = ""
+
+
+class LlmsTxtParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+
+
+class LlmsTxtSettings(sdl.Entity):
+    """Rank Math's llms.txt settings -- which post types/taxonomies are listed in the
+    dynamically-served /llms.txt file, how many links per type, and any extra Markdown
+    appended to it. Requires the Imperal Bridge plugin (SECTION 8) and Rank Math's own
+    llms-txt module active on the site (it is NOT active by default, unlike robots.txt)."""
+    module_active: bool = False
+    llms_txt_url: str = ""
+    post_types: list[str] = Field(default_factory=list)
+    taxonomies: list[str] = Field(default_factory=list)
+    limit: int = 100
+    extra_content: str = ""
+
+
+class UpdateLlmsTxtParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_types: list[str] | None = Field(
+        default=None, description="Post type slugs to list in llms.txt. Omit to leave unchanged.")
+    taxonomies: list[str] | None = Field(
+        default=None, description="Taxonomy slugs to list in llms.txt. Omit to leave unchanged.")
+    limit: int | None = Field(
+        default=None, description="Max links per post type/taxonomy. Omit to leave unchanged.")
+    extra_content: str | None = Field(
+        default=None,
+        description="Free-text Markdown appended to the file. Pass an empty string to clear it, "
+                    "omit to leave unchanged.")

@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.4.0
+ * Version:           2.5.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.4.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.5.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt' ),
 		)
 	);
 }
@@ -3023,3 +3023,187 @@ function imperal_rankmath_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_rankmath_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 8 — LLMS.TXT (Rank Math's AI-crawler guidance file)
+ *
+ * Rank Math's llms-txt module (RankMath\LLMS\LLMS_Txt, includes/modules/llms/
+ * class-llms-txt.php in seo-by-rank-math trunk, verified before writing this)
+ * serves a dynamic, Markdown-format /llms.txt file at the site root via a
+ * rewrite rule + template_redirect — the AI-crawler analogue of robots.txt.
+ * Its four settings live in the SAME `rank-math-options-general` option that
+ * SECTION 7 already reads/writes for robots_txt_content — Rank Math's own
+ * settings-storage convention, so this section follows the identical
+ * get_option()/update_option() pattern, never raw SQL:
+ *
+ *   - llms_post_types      (array of post type slugs to list)
+ *   - llms_taxonomies      (array of taxonomy slugs to list)
+ *   - llms_limit           (int, max links per post type/taxonomy, default 100
+ *                           per class-llms-txt.php's output(), 50 per its own
+ *                           options.php default field value — the option
+ *                           itself has no stored default until first saved)
+ *   - llms_extra_content   (string, free-text Markdown appended to the file)
+ *
+ * Unlike robots.txt, this module is NOT active by default (absent from
+ * class-installer.php's create_misc_options() default $modules array) — so
+ * this section also reports module_active (from the `rank_math_modules`
+ * option, same check SECTION 7 uses for the Sitemap module) and the file's
+ * live URL, without inventing an "activate module" action: enabling/
+ * disabling Rank Math modules happens on Rank Math's own module-manager
+ * screen (a many-module settings UI with no single-module REST toggle in the
+ * plugin itself), so this bridge only edits the SETTINGS, matching the
+ * boundary already drawn for robots.txt/sitemap in SECTION 7.
+ * ============================================================================= */
+
+define( 'IMPERAL_LLMSTXT_BRIDGE_NAMESPACE', 'imperal/v1' );
+
+/**
+ * Is Rank Math's llms-txt module active on this site?
+ *
+ * @return bool
+ */
+function imperal_llmstxt_bridge_module_active() {
+	$active_modules = get_option( 'rank_math_modules', array() );
+	return is_array( $active_modules ) && in_array( 'llms-txt', $active_modules, true );
+}
+
+/**
+ * GET /imperal/v1/llmstxt — read the llms.txt settings.
+ *
+ * @return WP_REST_Response
+ */
+function imperal_llmstxt_bridge_get_settings() {
+	$general = get_option( 'rank-math-options-general', array() );
+	$general = is_array( $general ) ? $general : array();
+
+	return rest_ensure_response(
+		array(
+			'module_active'   => imperal_llmstxt_bridge_module_active(),
+			'llms_txt_url'    => home_url( '/llms.txt' ),
+			'post_types'      => isset( $general['llms_post_types'] ) && is_array( $general['llms_post_types'] )
+				? array_values( array_map( 'strval', $general['llms_post_types'] ) ) : array(),
+			'taxonomies'      => isset( $general['llms_taxonomies'] ) && is_array( $general['llms_taxonomies'] )
+				? array_values( array_map( 'strval', $general['llms_taxonomies'] ) ) : array(),
+			'limit'           => isset( $general['llms_limit'] ) ? (int) $general['llms_limit'] : 100,
+			'extra_content'   => isset( $general['llms_extra_content'] ) ? (string) $general['llms_extra_content'] : '',
+		)
+	);
+}
+
+/**
+ * POST /imperal/v1/llmstxt — update the llms.txt settings. Only keys present
+ * in the request body are touched, matching SECTION 7's per-post SEO
+ * partial-update convention.
+ *
+ * @param WP_REST_Request $request Incoming request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_llmstxt_bridge_update_settings( $request ) {
+	$general = get_option( 'rank-math-options-general', array() );
+	$general = is_array( $general ) ? $general : array();
+	$changed = array();
+
+	if ( $request->has_param( 'post_types' ) ) {
+		$raw = $request->get_param( 'post_types' );
+		if ( ! is_array( $raw ) ) {
+			return new WP_Error(
+				'imperal_llmstxt_invalid_post_types',
+				__( 'post_types must be an array of post type slugs.', 'imperal-bridge' ),
+				array( 'status' => 400 )
+			);
+		}
+		$general['llms_post_types'] = array_values( array_map( 'sanitize_key', $raw ) );
+		$changed[]                  = 'post_types';
+	}
+
+	if ( $request->has_param( 'taxonomies' ) ) {
+		$raw = $request->get_param( 'taxonomies' );
+		if ( ! is_array( $raw ) ) {
+			return new WP_Error(
+				'imperal_llmstxt_invalid_taxonomies',
+				__( 'taxonomies must be an array of taxonomy slugs.', 'imperal-bridge' ),
+				array( 'status' => 400 )
+			);
+		}
+		$general['llms_taxonomies'] = array_values( array_map( 'sanitize_key', $raw ) );
+		$changed[]                  = 'taxonomies';
+	}
+
+	if ( $request->has_param( 'limit' ) ) {
+		$limit = (int) $request->get_param( 'limit' );
+		if ( $limit < 1 ) {
+			return new WP_Error(
+				'imperal_llmstxt_invalid_limit',
+				__( 'limit must be a positive integer.', 'imperal-bridge' ),
+				array( 'status' => 400 )
+			);
+		}
+		$general['llms_limit'] = $limit;
+		$changed[]              = 'limit';
+	}
+
+	if ( $request->has_param( 'extra_content' ) ) {
+		$extra = $request->get_param( 'extra_content' );
+		if ( ! is_string( $extra ) ) {
+			return new WP_Error(
+				'imperal_llmstxt_invalid_extra_content',
+				__( 'extra_content must be a string (may be empty to clear it).', 'imperal-bridge' ),
+				array( 'status' => 400 )
+			);
+		}
+		$general['llms_extra_content'] = $extra;
+		$changed[]                     = 'extra_content';
+	}
+
+	if ( empty( $changed ) ) {
+		return new WP_Error(
+			'imperal_llmstxt_nothing_to_update',
+			__( 'No llms.txt settings were supplied.', 'imperal-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	update_option( 'rank-math-options-general', $general );
+
+	return rest_ensure_response(
+		array(
+			'module_active' => imperal_llmstxt_bridge_module_active(),
+			'llms_txt_url'  => home_url( '/llms.txt' ),
+			'post_types'    => $general['llms_post_types'] ?? array(),
+			'taxonomies'    => $general['llms_taxonomies'] ?? array(),
+			'limit'         => isset( $general['llms_limit'] ) ? (int) $general['llms_limit'] : 100,
+			'extra_content' => $general['llms_extra_content'] ?? '',
+			'updated'       => $changed,
+		)
+	);
+}
+
+/**
+ * Register the llms.txt REST routes, gated behind manage_options — matches
+ * SECTION 7's robots.txt/sitemap gate, since llms.txt settings live under
+ * Rank Math's General settings page (an admin-only screen), not the
+ * per-post editor.
+ */
+function imperal_llmstxt_bridge_register_routes() {
+	register_rest_route(
+		IMPERAL_LLMSTXT_BRIDGE_NAMESPACE,
+		'/llmstxt',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_llmstxt_bridge_get_settings',
+				'permission_callback' => function () {
+					return current_user_can( 'manage_options' );
+				},
+			),
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_llmstxt_bridge_update_settings',
+				'permission_callback' => function () {
+					return current_user_can( 'manage_options' );
+				},
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_llmstxt_bridge_register_routes' );

@@ -601,6 +601,50 @@ async def test_manage_tab_seo_shows_indexnow_module_disabled_hint():
     assert "Advanced Mode" in s
 
 
+async def test_manage_tab_seo_shows_llms_txt_card_when_active():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_post("https://blog.com/wp-json/rankmath/v1/in/getLog", {"code": "rest_no_route"}, 404)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/sitemap-status",
+                      {"module_active": True, "sitemap_url": "https://blog.com/sitemap_index.xml"}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/robots-txt",
+                      {"content": "", "is_active": False, "site_is_public": True}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/404-logs", {"hits": []}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/llmstxt",
+                      {"module_active": True, "llms_txt_url": "https://blog.com/llms.txt",
+                       "post_types": ["post"], "taxonomies": ["category"], "limit": 50,
+                       "extra_content": "## Notes"}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/types",
+                      {"post": {"name": "Posts"}, "page": {"name": "Pages"}}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/taxonomies",
+                      {"category": {"name": "Categories"}}, 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="seo")
+    s = str(node)
+    assert "llms.txt" in s
+    assert "update_llms_txt_settings" in s
+    assert "Active" in s
+
+
+async def test_manage_tab_seo_shows_llms_txt_module_inactive_hint():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_post("https://blog.com/wp-json/rankmath/v1/in/getLog", {"code": "rest_no_route"}, 404)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/sitemap-status",
+                      {"module_active": True, "sitemap_url": "https://blog.com/sitemap_index.xml"}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/robots-txt",
+                      {"content": "", "is_active": False, "site_is_public": True}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/404-logs", {"hits": []}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/llmstxt",
+                      {"module_active": False, "llms_txt_url": "https://blog.com/llms.txt",
+                       "post_types": [], "taxonomies": [], "limit": 100, "extra_content": ""}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/types", {"post": {"name": "Posts"}}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/taxonomies", {}, 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="seo")
+    s = str(node)
+    assert "Not active yet" in s
+    assert "update_llms_txt_settings" in s
+
+
 async def test_manage_tab_settings_shows_editable_form():
     ctx = await _base_panel_ctx()
     ctx.http.mock_get("https://blog.com/wp-json/wp/v2/settings",

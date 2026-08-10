@@ -1282,6 +1282,56 @@ async def _render_rankmath_block(ctx, site_id, base_url, username, pw):
         sections.append(ui.Alert(
             message="Rank Math's 404 Monitor module is not active on this site.", type="info"))
 
+    # ── llms.txt (AI-crawler guidance file) ──
+    llms_r = await wp_get(ctx, base_url, "/wp-json/imperal/v1/llmstxt",
+                          username=username, app_password=pw)
+    if llms_r is not None and llms_r.status_code == 200 and isinstance(llms_r.body, dict):
+        lb = llms_r.body
+        active = bool(lb.get("module_active"))
+        # Real post types/taxonomies from WordPress core's own REST discovery —
+        # never a hardcoded guess, since custom post types/taxonomies vary per site.
+        types_r, taxes_r = await asyncio.gather(
+            wp_get(ctx, base_url, "/wp-json/wp/v2/types", username=username, app_password=pw),
+            wp_get(ctx, base_url, "/wp-json/wp/v2/taxonomies", username=username, app_password=pw),
+        )
+        types_body = types_r.body if types_r.status_code == 200 and isinstance(types_r.body, dict) else {}
+        taxes_body = taxes_r.body if taxes_r.status_code == 200 and isinstance(taxes_r.body, dict) else {}
+        post_type_opts = [{"label": i.get("name", s), "value": s}
+                          for s, i in types_body.items() if s != "attachment"]
+        taxonomy_opts = [{"label": i.get("name", s), "value": s}
+                         for s, i in taxes_body.items() if s not in ("nav_menu", "link_category", "post_format")]
+        llms_form = ui.Form(
+            action="update_llms_txt_settings", submit_label="Save llms.txt settings",
+            defaults={"site_id": site_id},
+            children=[
+                ui.MultiSelect(param_name="post_types", options=post_type_opts,
+                               values=lb.get("post_types", [])),
+                ui.MultiSelect(param_name="taxonomies", options=taxonomy_opts,
+                               values=lb.get("taxonomies", [])),
+                ui.Input(param_name="limit", value=str(lb.get("limit", 100)), type="number",
+                         placeholder="Max links per type"),
+                ui.TextArea(param_name="extra_content", value=lb.get("extra_content", ""),
+                           rows=4, placeholder="Extra Markdown appended to llms.txt"),
+            ],
+        )
+        sections.append(ui.Card(
+            title="llms.txt (AI-crawler guidance file)",
+            content=ui.Stack(gap=2, children=[
+                ui.Alert(
+                    message=(f"Active — served at {lb.get('llms_txt_url', '')}" if active else
+                              "Not active yet — enable Rank Math's llms-txt module first "
+                              "(Rank Math → Dashboard → Advanced Mode → LLMS Txt), settings "
+                              "below are saved either way"),
+                    type="success" if active else "info"),
+                llms_form,
+            ]),
+        ))
+    elif llms_r is not None and llms_r.status_code == 404:
+        sections.append(ui.Alert(
+            message="llms.txt settings need the Imperal Bridge plugin (version 2.5.0+) — "
+                    "install/update it on this site first.",
+            type="info"))
+
     return ui.Stack(gap=3, children=sections) if sections else ui.Empty(
         message="Could not load Rank Math data — check the connection.")
 

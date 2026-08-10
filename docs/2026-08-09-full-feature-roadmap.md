@@ -5,21 +5,29 @@ Date: 2026-08-09, updated 2026-08-10. Supersedes ad-hoc feature lists; update th
 
 ## Purpose
 
-WordPress Hub now ships 133 functions covering sites, posts/pages (incl. delete/duplicate/bulk
+WordPress Hub now ships 139 functions covering sites, posts/pages (incl. delete/duplicate/bulk
 status), taxonomy, media, SEO (Rank Math per-content + full site-wide coverage: redirects, robots.txt,
-sitemap status, SEO score, 404 monitor), page builders (Elementor/Bricks point-edits), WooCommerce
-(incl. product reviews, manual order entry, order note thread, customer deletion), native user
-management, menus/navigation, site settings + native plugin/theme listing, and SSH/WP-CLI + Bridge
-server ops. This document maps EVERY realistic capability across WordPress Core, WooCommerce, Rank
-Math, and our own Bridge/SSH layer — what exists today, what's missing, and in what order to build
-it. Every future "what should we add" conversation starts from this file, not from memory.
+sitemap status, SEO score, 404 monitor, Instant Indexing/IndexNow, llms.txt), page builders
+(Elementor/Bricks point-edits), WooCommerce (incl. product reviews, manual order entry, order note
+thread, customer deletion), native user management, menus/navigation, site settings + native
+plugin/theme listing, and SSH/WP-CLI + Bridge server ops. This document maps EVERY realistic
+capability across WordPress Core, WooCommerce, Rank Math, and our own Bridge/SSH layer — what exists
+today, what's missing, and in what order to build it. Every future "what should we add" conversation
+starts from this file, not from memory.
 
 Coverage baseline verified against the actual codebase on 2026-08-10 (grep of all
-`@chat.function`/`@ext.expose` decorators across `handlers_*.py` — 133 functions confirmed, up from
+`@chat.function`/`@ext.expose` decorators across `handlers_*.py` — 139 functions confirmed, up from
 87 on 2026-08-09 — Priorities 2 through 7 shipped 2026-08-10 morning, Priority 8a (create_order/
 list_order_notes/delete_customer) shipped 2026-08-10 afternoon, Priority 13 (full Rank Math
-site-wide coverage: robots.txt, sitemap status, SEO score, 404 monitor) shipped 2026-08-10 evening —
-Rank Math is now the ONLY layer in this document with zero remaining ❌ gaps).
+site-wide coverage: robots.txt, sitemap status, SEO score, 404 monitor) shipped 2026-08-10 evening,
+Priority 14 (Instant Indexing/IndexNow) and Priority 15 (llms.txt) — both found via the SAME full
+doc+plugin-source re-audit — shipped 2026-08-10 night. That re-audit also turned up Rank Math's
+newer `ai-visibility` module (brand-tracking against AI answer engines): investigated and
+deliberately NOT built — it is a paid Rank Math SaaS proxy gated behind a separate connected Rank
+Math account + trial/subscription, not WordPress site data, so covering it would mean reselling
+Rank Math's own paid analytics subscription rather than exposing real site-management capability.
+Rank Math is now confirmed FULLY covered against every real, callable, site-management module in the
+actual plugin source, not just against our own prior assumptions).
 
 ---
 
@@ -128,6 +136,62 @@ as a new Manage > SEO sub-tab (sitemap status card, robots.txt editor form, 404 
 per-row delete action); `get_seo_analysis_score` stays chat-tool-only since it is per-post like the
 rest of §2.1 and none of that per-post SEO surface has panel UI yet either.
 
+### 2.3 Instant Indexing (IndexNow) — ✅ FULLY COVERED 2026-08-10 night — the one real gap found on re-audit
+| Function | Status |
+|---|---|
+| **`submit_urls_to_indexnow`** | ✅ done — POST `rankmath/v1/in/submitUrls` on Rank Math's OWN native REST controller (`RankMath\Instant_Indexing\Rest`), not the Imperal Bridge — this module hooks `rest_api_init` itself and needs no companion plugin at all |
+| **`list_indexnow_log`** | ✅ done — POST `rankmath/v1/in/getLog`, filter all\|manual\|auto, reads the `rank_math_indexnow_log` WP option (last 100 entries, `RankMath\Instant_Indexing\Api::get_log()`'s own storage) |
+| **`clear_indexnow_log`** | ✅ done — POST `rankmath/v1/in/clearLog`, deletes the same option |
+| **`reset_indexnow_key`** | ✅ done — POST `rankmath/v1/in/resetKey`, regenerates the site's IndexNow verification key (`Api::reset_key()`) and returns the new key + its verification-file URL |
+
+**Why this mattered:** found via the explicit re-audit request "перепроверь всю их документацию,
+изучи их плагин... если найдешь что еще не покрыто - покрой" — re-checked the official module list
+at rankmath.com/kb/advanced-mode/ and the real plugin source on plugins.svn.wordpress.org module by
+module against our own coverage. Confirmed via `includes/class-installer.php`'s
+`create_misc_options()` that Instant Indexing is ACTIVE BY DEFAULT on every fresh Rank Math install
+(same default-`$modules` array as sitemap/seo-analysis), so this silently affected most connected
+sites, not just ones that opted in. Architecturally distinct from every other Rank Math function in
+this app: it talks straight to Rank Math's own REST namespace with the connected Application
+Password, with NO Bridge plugin involved — verified route-by-route against
+`includes/modules/instant-indexing/class-rest.php` before writing a line of Python. Wired into the
+Manage > SEO sub-tab as its own card (submission log list, submit-URLs form, clear-log button).
+Other candidate gaps investigated and deliberately NOT built: Database Tools' "Update SEO Scores"
+bulk recompute (verified via `class-update-score.php` that it runs entirely client-side through a
+bundled JS analyzer in wp-admin, with no PHP/REST/WP-CLI hook to call into — building this would
+have meant fabricating a capability that doesn't exist server-side).
+
+### 2.4 llms.txt (AI-crawler guidance file) — ✅ FULLY COVERED 2026-08-10 night — found on the SAME re-audit as §2.3
+| Function | Status |
+|---|---|
+| **`get_llms_txt_settings`** | ✅ done — Imperal Bridge SECTION 8, GET `/imperal/v1/llmstxt`, reads `llms_post_types`/`llms_taxonomies`/`llms_limit`/`llms_extra_content` from the SAME `rank-math-options-general` option §2.2 already reads `robots_txt_content` from, plus whether the module is active and the file's live URL |
+| **`update_llms_txt_settings`** | ✅ done — Imperal Bridge SECTION 8, POST `/imperal/v1/llmstxt`, partial-update (only fields present in the request are touched, same convention as per-post SEO in §2.1) |
+
+**What it is:** Rank Math's `llms-txt` module (`RankMath\LLMS\LLMS_Txt`,
+`includes/modules/llms/class-llms-txt.php`) serves a dynamic, Markdown-format `/llms.txt` file at
+the site root via a rewrite rule + `template_redirect` — the AI-crawler analogue of robots.txt,
+telling LLM crawlers which posts/pages/taxonomies matter most. It exposes NO REST API of its own
+(unlike Instant Indexing) — its settings only exist as a WP option, so this had to go through the
+Imperal Bridge (bumped to v2.5.0) rather than native REST, following §2.2's exact
+get_option()/update_option() pattern. Confirmed via `includes/class-installer.php` that, UNLIKE
+robots.txt/sitemap/seo-analysis, `llms-txt` is NOT in the default-active `$modules` array — so
+`module_active` is reported honestly rather than assumed, and turning the module itself on/off is
+left to Rank Math's own module-manager screen (no single-module REST toggle exists in the plugin to
+build against). Wired into the Manage > SEO sub-tab as its own card — post types/taxonomies pulled
+live from WordPress core's own `/wp/v2/types` and `/wp/v2/taxonomies` (never a hardcoded guess,
+since custom post types vary per site), limit and extra-Markdown as plain form fields.
+
+**Investigated on the same pass and deliberately NOT built — AI Visibility module:** Rank Math also
+ships an `ai-visibility` module (`includes/modules/ai-visibility/`, active by default alongside
+Instant Indexing) that DOES expose real REST routes (`/rankmath/v1/ai-visibility/overview`,
+`/brands`, `/trial`, `/checkout`). Read its controllers before deciding: this module is a
+cache-backed proxy to Rank Math's OWN paid SaaS backend — brand visibility tracking across AI
+answer engines (ChatGPT etc.), gated behind a Rank Math account connection plus a trial/paid
+subscription and Content AI credits it consumes from Rank Math's own servers, not from anything on
+the WordPress site itself. Building this would mean reselling access to a third party's paid
+subscription flow we don't control pricing, quota, or billing for — out of scope for a
+site-management app, and a real fabrication risk if we guessed at behavior we can't verify without
+paying for it ourselves. Correctly excluded, not a gap.
+
 ---
 
 ## Layer 3 — WooCommerce
@@ -203,11 +267,13 @@ story, not be built speculatively.
 
 ## Layer 5 — Imperal Bridge plugin & SSH/WP-CLI server layer
 
-### 5.1 Bridge plugin (`imperal-bridge.php`) — sections today
-SEO (Rank Math fields) + Builder (Elementor/Bricks point-edits) + Media (sideload). Rule from
-CLAUDE.md: **future bridge capabilities are new sections in this same file, never a new plugin.**
-Menus (1.5) and Redirects (2.2) will likely need new Bridge sections if core REST doesn't already
-expose them — verify per-feature before assuming a Bridge change is needed.
+### 5.1 Bridge plugin (`imperal-bridge.php`) — sections today (v2.5.0, 8 sections)
+SECTION 1 SEO (Rank Math per-post fields) · SECTION 2 Builder (Elementor/Bricks point-edits) ·
+SECTION 3 Media (external-image sideload) · SECTION 4 Server (WP/PHP versions, updates, cron, DB
+size) · SECTION 5 Redirects (Rank Math's own redirection table) · SECTION 6 Users (native
+password-reset trigger) · SECTION 7 Rank Math site-wide (SEO score, robots.txt, sitemap status, 404
+log) · SECTION 8 llms.txt (AI-crawler guidance file settings). Rule from CLAUDE.md: **future bridge
+capabilities are new sections in this same file, never a new plugin.**
 
 ### 5.2 SSH / WP-CLI — ✅ fully covered
 `add_ssh`, `remove_ssh`, `get_server_info`, `list_plugins`, `install_plugin`, `purge_cache`
@@ -291,16 +357,40 @@ Server section of the connected-site detail screen.
    panel render-path tests, full suite 531/531 green, `imperal validate` 0 errors/0 warnings (133
    functions). Rank Math (Layer 2) is now the only layer in this whole document with zero
    remaining ❌ gaps.
-14. **Everything still explicitly deferred**: theme activation (1.7), 4.2 (builder extensions:
+14. ✅ **Instant Indexing / IndexNow** (2.3) — DONE 2026-08-10 night, found on an explicit re-audit
+   request ("перепроверь всю их документацию, изучи их плагин... если найдешь что еще не покрыто -
+   покрой") issued AFTER Priority 13 had already marked Rank Math "fully covered." Re-checking the
+   real plugin source module-by-module turned up Instant Indexing — active by default, with its own
+   REST namespace needing no Bridge at all. Shipped 4 functions in `handlers_indexnow.py`:
+   `submit_urls_to_indexnow`, `list_indexnow_log`, `clear_indexnow_log`, `reset_indexnow_key`. 12 new
+   handler tests + 3 new panel tests, full suite 545/545 green, `imperal validate` 0 errors/0
+   warnings (137 functions). Wired into the Manage > SEO sub-tab.
+15. ✅ **llms.txt** (2.4) — DONE 2026-08-10 night, found on the SAME re-audit as Priority 14 (module
+   list at rankmath.com/kb/advanced-mode/ checked module-by-module against plugin source on
+   plugins.svn.wordpress.org). Unlike Instant Indexing, this module exposes no REST API of its own —
+   its 4 settings (`llms_post_types`/`llms_taxonomies`/`llms_limit`/`llms_extra_content`) live only
+   as a WP option, so it needed a new Imperal Bridge SECTION 8 (`imperal-bridge.php` bumped to
+   v2.5.0) mirroring §2.2's robots.txt get_option()/update_option() pattern exactly. Shipped
+   `get_llms_txt_settings`/`update_llms_txt_settings` in `handlers_llmstxt.py`. Confirmed via
+   `class-installer.php` that this module — unlike robots.txt/sitemap/Instant Indexing — is NOT
+   active by default, so `module_active` is reported honestly rather than assumed. Post
+   type/taxonomy pickers in the panel form are populated from WordPress core's own
+   `/wp-json/wp/v2/types` and `/wp-json/wp/v2/taxonomies` discovery, never a hardcoded guess (custom
+   post types vary per site). Same re-audit also surfaced Rank Math's newer `ai-visibility` module —
+   investigated and deliberately excluded: it is a paid Rank Math SaaS brand-tracking proxy gated
+   behind a separate account/subscription, not WordPress site data. 9 new handler tests + 2 new
+   panel tests, full suite 556/556 green, `imperal validate` 0 errors/0 warnings (139 functions).
+16. **Everything still explicitly deferred**: theme activation (1.7), 4.2 (builder extensions:
    duplicate element, template library), 3.7 (shipping/tax classes). Revisit only when a real,
    recurring user need appears. Do not build speculatively — matches this app's existing discipline
    (see WooCommerce module plan: "read-only first, add write only with explicit scope").
 
 All of Priorities 2–7 above: 114 functions total (up from 87); Priority 8a adds 3 more (117
-total); Priority 13 adds 6 more (133 total, current). Full pytest suite green (531/531) at every
-step, and every new function priced via `developer.update_pricing` — the COMPLETE price map is
-always passed (never a partial merge), verified against the live `@chat.function` name set after
-every pricing call so no function is ever left unpriced or mispriced.
+total); Priority 13 adds 6 more (133 total); Priority 14 adds 4 more (137 total); Priority 15 adds
+2 more (139 total, current). Full pytest suite green (556/556) at every step, and every new function
+priced via `developer.update_pricing` — the COMPLETE price map is always passed (never a partial
+merge), verified against the live `@chat.function` name set after every pricing call so no function
+is ever left unpriced or mispriced.
 
 ## Explicitly out of scope (documented so it isn't re-proposed later)
 
