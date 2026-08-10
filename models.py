@@ -753,6 +753,38 @@ class PluginInstallResult(sdl.Entity):
     output: str = ""
 
 
+class UpdatePluginParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    slug: str = Field(
+        min_length=1, max_length=200,
+        description="Plugin folder/file slug from list_plugins, e.g. 'akismet' or 'akismet/akismet.php'",
+    )
+
+
+class PluginUpdateResult(sdl.Entity):
+    """Result of updating one plugin over WP-CLI."""
+    slug: str = ""
+    output: str = ""
+
+
+class UpdateCoreParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+
+
+class CoreUpdateResult(sdl.Entity):
+    """Result of updating WordPress core over WP-CLI."""
+    output: str = ""
+
+
+class RunWpCronParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+
+
+class WpCronRunResult(sdl.Entity):
+    """Result of forcing due cron events to run over WP-CLI."""
+    output: str = ""
+
+
 class Order(sdl.Entity):
     total: str = ""
     currency: str = ""

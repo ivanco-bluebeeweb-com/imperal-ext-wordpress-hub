@@ -170,6 +170,78 @@ async def install_plugin(cred: dict, source: str, activate: bool) -> tuple[dict 
     return {"raw": output}, None
 
 
+async def update_plugin(cred: dict, slug: str) -> tuple[dict | None, str | None]:
+    """Update ONE already-installed plugin via `wp plugin update <slug>`.
+
+    Scoped to a single named plugin, not `--all` — an unattended bulk update
+    across every plugin on a live site is a much bigger blast radius than a
+    single named one, so bulk plugin updates are deliberately not exposed.
+    `slug` is restricted to safe plugin-slug characters so it cannot inject
+    extra shell arguments.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    if not slug or not all(ch.isalnum() or ch in "-_." for ch in slug):
+        return None, "Invalid plugin slug — use the plugin's folder/file slug from list_plugins."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = (
+        f"wp plugin update {slug} --format=json "
+        f"--path={wp_path} --allow-root"
+    )
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command, timeout=60)
+    if output is None:
+        return None, error or "SSH connection failed"
+    return {"raw": output}, None
+
+
+async def update_core(cred: dict) -> tuple[dict | None, str | None]:
+    """Update WordPress core to the latest version via `wp core update`.
+
+    No version argument is accepted — always the latest, matching what
+    clicking "Update Now" in wp-admin does. A stuck/incompatible update is
+    the site owner's call to make deliberately (e.g. pinning a version),
+    which this app does not support.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp core update --format=json --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command, timeout=120)
+    if output is None:
+        return None, error or "SSH connection failed"
+    return {"raw": output}, None
+
+
+async def run_wp_cron(cred: dict) -> tuple[str | None, str | None]:
+    """Force-run every due cron event now via `wp cron event run --due-now`.
+
+    Fixed shape, no event-name argument accepted — running a single
+    caller-chosen event by name would let an agent trigger arbitrary
+    site-specific cron hooks (some of which can be destructive, e.g. cleanup
+    tasks), which is out of scope for a diagnostic "unstick the queue" tool.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp cron event run --due-now --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command, timeout=60)
+
+
 async def get_server_info(cred: dict) -> dict:
     """Run WP-CLI diagnostic commands and return results."""
     if not cred.get("key"):

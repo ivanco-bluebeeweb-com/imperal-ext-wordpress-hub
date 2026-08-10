@@ -1323,17 +1323,21 @@ async def _render_detail(ctx, site_id,
             if plug_list:
                 update_items += [
                     ui.Text("Plugin updates", variant="heading"),
-                    ui.DataTable(
-                        columns=[
-                            ui.DataColumn("title",          "Plugin",    sortable=True),
-                            ui.DataColumn("version",        "Current",   sortable=False),
-                            ui.DataColumn("update_version", "Available", sortable=False),
-                        ],
-                        rows=[{"title": p.get("title") or p.get("name", ""),
-                               "version": p.get("version", ""),
-                               "update_version": p.get("update_version", "")}
-                              for p in plug_list],
-                    ),
+                    ui.List(items=[
+                        ui.ListItem(
+                            id=str(p.get("name", "")),
+                            title=p.get("title") or p.get("name", ""),
+                            subtitle=f"{p.get('version', '')} → {p.get('update_version', '')}",
+                            actions=([{
+                                "icon": "Download",
+                                "on_click": ui.Call("update_plugin", site_id=site_id,
+                                                    slug=p.get("name", "")),
+                                "confirm": f"Update '{p.get('title') or p.get('name', '')}' "
+                                          f"now over SSH?",
+                            }] if has_ssh else None),
+                        )
+                        for p in plug_list
+                    ]),
                 ]
             if theme_list:
                 update_items += [
@@ -1350,6 +1354,28 @@ async def _render_detail(ctx, site_id,
                               for t in theme_list],
                     ),
                 ]
+            if has_ssh and (record.get("core_update") or n_updates):
+                update_items.append(ui.List(items=[
+                    ui.ListItem(
+                        id="update-core", title="Update WordPress core",
+                        subtitle="Updates core to the latest version over SSH",
+                        icon="ArrowUpCircle",
+                        actions=[{
+                            "icon": "ArrowUpCircle",
+                            "on_click": ui.Call("update_core", site_id=site_id),
+                            "confirm": "Update WordPress core to the latest version now over SSH?",
+                        }],
+                    ),
+                    ui.ListItem(
+                        id="run-cron", title="Run due cron events",
+                        subtitle="Forces WP-Cron to fire any events that are overdue",
+                        icon="Clock",
+                        actions=[{
+                            "icon": "Clock",
+                            "on_click": ui.Call("run_wp_cron", site_id=site_id),
+                        }],
+                    ),
+                ]))
 
         checked_text = f"Last checked: {last_check[:16].replace('T', ' ')}" if last_check else ""
         if server_source:

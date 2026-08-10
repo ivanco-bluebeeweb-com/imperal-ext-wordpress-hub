@@ -270,6 +270,35 @@ async def test_center_detail_shows_bridge_outdated_warning_instead_of_no_data():
     assert "No server data yet" not in s
 
 
+async def test_center_detail_server_section_offers_update_plugin_with_ssh():
+    """Plugin updates listed under Server must offer an update_plugin action
+    per row when SSH is configured -- and must send the WP-CLI slug (the
+    'name' field), never the human-readable title, since update_plugin's own
+    slug validation would reject anything with spaces."""
+    ctx = MockContext()
+    await storage.save_site_record(ctx, {
+        "id": "x-com", "name": "X", "url": "https://x.com", "username": "admin",
+        "status": "connected", "ssh_host": "ssh.x.com",
+        "wp_version": "6.5.2", "php_version": "8.2.10",
+        "pending_updates": 1, "server_source": "bridge",
+        "plugin_updates_list": [
+            {"name": "akismet", "title": "Akismet Anti-Spam", "version": "5.3", "update_version": "5.4"},
+        ],
+    })
+    await storage.set_credential(ctx, "x-com", "pw")
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/users/me", {"name": "Admin"}, 200)
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/posts", [], 200)
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/pages", [], 200)
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/media", [], 200)
+    node = await panels.center(ctx, view="", site_id="x-com")
+    s = str(node)
+    assert "Akismet Anti-Spam" in s
+    assert "update_plugin" in s
+    assert "'slug': 'akismet'" in s
+    assert "update_core" in s
+    assert "run_wp_cron" in s
+
+
 async def test_center_store_has_separate_commerce_group():
     ctx = await _store_panel_ctx()
     node = await panels.center(ctx, view="", site_id="shop-com")

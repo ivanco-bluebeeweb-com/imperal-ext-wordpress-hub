@@ -38,5 +38,6 @@ import handlers_post_lifecycle  # noqa: E402,F401
 import handlers_reviews  # noqa: E402,F401
 import handlers_site_settings  # noqa: E402,F401
 import handlers_redirects  # noqa: E402,F401
+import handlers_maintenance  # noqa: E402,F401
 import skeleton  # noqa: E402,F401
 import panels  # noqa: E402,F401
