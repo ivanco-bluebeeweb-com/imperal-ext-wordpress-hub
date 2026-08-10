@@ -984,12 +984,15 @@ async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, m
     manage_btns = [
         _manage_btn("Menus", "menus"),
         _manage_btn("Redirects", "redirects"),
+        _manage_btn("SEO", "seo"),
         _manage_btn("Settings", "settings"),
         _manage_btn("Plugins", "plugins"),
     ]
 
     if manage_tab == "redirects":
         body = await _render_redirects_block(ctx, site_id, base_url, username, pw)
+    elif manage_tab == "seo":
+        body = await _render_rankmath_block(ctx, site_id, base_url, username, pw)
     elif manage_tab == "settings":
         body = await _render_settings_block(ctx, site_id, base_url, username, pw)
     elif manage_tab == "plugins":
@@ -1140,6 +1143,100 @@ async def _render_redirects_block(ctx, site_id, base_url, username, pw):
         redirects_list,
         ui.Card(title="New redirect", content=create_form),
     ])
+
+
+async def _render_rankmath_block(ctx, site_id, base_url, username, pw):
+    """Rank Math site-wide: sitemap module status, robots.txt override editor,
+    and the 404 Monitor log — Imperal Bridge SECTION 7. Per-post SEO fields
+    (title/description/focus keyword/schema type) live on each post's own
+    edit view via get_seo_meta/update_seo_meta, not here.
+    """
+    sitemap_r = await wp_get(ctx, base_url, "/wp-json/imperal/v1/rankmath/sitemap-status",
+                             username=username, app_password=pw)
+    robots_r = await wp_get(ctx, base_url, "/wp-json/imperal/v1/rankmath/robots-txt",
+                            username=username, app_password=pw)
+    hits_r = await wp_get(ctx, base_url, "/wp-json/imperal/v1/rankmath/404-logs",
+                          username=username, app_password=pw, params={"limit": 50})
+
+    if sitemap_r is None or sitemap_r.status_code == 404:
+        return ui.Alert(
+            message="Rank Math site-wide data needs the Imperal Bridge plugin "
+                    "(version 2.4.0+) — install/update it on this site first.",
+            type="info")
+    if sitemap_r.status_code in (401, 403):
+        return ui.Alert(message="The connected user cannot read Rank Math settings.", type="error")
+
+    sections = []
+
+    # ── Sitemap status ──
+    if sitemap_r.status_code == 200 and isinstance(sitemap_r.body, dict):
+        sm = sitemap_r.body
+        active = bool(sm.get("module_active"))
+        sections.append(ui.Card(
+            title="Sitemap",
+            content=ui.Stack(gap=2, children=[
+                ui.Alert(
+                    message=(f"Sitemap module is active — {sm.get('sitemap_url', '')}"
+                              if active else
+                              "Rank Math's Sitemap module is not active on this site."),
+                    type="success" if active else "info"),
+            ]),
+        ))
+
+    # ── robots.txt override ──
+    if robots_r is not None and robots_r.status_code == 200 and isinstance(robots_r.body, dict):
+        rb = robots_r.body
+        robots_form = ui.Form(
+            action="update_robots_txt", submit_label="Save robots.txt override",
+            defaults={"site_id": site_id},
+            children=[
+                ui.TextArea(param_name="content", value=rb.get("content", ""), rows=8,
+                            placeholder="User-agent: *\nDisallow: /wp-admin/"),
+            ],
+        )
+        status_note = ("Active — served in place of WordPress's own robots.txt"
+                        if rb.get("is_active") else
+                        "Not active — WordPress's own default robots.txt is served instead "
+                        "(save non-empty text here, or check the site is public, to activate it)")
+        sections.append(ui.Card(
+            title="robots.txt override",
+            content=ui.Stack(gap=2, children=[
+                ui.Text(status_note, variant="caption"),
+                robots_form,
+            ]),
+        ))
+
+    # ── 404 Monitor log ──
+    if hits_r is not None and hits_r.status_code == 200 and isinstance(hits_r.body, dict):
+        hits = hits_r.body.get("hits", [])
+        if isinstance(hits, list) and hits:
+            rows_ui = [
+                ui.ListItem(
+                    id=str(h.get("id", "")),
+                    title=h.get("uri", ""),
+                    subtitle=f"hit {h.get('times_accessed', 0)}x · last {h.get('accessed', '')}",
+                    meta=h.get("referer", "") or "(no referer)",
+                    actions=[
+                        {"icon": "Trash2", "label": "Delete",
+                         "on_click": ui.Call("delete_404_hit", site_id=site_id, hit_id=h.get("id")),
+                         "confirm": "Delete this 404 log entry?"},
+                    ],
+                )
+                for h in hits
+            ]
+            hits_body = ui.List(items=rows_ui)
+        elif isinstance(hits, list):
+            hits_body = ui.Empty(message="No 404 hits logged yet.")
+        else:
+            hits_body = ui.Alert(message="Rank Math's 404 Monitor module is not active on this site.",
+                                 type="info")
+        sections.append(ui.Card(title="404 Monitor", content=hits_body))
+    elif hits_r is not None and hits_r.status_code == 404:
+        sections.append(ui.Alert(
+            message="Rank Math's 404 Monitor module is not active on this site.", type="info"))
+
+    return ui.Stack(gap=3, children=sections) if sections else ui.Empty(
+        message="Could not load Rank Math data — check the connection.")
 
 
 async def _render_settings_block(ctx, site_id, base_url, username, pw):

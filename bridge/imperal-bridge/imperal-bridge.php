@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
- * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, and server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.3.0
+ * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
+ * Version:           2.4.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.3.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.4.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath' ),
 		)
 	);
 }
@@ -2733,3 +2733,293 @@ function imperal_users_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_users_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 7 — RANK MATH SITE-WIDE (SEO score, robots.txt, sitemap status, 404 log)
+ *
+ * Four more pieces of Rank Math data that live outside per-post SEO meta
+ * (SECTION 1) and outside the Redirections table (SECTION 5), verified
+ * against seo-by-rank-math 1.0.275 source before writing a single line here:
+ *
+ *   - SEO score: a plain integer in postmeta key `rank_math_seo_score`
+ *     (RankMath\Frontend_SEO_Score reads it with a bare get_post_meta() call —
+ *     no wrapper class, no separate table).
+ *   - robots.txt: NOT the raw file on disk. Rank Math's own editor
+ *     (RankMath\Robots_Txt) stores the override text in the `robots_txt_content`
+ *     key of the `rank-math-options-general` option (one big serialized array —
+ *     Rank Math's own settings-storage convention, read/written here via
+ *     get_option()/update_option() exactly like Rank Math's own Helper::option()
+ *     trait does, never touched with raw SQL since this is a normal WP option).
+ *     It only takes effect on a *public* site (Rank Math's own filter checks
+ *     $is_public) and only when non-empty — both preserved here.
+ *   - Sitemap status: Rank Math generates sitemaps dynamically on request
+ *     (RankMath\Sitemap\Router rewrites /sitemap_index.xml et al. at
+ *     runtime); there is no stored "last generated" state to read and no
+ *     regenerate action to trigger — asking Rank Math to "regenerate" the
+ *     sitemap is not a real operation on this plugin, so this section only
+ *     reports whether the Sitemap module is active (`rank_math_modules`
+ *     option, a plain array of active module ids — RankMath\Helpers\Conditional
+ *     ::is_module_active() checks it with a bare in_array()) plus the sitemap
+ *     index URL when it is.
+ *   - 404 log: read-only view of Rank Math's own 404 Monitor, which logs
+ *     real hits in its own table ({$wpdb->prefix}rank_math_404_logs: id, uri,
+ *     accessed, times_accessed, referer, user_agent — RankMath\Monitor\DB).
+ *     Delete-one-entry is supported (Rank Math's own admin screen offers
+ *     the same); bulk-clearing the whole log is deliberately NOT exposed —
+ *     no legitimate Imperal workflow needs to wipe 404 history in one call,
+ *     and it would remove real diagnostic history with no way back.
+ * ============================================================================= */
+
+define( 'IMPERAL_RANKMATH_BRIDGE_NAMESPACE', 'imperal/v1' );
+define( 'IMPERAL_RANKMATH_BRIDGE_VERSION', '1.0.0' );
+
+/**
+ * GET /imperal/v1/rankmath/score/{id} — read a post's Rank Math SEO score.
+ *
+ * @param WP_REST_Request $request Incoming request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_rankmath_bridge_get_score( $request ) {
+	$post_id = (int) $request->get_param( 'id' );
+	$post    = get_post( $post_id );
+	if ( ! $post ) {
+		return new WP_Error(
+			'imperal_rankmath_post_not_found',
+			__( 'That post does not exist.', 'imperal-bridge' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	$score = get_post_meta( $post_id, 'rank_math_seo_score', true );
+	return rest_ensure_response(
+		array(
+			'id'    => $post_id,
+			'score' => '' === $score ? null : (int) $score,
+		)
+	);
+}
+
+/**
+ * GET /imperal/v1/rankmath/robots-txt — read Rank Math's robots.txt override text.
+ *
+ * @return WP_REST_Response
+ */
+function imperal_rankmath_bridge_get_robots_txt() {
+	$general = get_option( 'rank-math-options-general', array() );
+	$content = is_array( $general ) ? (string) ( $general['robots_txt_content'] ?? '' ) : '';
+
+	return rest_ensure_response(
+		array(
+			'content'      => $content,
+			'is_active'    => '' !== $content,
+			'site_is_public' => (bool) get_option( 'blog_public' ),
+		)
+	);
+}
+
+/**
+ * POST /imperal/v1/rankmath/robots-txt — write Rank Math's robots.txt override text.
+ *
+ * @param WP_REST_Request $request Incoming request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_rankmath_bridge_update_robots_txt( $request ) {
+	$content = $request->get_param( 'content' );
+	if ( ! is_string( $content ) ) {
+		return new WP_Error(
+			'imperal_rankmath_invalid_content',
+			__( 'content must be a string (may be empty to clear the override).', 'imperal-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$general = get_option( 'rank-math-options-general', array() );
+	if ( ! is_array( $general ) ) {
+		$general = array();
+	}
+	$general['robots_txt_content'] = $content;
+	update_option( 'rank-math-options-general', $general );
+
+	return rest_ensure_response(
+		array(
+			'content'   => $content,
+			'is_active' => '' !== $content,
+		)
+	);
+}
+
+/**
+ * GET /imperal/v1/rankmath/sitemap-status — whether Rank Math's Sitemap
+ * module is active, plus the sitemap index URL when it is.
+ *
+ * @return WP_REST_Response
+ */
+function imperal_rankmath_bridge_sitemap_status() {
+	$active_modules = get_option( 'rank_math_modules', array() );
+	$active         = is_array( $active_modules ) && in_array( 'sitemap', $active_modules, true );
+
+	return rest_ensure_response(
+		array(
+			'module_active' => $active,
+			'sitemap_url'   => $active ? home_url( '/sitemap_index.xml' ) : '',
+		)
+	);
+}
+
+/**
+ * Whether Rank Math's 404-logs table exists on this site (404 Monitor module
+ * may be disabled, or Rank Math itself may not be installed).
+ *
+ * @return bool
+ */
+function imperal_rankmath_bridge_404_table_exists() {
+	global $wpdb;
+	$table = $wpdb->prefix . 'rank_math_404_logs';
+	$found = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+	return $found === $table;
+}
+
+/**
+ * GET /imperal/v1/rankmath/404-logs — list logged 404 hits, newest first.
+ *
+ * @param WP_REST_Request $request Incoming request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_rankmath_bridge_list_404_logs( $request ) {
+	if ( ! imperal_rankmath_bridge_404_table_exists() ) {
+		return new WP_Error(
+			'imperal_rankmath_404_not_available',
+			__( 'Rank Math\'s 404 Monitor module does not appear to be enabled on this site.', 'imperal-bridge' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	global $wpdb;
+	$table = $wpdb->prefix . 'rank_math_404_logs';
+	$limit = min( 100, max( 1, (int) $request->get_param( 'limit' ) ?: 50 ) );
+
+	$rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} ORDER BY accessed DESC LIMIT %d", $limit ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+	$out = array();
+	foreach ( (array) $rows as $row ) {
+		$out[] = array(
+			'id'             => (int) $row->id,
+			'uri'            => (string) $row->uri,
+			'accessed'       => (string) $row->accessed,
+			'times_accessed' => (int) $row->times_accessed,
+			'referer'        => (string) $row->referer,
+			'user_agent'     => (string) $row->user_agent,
+		);
+	}
+
+	return rest_ensure_response( $out );
+}
+
+/**
+ * DELETE /imperal/v1/rankmath/404-logs/{id} — remove one logged 404 hit.
+ *
+ * @param WP_REST_Request $request Incoming request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_rankmath_bridge_delete_404_log( $request ) {
+	if ( ! imperal_rankmath_bridge_404_table_exists() ) {
+		return new WP_Error(
+			'imperal_rankmath_404_not_available',
+			__( 'Rank Math\'s 404 Monitor module does not appear to be enabled on this site.', 'imperal-bridge' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	global $wpdb;
+	$table = $wpdb->prefix . 'rank_math_404_logs';
+	$id    = (int) $request->get_param( 'id' );
+
+	$row = $wpdb->get_row( $wpdb->prepare( "SELECT id FROM {$table} WHERE id = %d", $id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( ! $row ) {
+		return new WP_Error(
+			'imperal_rankmath_404_not_found',
+			__( 'That 404 log entry does not exist.', 'imperal-bridge' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	$wpdb->delete( $table, array( 'id' => $id ), array( '%d' ) );
+
+	return rest_ensure_response( array( 'id' => $id, 'deleted' => true ) );
+}
+
+/**
+ * Register the Rank Math site-wide REST routes. The SEO score read is gated
+ * behind edit_posts (matches SECTION 1's own per-post SEO gate — reading a
+ * score is no more sensitive than reading a post's SEO meta); robots.txt,
+ * sitemap status and the 404 log are gated behind manage_options, matching
+ * Rank Math's own admin screens for those (all live under its Settings
+ * pages, not the per-post editor).
+ */
+function imperal_rankmath_bridge_register_routes() {
+	register_rest_route(
+		IMPERAL_RANKMATH_BRIDGE_NAMESPACE,
+		'/rankmath/score/(?P<id>\d+)',
+		array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => 'imperal_rankmath_bridge_get_score',
+			'permission_callback' => function () {
+				return current_user_can( 'edit_posts' );
+			},
+		)
+	);
+	register_rest_route(
+		IMPERAL_RANKMATH_BRIDGE_NAMESPACE,
+		'/rankmath/robots-txt',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_rankmath_bridge_get_robots_txt',
+				'permission_callback' => function () {
+					return current_user_can( 'manage_options' );
+				},
+			),
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_rankmath_bridge_update_robots_txt',
+				'permission_callback' => function () {
+					return current_user_can( 'manage_options' );
+				},
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_RANKMATH_BRIDGE_NAMESPACE,
+		'/rankmath/sitemap-status',
+		array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => 'imperal_rankmath_bridge_sitemap_status',
+			'permission_callback' => function () {
+				return current_user_can( 'manage_options' );
+			},
+		)
+	);
+	register_rest_route(
+		IMPERAL_RANKMATH_BRIDGE_NAMESPACE,
+		'/rankmath/404-logs',
+		array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => 'imperal_rankmath_bridge_list_404_logs',
+			'permission_callback' => function () {
+				return current_user_can( 'manage_options' );
+			},
+		)
+	);
+	register_rest_route(
+		IMPERAL_RANKMATH_BRIDGE_NAMESPACE,
+		'/rankmath/404-logs/(?P<id>\d+)',
+		array(
+			'methods'             => WP_REST_Server::DELETABLE,
+			'callback'            => 'imperal_rankmath_bridge_delete_404_log',
+			'permission_callback' => function () {
+				return current_user_can( 'manage_options' );
+			},
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_rankmath_bridge_register_routes' );

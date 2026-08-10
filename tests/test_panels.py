@@ -535,6 +535,36 @@ async def test_manage_tab_redirects_shows_bridge_hint_on_404():
     assert "Imperal Bridge" in str(node)
 
 
+async def test_manage_tab_seo_shows_sitemap_robots_and_404_sections():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/sitemap-status",
+                      {"module_active": True, "sitemap_url": "https://blog.com/sitemap_index.xml"}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/robots-txt",
+                      {"content": "User-agent: *\nDisallow: /wp-admin/", "is_active": True,
+                       "site_is_public": True}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/404-logs",
+                      {"hits": [{"id": 3, "uri": "/gone/", "accessed": "2026-08-01 00:00:00",
+                                "times_accessed": 5, "referer": "https://example.com/",
+                                "user_agent": "Mozilla"}]}, 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="seo")
+    s = str(node)
+    assert "sitemap_index.xml" in s
+    assert "update_robots_txt" in s
+    assert "Disallow: /wp-admin/" in s
+    assert "/gone/" in s
+    assert "delete_404_hit" in s
+
+
+async def test_manage_tab_seo_shows_bridge_hint_when_missing():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/rankmath/sitemap-status",
+                      {"code": "rest_no_route"}, 404)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="seo")
+    assert "Imperal Bridge" in str(node)
+
+
 async def test_manage_tab_settings_shows_editable_form():
     ctx = await _base_panel_ctx()
     ctx.http.mock_get("https://blog.com/wp-json/wp/v2/settings",

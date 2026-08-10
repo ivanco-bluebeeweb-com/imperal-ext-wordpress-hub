@@ -1560,3 +1560,62 @@ class MediaSupport(sdl.Entity):
     """Outcome of check_media_support: is the Media Bridge present, can this user upload."""
     bridge_version: str = ""
     can_upload: bool = False
+
+
+# ─────────── Rank Math site-wide (SEO score, robots.txt, sitemap status, 404 log) ───────────
+
+class GetSeoScoreParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(gt=0, description="Numeric post/page id from list_posts/list_pages")
+
+
+class SeoScoreResult(sdl.Entity):
+    """Rank Math's own content-analysis SEO score (0-100) for one post."""
+    post_id: int = 0
+    score: int | None = None  # None means Rank Math has never analyzed this post
+
+
+class RobotsTxtParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+
+
+class UpdateRobotsTxtParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    content: str = Field(description="New robots.txt override text — empty string clears the override, "
+                          "reverting to WordPress's own default robots.txt")
+
+
+class RobotsTxt(sdl.Entity):
+    """Rank Math's robots.txt override — NOT the raw file on disk."""
+    content: str = ""
+    is_active: bool = False
+    site_is_public: bool = True
+
+
+class SitemapStatus(sdl.Entity):
+    """Whether Rank Math's Sitemap module is active, and its index URL if so."""
+    module_active: bool = False
+    sitemap_url: str = ""
+
+
+class List404HitsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    limit: int = Field(default=50, ge=1, le=100, description="Max hits to return, newest first")
+
+
+class Hit404(sdl.Entity):
+    """One logged 404 hit from Rank Math's 404 Monitor."""
+    uri: str = ""
+    accessed: str = ""
+    times_accessed: int = 0
+    referer: str = ""
+    user_agent: str = ""
+
+
+class Delete404HitParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    hit_id: int = Field(gt=0, description="Numeric 404-log entry id from list_404_hits")
+
+
+class Hit404DeleteResult(sdl.Entity):
+    deleted: bool = False
