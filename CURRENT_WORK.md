@@ -5,6 +5,60 @@
 
 ---
 
+## 2026-08-10 (cont'd, later) — Priority 8a: create_order, list_order_notes, delete_customer
+
+**Status:** implemented, tested, priced, deployed. Full suite 458/458 pass, `imperal validate`
+clean (117 functions, 0 errors/0 warnings), commit `43814d8` pushed and deployed
+(`developer.deploy_app` → 19/21, same pre-existing baseline as before this change, not a
+regression). Pricing re-applied as a complete 117-function map via `developer.update_pricing`
+(never `save_pricing`, per the standing protocol) while the app was suspended, then resubmitted
+(`pending_review`).
+
+**Shipped**, picked from the roadmap's own explicit backlog (`docs/2026-08-09-full-feature-
+roadmap.md` §3.2/3.3, Priority 8 item):
+- `create_order` — manual/phone WooCommerce order entry. Guest or registered customer, explicit
+  line items (`OrderLineItemInput`), optional `set_paid`. Validates status/billing email for guest
+  orders. `handlers_woocommerce_operations.py`, action_type=write.
+- `list_order_notes` — reads the full note thread on an order (private + customer-visible),
+  symmetric with the existing add-note write path. action_type=read.
+- `delete_customer` — permanent WooCommerce customer deletion, optional order reassignment via
+  `reassign_to`, mirrors `handlers_users.py`'s `delete_user` pattern exactly. action_type=destructive.
+  Wired into the Customers commerce sub-tab (`panels.py`) with a per-row Delete action behind a
+  destructive confirm gate — not left as a chat-tool-only function, since it's a simple single-id
+  action matching the existing Archive-button pattern.
+
+**Deliberately NOT UI-wired:** `create_order` (multi-line-item input) and `list_order_notes`
+(per-order note thread view) stay chat-tool-only — no repeatable line-item-array or note-thread
+widget exists yet in `panels.py`'s established patterns, and building one ad hoc for a single
+function risked a fragile one-off. Documented in the roadmap as a named, deliberate gap to revisit
+once a second real need for either widget pattern appears.
+
+**Bridge "No server data yet" bug — re-verified, confirmed already fixed:** the user flagged that
+all 3 connected sites (climtec.md, g4s.md, ksrenovationgroup.com) have the Imperal Bridge plugin
+installed, yet the detail screen showed the generic "No server data yet" message and refresh
+didn't clear it. Live-tested `get_server_info` on all 3 real sites this session:
+- climtec.md → full server data via Bridge (`source: "bridge"`), works correctly.
+- g4s.md / ksrenovationgroup.com → the *specific* "Bridge is version 2.0.0, which predates the
+  /server/info route (2.1.0)" error, not the generic message.
+
+This confirms the fix already shipped in a prior session (commit `dd6ac67`: added
+`refresh_panels=["center"]` to the `ActionResult.error()` branch in `get_server_info` so the panel
+actually repaints after discovering `bridge_outdated`/`ssh_error`, instead of freezing on stale
+text) is live and working. The remaining gap for those 2 sites — their Bridge plugin needs a
+manual update on the WordPress side (Plugins → Imperal Bridge → update, from 2.0.0 to 2.2.0) — is
+an external constraint on those specific WordPress installs, not a defect in our code. No further
+code action possible on our side; documented as closed.
+
+**Pricing note (important for future sessions):** `developer.update_pricing` does NOT merge —
+it replaces `pricing_config` wholesale with whatever is passed. Passing only the 3 new function
+prices in one call (as an earlier draft of this session's pricing step did) would have silently
+wiped the other 114 functions' prices. Corrected before resubmitting: reconstructed the FULL
+117-function price map from the manifest's own tool list (`imperal.json` → `tools[]`, filtered out
+`skeleton_*`) and sent it as ONE complete `update_pricing` call. Verify the full map against the
+manifest's function count every time — do not assume incremental calls merge.
+
+---
+
 ## 2026-08-10 (cont'd) — Detail-screen rework: Customers/Coupons/Orders/Products wired to UI
 
 **Status:** implemented, tested, deployed (450/450 tests pass, `imperal validate` clean 0/0/1-info,

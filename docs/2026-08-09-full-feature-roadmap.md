@@ -5,17 +5,19 @@ Date: 2026-08-09, updated 2026-08-10. Supersedes ad-hoc feature lists; update th
 
 ## Purpose
 
-WordPress Hub now ships 114 functions covering sites, posts/pages (incl. delete/duplicate/bulk
+WordPress Hub now ships 117 functions covering sites, posts/pages (incl. delete/duplicate/bulk
 status), taxonomy, media, SEO (Rank Math per-content + site-wide redirects), page builders
-(Elementor/Bricks point-edits), WooCommerce (incl. product reviews), native user management,
-menus/navigation, site settings + native plugin/theme listing, and SSH/WP-CLI + Bridge server ops.
-This document maps EVERY realistic capability across WordPress Core, WooCommerce, Rank Math, and
-our own Bridge/SSH layer — what exists today, what's missing, and in what order to build it. Every
-future "what should we add" conversation starts from this file, not from memory.
+(Elementor/Bricks point-edits), WooCommerce (incl. product reviews, manual order entry, order note
+thread, customer deletion), native user management, menus/navigation, site settings + native
+plugin/theme listing, and SSH/WP-CLI + Bridge server ops. This document maps EVERY realistic
+capability across WordPress Core, WooCommerce, Rank Math, and our own Bridge/SSH layer — what
+exists today, what's missing, and in what order to build it. Every future "what should we add"
+conversation starts from this file, not from memory.
 
 Coverage baseline verified against the actual codebase on 2026-08-10 (grep of all
-`@chat.function`/`@ext.expose` decorators across `handlers_*.py` — 114 functions confirmed, up from
-87 on 2026-08-09 — Priorities 2 through 7 below all shipped in this pass).
+`@chat.function`/`@ext.expose` decorators across `handlers_*.py` — 117 functions confirmed, up from
+87 on 2026-08-09 — Priorities 2 through 7 shipped 2026-08-10 morning, Priority 8a (create_order/
+list_order_notes/delete_customer) shipped 2026-08-10 afternoon).
 
 ---
 
@@ -132,14 +134,15 @@ products and variations (preview-then-apply pattern with state tokens throughout
 | `list_orders`, `get_order`, `update_order_status`, `update_order_status_risky` | ✅ done |
 | `apply_order_line_changes` (quantity changes, preview-gated) | ✅ done |
 | `add_private_order_note`, `add_customer_order_note` | ✅ done |
-| **`create_order`** (manual/phone order entry) | ❌ missing — real gap for stores that take phone/in-person orders |
-| **`list_order_notes`** (read the note thread back, not just add) | ❌ missing |
-| **`resend_order_email`** (trigger WooCommerce's own "new order"/"invoice" email) | ❌ missing |
+| **`create_order`** (manual/phone order entry) | ✅ done — shipped 2026-08-10, Priority 8a |
+| **`list_order_notes`** (read the note thread back, not just add) | ✅ done — shipped 2026-08-10, Priority 8a |
+| **`resend_order_email`** (trigger WooCommerce's own "new order"/"invoice" email) | ❌ missing — no core/WooCommerce REST route exists for this; would need a Bridge addition, deferred |
 
 ### 3.3 Customers — ✅ covered
 `list_customers`, `get_customer`, `create_customer`, `update_customer`,
-`list_customer_orders`. Missing: **`delete_customer`** (rare need, GDPR-adjacent — treat carefully
-if ever built, likely needs an anonymize-not-delete pattern instead).
+`list_customer_orders`, **`delete_customer`** (shipped 2026-08-10, Priority 8a — permanent delete
+with optional order reassignment via `?reassign=`, mirrors `delete_user`'s pattern; wired into the
+Customers UI sub-tab with a destructive confirm gate, not just a chat-tool).
 
 ### 3.4 Coupons — ✅ covered
 `list_coupons`, `create_coupon`, `update_coupon`, `archive_coupon`.
@@ -241,17 +244,26 @@ expose them — verify per-feature before assuming a Bridge change is needed.
    `handlers_site_settings.py` — all native REST (`/wp/v2/settings`, `/wp/v2/plugins`,
    `/wp/v2/themes`, WP 5.5+), no SSH needed. Theme *switching* deliberately not implemented — no
    core REST route exists for it.
-8. **Everything still explicitly deferred**: reset_user_password, get_post_revisions/
+8. **Priority 8a — the real, recurring Orders/Customers gaps** — ✅ DONE 2026-08-10. Shipped
+   `create_order` (manual/phone WooCommerce order entry, guest or registered customer, explicit
+   line items, optional `set_paid`), `list_order_notes` (read the full private+customer-visible
+   note thread on an order), and `delete_customer` (permanent delete with optional order
+   reassignment, mirrors `delete_user`'s pattern) via `handlers_woocommerce_operations.py`.
+   `delete_customer` wired into the Customers UI sub-tab with a destructive confirm gate;
+   `create_order`/`list_order_notes` remain chat-tool-only for now (no established repeatable
+   line-item-array form widget exists yet in `panels.py` — building one ad hoc for a single
+   function risked a fragile one-off; revisit once a second multi-line-item UI need appears).
+9. **Everything still explicitly deferred**: reset_user_password, get_post_revisions/
    restore_revision, set_post_password, sitemap status/regenerate, robots.txt editor, SEO analysis
-   score, 404 monitor, schema type per post, theme activation, 4.2 (builder extensions), 3.7
-   (shipping/tax), plugin/core updates via WP-CLI, order create/resend-email/list-notes, customer
-   delete. Revisit only when a real, recurring user need appears. Do not build speculatively —
-   matches this app's existing discipline (see WooCommerce module plan: "read-only first, add write
-   only with explicit scope").
+   score, 404 monitor, schema type per post, theme activation, resend_order_email, 4.2 (builder
+   extensions), 3.7 (shipping/tax), plugin/core updates via WP-CLI. Revisit only when a real,
+   recurring user need appears. Do not build speculatively — matches this app's existing
+   discipline (see WooCommerce module plan: "read-only first, add write only with explicit scope").
 
-All of Priorities 2–7 above: 114 functions total (up from 87), full pytest suite green, and every
-new function priced via `developer.update_pricing` on 2026-08-10 (see pricing note) — merged into
-the existing 89-function price map rather than replacing it, so no prior pricing was lost.
+All of Priorities 2–7 above: 114 functions total (up from 87); Priority 8a adds 3 more (117
+total). Full pytest suite green (458/458) at every step, and every new function priced via
+`developer.update_pricing` — merged into the existing price map each time rather than replacing
+it, so no prior pricing was ever lost.
 
 ## Explicitly out of scope (documented so it isn't re-proposed later)
 
