@@ -22,8 +22,12 @@ from models import (
     Coupon,
     CreateCouponParams,
     CreateCustomerParams,
+    CreateOrderParams,
     Customer,
+    CustomerDeleteResult,
     CustomerOrdersParams,
+    DeleteCustomerParams,
+    ListOrderNotesParams,
     Order,
     OrderNote,
     UpdateCouponParams,
@@ -200,6 +204,52 @@ def _note_entity(note, order_id):
     )
 
 
+@chat.function(
+    "create_order",
+    description=(
+        "Create a WooCommerce order manually -- for a phone/in-person sale, or any purchase "
+        "taken outside the store's own checkout. Supports an existing registered customer or a "
+        "guest order (billing_email required for guests)."
+    ),
+    action_type="write", data_model=Order,
+    effects=["wc.order_create"], event="wordpress-hub.create_order")
+async def create_order(ctx, params: CreateOrderParams) -> ActionResult:
+    """Create one order with explicit line items; WooCommerce computes totals/tax itself."""
+    status = params.status.strip().lower()
+    if status not in _ORDER_STATUSES:
+        return _error(f"Unsupported order status '{status}'.", code="WOOCOMMERCE_INVALID_ORDER_STATUS")
+    if params.customer_id is None and not (params.billing_email or "").strip():
+        return _error(
+            "billing_email is required for a guest order (customer_id omitted).",
+            code="WOOCOMMERCE_ORDER_MISSING_BILLING_EMAIL")
+    payload = {
+        "status": status,
+        "line_items": [
+            {"product_id": item.product_id, "quantity": item.quantity} for item in params.line_items
+        ],
+        "set_paid": params.set_paid,
+    }
+    if params.customer_id is not None:
+        payload["customer_id"] = params.customer_id
+    billing = {}
+    if params.billing_email:
+        billing["email"] = params.billing_email.strip()
+    if params.billing_first_name:
+        billing["first_name"] = params.billing_first_name.strip()
+    if params.billing_last_name:
+        billing["last_name"] = params.billing_last_name.strip()
+    if billing:
+        payload["billing"] = billing
+    if params.customer_note:
+        payload["customer_note"] = params.customer_note.strip()
+    data, err = await _write(ctx, params.site_id, "/orders", payload)
+    if err:
+        return err
+    entity = _order_entity(data, detailed=True)
+    return ActionResult.success(
+        entity, summary=f"Created order #{entity.id} ({status})", refresh_panels=["center"])
+
+
 async def _set_order_status(ctx, params):
     status = params.status.strip().lower()
     if status not in _ORDER_STATUSES:
@@ -295,6 +345,20 @@ async def add_customer_order_note(ctx, params: AddOrderNoteParams) -> ActionResu
 
 
 @chat.function(
+    "list_order_notes",
+    description="Read the note thread on one WooCommerce order -- both private internal notes and customer-visible ones.",
+    action_type="read", data_model=sdl.EntityList[OrderNote])
+async def list_order_notes(ctx, params: ListOrderNotesParams) -> ActionResult:
+    """List every note recorded against one order, newest first (WooCommerce's own order)."""
+    data, err = await _request(ctx, params.site_id, f"/orders/{params.order_id}/notes")
+    if err:
+        return err
+    items = [_note_entity(note, params.order_id) for note in data]
+    return ActionResult.success(
+        sdl.EntityList[OrderNote](items=items), summary=f"{len(items)} note(s) on order #{params.order_id}")
+
+
+@chat.function(
     "get_customer",
     description="Read one WooCommerce customer profile without postal addresses or phone numbers.",
     action_type="read", data_model=Customer)
@@ -339,6 +403,40 @@ async def update_customer(ctx, params: UpdateCustomerParams) -> ActionResult:
         return err
     entity = _customer_entity(data)
     return ActionResult.success(entity, summary=f"Updated customer #{entity.id}", refresh_panels=["center"])
+
+
+@chat.function(
+    "delete_customer",
+    description=(
+        "Permanently delete a WooCommerce customer. Optionally reassign their past orders to "
+        "another existing customer id -- WooCommerce requires SOME disposition for the "
+        "departing customer's orders, so omitting reassign_to leaves those orders with their "
+        "own stored billing snapshot (they are not deleted)."
+    ),
+    action_type="destructive", data_model=CustomerDeleteResult,
+    effects=["wc.customer_delete"], event="wordpress-hub.delete_customer")
+async def delete_customer(ctx, params: DeleteCustomerParams) -> ActionResult:
+    """Delete one WooCommerce customer via /wc/v3/customers, with optional order reassignment."""
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+    query = {"force": "true"}
+    if params.reassign_to is not None:
+        query["reassign"] = params.reassign_to
+    response = await wp_request(
+        ctx, "delete", base_url, f"{WC_BASE}/customers/{params.customer_id}",
+        username=username, app_password=pw, params=query)
+    if not 200 <= response.status_code < 300:
+        return _failure(response.status_code, response.body)
+    entity = CustomerDeleteResult(
+        id=str(params.customer_id), title=f"Customer #{params.customer_id}", kind="wc_customer_delete",
+        deleted=True, reassigned_to=str(params.reassign_to) if params.reassign_to is not None else "")
+    return ActionResult.success(
+        entity,
+        summary=f"Deleted customer #{params.customer_id}"
+                + (f", orders reassigned to #{params.reassign_to}" if params.reassign_to is not None else ""),
+        refresh_panels=["center"])
 
 
 @chat.function(

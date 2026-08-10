@@ -10,7 +10,11 @@ from models import (
     ArchiveCouponParams,
     CreateCouponParams,
     CreateCustomerParams,
+    CreateOrderParams,
     CustomerOrdersParams,
+    DeleteCustomerParams,
+    ListOrderNotesParams,
+    OrderLineItemInput,
     UpdateCouponParams,
     UpdateCustomerParams,
     UpdateOrderStatusParams,
@@ -18,6 +22,11 @@ from models import (
 )
 
 BASE = "https://shop.test/wp-json/wc/v3"
+
+
+def _mock_delete(ctx, url_pattern, response, status=200):
+    """No mock_delete helper exists on MockHTTP yet — append the DELETE tuple directly."""
+    ctx.http._mocks.append(("DELETE", url_pattern, response, status, {}))
 
 
 async def _ctx():
@@ -226,3 +235,90 @@ async def test_customer_validation_rejects_bad_email_and_empty_update():
         site_id="shop-test", customer_id=3))
     assert bad.status == "error" and bad.error_code == "WOOCOMMERCE_INVALID_CUSTOMER"
     assert empty.status == "error" and empty.error_code == "WOOCOMMERCE_NO_CHANGES"
+
+
+async def test_delete_customer_without_reassign():
+    ctx = await _ctx()
+    _mock_delete(ctx, f"{BASE}/customers/3", {"deleted": True, "previous": {"id": 3}}, 200)
+    result = await ho.delete_customer(ctx, DeleteCustomerParams(site_id="shop-test", customer_id=3))
+    assert result.status == "success"
+    assert result.data.deleted is True
+    assert result.data.reassigned_to == ""
+
+
+async def test_delete_customer_with_reassign():
+    ctx = await _ctx()
+    _mock_delete(ctx, f"{BASE}/customers/3", {"deleted": True, "previous": {"id": 3}}, 200)
+    result = await ho.delete_customer(ctx, DeleteCustomerParams(
+        site_id="shop-test", customer_id=3, reassign_to=7))
+    assert result.status == "success"
+    assert result.data.reassigned_to == "7"
+    assert "7" in result.summary
+
+
+async def test_delete_customer_not_found():
+    ctx = await _ctx()
+    _mock_delete(ctx, f"{BASE}/customers/999", {"code": "woocommerce_rest_customer_invalid_id"}, 404)
+    result = await ho.delete_customer(ctx, DeleteCustomerParams(site_id="shop-test", customer_id=999))
+    assert result.status == "error"
+    assert result.error_code == "WOOCOMMERCE_ITEM_NOT_FOUND"
+
+
+async def test_list_order_notes_returns_note_thread():
+    ctx = await _ctx()
+    notes = [
+        {"id": 1, "note": "Packed", "customer_note": False,
+         "date_created": "2026-08-02T12:00:00", "author": "Manager"},
+        {"id": 2, "note": "Shipped, tracking sent", "customer_note": True,
+         "date_created": "2026-08-02T13:00:00", "author": "Manager"},
+    ]
+    ctx.http.mock_get(f"{BASE}/orders/12/notes", notes, 200)
+    result = await ho.list_order_notes(ctx, ListOrderNotesParams(site_id="shop-test", order_id=12))
+    assert result.status == "success"
+    assert len(result.data.items) == 2
+    assert result.data.items[0].note == "Packed" and result.data.items[0].customer_visible is False
+    assert result.data.items[1].customer_visible is True
+
+
+async def test_create_order_registered_customer():
+    ctx = await _ctx()
+    ctx.http.mock_post(f"{BASE}/orders", _order("pending", oid=50), 201)
+    seen = _spy(ctx)
+    result = await ho.create_order(ctx, CreateOrderParams(
+        site_id="shop-test", customer_id=3,
+        line_items=[OrderLineItemInput(product_id=11, quantity=2)]))
+    assert result.status == "success"
+    payload = seen[-1][1]["json"]
+    assert payload["customer_id"] == 3
+    assert payload["line_items"] == [{"product_id": 11, "quantity": 2}]
+    assert payload["status"] == "pending"
+
+
+async def test_create_order_guest_requires_billing_email():
+    ctx = await _ctx()
+    result = await ho.create_order(ctx, CreateOrderParams(
+        site_id="shop-test", line_items=[OrderLineItemInput(product_id=11, quantity=1)]))
+    assert result.status == "error"
+    assert result.error_code == "WOOCOMMERCE_ORDER_MISSING_BILLING_EMAIL"
+
+
+async def test_create_order_guest_with_billing_email_succeeds():
+    ctx = await _ctx()
+    ctx.http.mock_post(f"{BASE}/orders", _order("pending", oid=51), 201)
+    seen = _spy(ctx)
+    result = await ho.create_order(ctx, CreateOrderParams(
+        site_id="shop-test", billing_email="guest@example.com", set_paid=True,
+        line_items=[OrderLineItemInput(product_id=11, quantity=1)]))
+    assert result.status == "success"
+    payload = seen[-1][1]["json"]
+    assert payload["billing"] == {"email": "guest@example.com"}
+    assert payload["set_paid"] is True
+
+
+async def test_create_order_rejects_unsupported_status():
+    ctx = await _ctx()
+    result = await ho.create_order(ctx, CreateOrderParams(
+        site_id="shop-test", billing_email="guest@example.com", status="deleted",
+        line_items=[OrderLineItemInput(product_id=11, quantity=1)]))
+    assert result.status == "error"
+    assert result.error_code == "WOOCOMMERCE_INVALID_ORDER_STATUS"

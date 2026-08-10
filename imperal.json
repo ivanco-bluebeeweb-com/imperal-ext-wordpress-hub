@@ -9756,6 +9756,298 @@
       "owner_chat_tool": "wordpress-hub"
     },
     {
+      "name": "create_order",
+      "description": "Create a WooCommerce order manually -- for a phone/in-person sale, or any purchase taken outside the store's own checkout. Supports an existing registered customer or a guest order (billing_email required for guests).",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wc.order_create"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "$defs": {
+          "OrderLineItemInput": {
+            "properties": {
+              "product_id": {
+                "description": "Existing WooCommerce product id",
+                "exclusiveMinimum": 0,
+                "title": "Product Id",
+                "type": "integer"
+              },
+              "quantity": {
+                "default": 1,
+                "description": "Quantity to order",
+                "maximum": 10000,
+                "minimum": 1,
+                "title": "Quantity",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "product_id"
+            ],
+            "title": "OrderLineItemInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "status": {
+            "default": "pending",
+            "description": "Initial order status, e.g. pending, processing, on-hold",
+            "title": "Status",
+            "type": "string"
+          },
+          "customer_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Existing registered customer id; omit for a guest order",
+            "title": "Customer Id"
+          },
+          "billing_email": {
+            "anyOf": [
+              {
+                "maxLength": 254,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Billing email — REQUIRED for a guest order (customer_id omitted)",
+            "title": "Billing Email"
+          },
+          "billing_first_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional billing first name",
+            "title": "Billing First Name"
+          },
+          "billing_last_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional billing last name",
+            "title": "Billing Last Name"
+          },
+          "line_items": {
+            "description": "Products and quantities for this manual order",
+            "items": {
+              "$ref": "#/$defs/OrderLineItemInput"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Line Items",
+            "type": "array"
+          },
+          "customer_note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional note visible to the customer on the order",
+            "title": "Customer Note"
+          },
+          "set_paid": {
+            "default": false,
+            "description": "Mark the order as already paid (skips the payment step) — use for phone/in-person orders taken with payment already received",
+            "title": "Set Paid",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "site_id",
+          "line_items"
+        ],
+        "title": "CreateOrderParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "total": {
+            "default": "",
+            "title": "Total",
+            "type": "string"
+          },
+          "currency": {
+            "default": "",
+            "title": "Currency",
+            "type": "string"
+          },
+          "date_created": {
+            "default": "",
+            "title": "Date Created",
+            "type": "string"
+          },
+          "customer_name": {
+            "default": "",
+            "title": "Customer Name",
+            "type": "string"
+          },
+          "customer_email": {
+            "default": "",
+            "title": "Customer Email",
+            "type": "string"
+          },
+          "item_count": {
+            "default": 0,
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "subtotal": {
+            "default": "",
+            "title": "Subtotal",
+            "type": "string"
+          },
+          "tax_total": {
+            "default": "",
+            "title": "Tax Total",
+            "type": "string"
+          },
+          "shipping_total": {
+            "default": "",
+            "title": "Shipping Total",
+            "type": "string"
+          },
+          "discount_total": {
+            "default": "",
+            "title": "Discount Total",
+            "type": "string"
+          },
+          "payment_method": {
+            "default": "",
+            "title": "Payment Method",
+            "type": "string"
+          },
+          "customer_note": {
+            "default": "",
+            "title": "Customer Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Order",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.create_order",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
       "name": "update_order_status",
       "description": "Change one WooCommerce order status. Financial refunds are not created by this tool.",
       "action_type": "write",
@@ -10440,6 +10732,192 @@
       "owner_chat_tool": "wordpress-hub"
     },
     {
+      "name": "list_order_notes",
+      "description": "Read the note thread on one WooCommerce order -- both private internal notes and customer-visible ones.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "order_id": {
+            "description": "Numeric WooCommerce order id",
+            "exclusiveMinimum": 0,
+            "title": "Order Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "order_id"
+        ],
+        "title": "ListOrderNotesParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "OrderNote": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "order_id": {
+                "default": 0,
+                "title": "Order Id",
+                "type": "integer"
+              },
+              "note": {
+                "default": "",
+                "title": "Note",
+                "type": "string"
+              },
+              "customer_visible": {
+                "default": false,
+                "title": "Customer Visible",
+                "type": "boolean"
+              },
+              "date_created": {
+                "default": "",
+                "title": "Date Created",
+                "type": "string"
+              },
+              "author": {
+                "default": "",
+                "title": "Author",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "OrderNote",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/OrderNote"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[OrderNote]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
       "name": "get_customer",
       "description": "Read one WooCommerce customer profile without postal addresses or phone numbers.",
       "action_type": "read",
@@ -10970,6 +11448,145 @@
         "x-sdl": "entity"
       },
       "event": "wordpress-hub.update_customer",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "delete_customer",
+      "description": "Permanently delete a WooCommerce customer. Optionally reassign their past orders to another existing customer id -- WooCommerce requires SOME disposition for the departing customer's orders, so omitting reassign_to leaves those orders with their own stored billing snapshot (they are not deleted).",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wc.customer_delete"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "customer_id": {
+            "description": "Numeric WooCommerce customer id to permanently delete",
+            "exclusiveMinimum": 0,
+            "title": "Customer Id",
+            "type": "integer"
+          },
+          "reassign_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional existing customer id to reassign this customer's past orders to; omitted orders keep their own stored billing snapshot and are not deleted",
+            "title": "Reassign To"
+          }
+        },
+        "required": [
+          "site_id",
+          "customer_id"
+        ],
+        "title": "DeleteCustomerParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Confirmation record for a permanently deleted WooCommerce customer.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "deleted": {
+            "default": false,
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "reassigned_to": {
+            "default": "",
+            "title": "Reassigned To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "CustomerDeleteResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.delete_customer",
       "background": false,
       "long_running": false,
       "scopes": [],

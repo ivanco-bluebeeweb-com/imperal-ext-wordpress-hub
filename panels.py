@@ -483,17 +483,21 @@ def _render_customers_block(items, site_id):
     if not items:
         return ui.Stack(gap=3, children=[ui.Empty(message="No customers found."), create_form])
 
-    rows = [
-        ui.ListItem(
-            id=str(it.get("id", "")),
+    def _row(it):
+        cid = it.get("id")
+        return ui.ListItem(
+            id=str(cid),
             title=" ".join(p for p in (it.get("first_name", ""), it.get("last_name", "")) if p)
                   or it.get("username", "Customer"),
             subtitle=it.get("email", ""),
             meta=f"{it.get('orders_count', 0)} order(s) · {it.get('total_spent', '')}",
+            actions=[{"icon": "Trash2", "label": "Delete",
+                      "on_click": ui.Call("delete_customer", site_id=site_id, customer_id=cid),
+                      "confirm": f"Permanently delete customer '{it.get('email', cid)}'? "
+                                 "Their past orders keep their own stored billing snapshot."}],
         )
-        for it in items
-    ]
-    return ui.Stack(gap=3, children=[ui.List(items=rows), create_form])
+
+    return ui.Stack(gap=3, children=[ui.List(items=[_row(it) for it in items]), create_form])
 
 
 # ── Orders (WooCommerce) ─────────────────────────────────────────────────────────

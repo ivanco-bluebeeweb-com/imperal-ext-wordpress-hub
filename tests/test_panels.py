@@ -620,6 +620,7 @@ async def test_commerce_tab_has_customers_subtab_with_create_form():
     assert "Ana" in s
     assert "ana@example.com" in s
     assert "create_customer" in s
+    assert "delete_customer" in s
 
 
 async def test_commerce_tab_has_coupons_subtab_with_create_and_archive_actions():
