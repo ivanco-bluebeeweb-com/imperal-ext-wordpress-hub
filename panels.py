@@ -566,6 +566,21 @@ def _render_orders_block(items, site_id):
             defaults={"site_id": site_id, "order_id": oid, "customer_visible": True},
             children=[ui.Input(param_name="note", placeholder="Note visible to the customer — WooCommerce may email it")],
         )
+        resend_email_form = ui.Form(
+            action="resend_order_email", submit_label="Resend order email",
+            defaults={"site_id": site_id, "order_id": oid},
+            children=[
+                ui.Select(param_name="template_id", placeholder="Order details (default)",
+                          options=[
+                              {"value": "", "label": "Order details (default)"},
+                              {"value": "customer_processing_order", "label": "Processing order"},
+                              {"value": "customer_completed_order", "label": "Completed order"},
+                              {"value": "customer_on_hold_order", "label": "On-hold order"},
+                              {"value": "customer_invoice", "label": "Invoice / order details"},
+                          ]),
+                ui.Input(param_name="email", placeholder="Send to a different address (optional)"),
+            ],
+        )
         return ui.ListItem(
             id=str(oid), title=f"Order #{oid}",
             subtitle=f"{it.get('total', '')} {it.get('currency', '')}".strip(),
@@ -577,6 +592,7 @@ def _render_orders_block(items, site_id):
                     ui.Card(title="Cancel / fail / refund status", content=risky_form),
                     ui.Card(title="Add private note", content=note_form),
                     ui.Card(title="Add customer-visible note", content=customer_note_form),
+                    ui.Card(title="Resend order email", content=resend_email_form),
                 ]),
             ],
         )

@@ -883,6 +883,28 @@ class OrderLineChangeResult(sdl.Entity):
     changes: list[str] = Field(default_factory=list)
 
 
+class ResendOrderEmailParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    order_id: int = Field(gt=0, description="Numeric WooCommerce order id")
+    template_id: str = Field(
+        default="",
+        description=(
+            "Which email template to send, e.g. 'customer_invoice', 'customer_completed_order', "
+            "'customer_on_hold_order'. Leave empty to send the generic order-details email "
+            "(same as 'customer_invoice')."
+        ),
+    )
+    email: str = Field(
+        default="", description="Send to this address instead of the order's own billing email")
+
+
+class OrderEmailResult(sdl.Entity):
+    order_id: int = 0
+    template_id: str = ""
+    sent_to: str = ""
+    message: str = ""
+
+
 class Refund(sdl.Entity):
     order_id: int = 0
     amount: str = ""

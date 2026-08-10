@@ -15,6 +15,7 @@ from models import (
     DeleteCustomerParams,
     ListOrderNotesParams,
     OrderLineItemInput,
+    ResendOrderEmailParams,
     UpdateCouponParams,
     UpdateCustomerParams,
     UpdateOrderStatusParams,
@@ -278,6 +279,44 @@ async def test_list_order_notes_returns_note_thread():
     assert len(result.data.items) == 2
     assert result.data.items[0].note == "Packed" and result.data.items[0].customer_visible is False
     assert result.data.items[1].customer_visible is True
+
+
+async def test_resend_order_email_default_sends_order_details():
+    ctx = await _ctx()
+    ctx.http.mock_post(f"{BASE}/orders/12/actions/send_order_details",
+                       {"message": "Order details sent to ada@example.com, via REST API."}, 200)
+    result = await ho.resend_order_email(ctx, ResendOrderEmailParams(site_id="shop-test", order_id=12))
+    assert result.status == "success"
+    assert result.data.template_id == "customer_invoice"
+    assert "sent" in result.summary.lower()
+
+
+async def test_resend_order_email_specific_template_uses_send_email_action():
+    ctx = await _ctx()
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_post(f"{BASE}/orders/12/actions/send_email", {"message": "Email sent."}, 200)
+    result = await ho.resend_order_email(ctx, ResendOrderEmailParams(
+        site_id="shop-test", order_id=12, template_id="customer_completed_order"))
+    assert result.status == "success"
+    assert result.data.template_id == "customer_completed_order"
+    url, kwargs = seen[0]
+    assert url == f"{BASE}/orders/12/actions/send_email"
+    assert kwargs["json"]["template_id"] == "customer_completed_order"
+
+
+async def test_resend_order_email_not_found():
+    ctx = await _ctx()
+    ctx.http.mock_post(f"{BASE}/orders/999/actions/send_order_details",
+                       {"code": "woocommerce_rest_shop_order_invalid_id"}, 404)
+    result = await ho.resend_order_email(ctx, ResendOrderEmailParams(site_id="shop-test", order_id=999))
+    assert result.status == "error"
 
 
 async def test_create_order_registered_customer():

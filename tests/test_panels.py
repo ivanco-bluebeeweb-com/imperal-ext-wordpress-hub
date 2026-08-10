@@ -322,6 +322,7 @@ async def test_center_commerce_orders_has_status_change_and_note_forms():
     assert "update_order_status_risky" in s
     assert "add_private_order_note" in s
     assert "add_customer_order_note" in s
+    assert "resend_order_email" in s
 
 
 async def test_commerce_tab_has_categories_subtab_with_create_form():

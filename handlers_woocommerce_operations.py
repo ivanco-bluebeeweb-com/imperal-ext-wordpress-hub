@@ -29,7 +29,9 @@ from models import (
     DeleteCustomerParams,
     ListOrderNotesParams,
     Order,
+    OrderEmailResult,
     OrderNote,
+    ResendOrderEmailParams,
     UpdateCouponParams,
     UpdateCustomerParams,
     UpdateOrderStatusParams,
@@ -356,6 +358,44 @@ async def list_order_notes(ctx, params: ListOrderNotesParams) -> ActionResult:
     items = [_note_entity(note, params.order_id) for note in data]
     return ActionResult.success(
         sdl.EntityList[OrderNote](items=items), summary=f"{len(items)} note(s) on order #{params.order_id}")
+
+
+@chat.function(
+    "resend_order_email",
+    description=(
+        "Re-send a WooCommerce order notification email to the customer -- the invoice/order-"
+        "details email by default, or a specific template (e.g. 'customer_completed_order', "
+        "'customer_on_hold_order') if given. Optionally redirect it to a different address than "
+        "the order's own billing email. Uses WooCommerce's native order-actions REST endpoint "
+        "(WooCommerce 9.8+); older WooCommerce versions don't expose it."
+    ),
+    action_type="write",
+    data_model=OrderEmailResult,
+    effects=["wc.order_email_sent"],
+    event="wordpress-hub.resend_order_email",
+)
+async def resend_order_email(ctx, params: ResendOrderEmailParams) -> ActionResult:
+    """Trigger a customer order email via WooCommerce's order-actions endpoint."""
+    payload = {}
+    if params.email:
+        payload["email"] = params.email
+        payload["force_email_update"] = False
+    template = params.template_id.strip()
+    path = (f"/orders/{params.order_id}/actions/send_email" if template
+            else f"/orders/{params.order_id}/actions/send_order_details")
+    if template:
+        payload["template_id"] = template
+
+    data, err = await _write(ctx, params.site_id, path, payload)
+    if err:
+        return err
+    message = data.get("message", "") if isinstance(data, dict) else ""
+    result = OrderEmailResult(
+        id=str(params.order_id), title=f"Order #{params.order_id}", kind="wc_order_email",
+        order_id=params.order_id, template_id=template or "customer_invoice",
+        sent_to=params.email, message=message,
+    )
+    return ActionResult.success(result, summary=message or f"Email sent for order #{params.order_id}")
 
 
 @chat.function(

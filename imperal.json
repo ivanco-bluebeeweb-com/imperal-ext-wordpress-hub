@@ -10918,6 +10918,153 @@
       "owner_chat_tool": "wordpress-hub"
     },
     {
+      "name": "resend_order_email",
+      "description": "Re-send a WooCommerce order notification email to the customer -- the invoice/order-details email by default, or a specific template (e.g. 'customer_completed_order', 'customer_on_hold_order') if given. Optionally redirect it to a different address than the order's own billing email. Uses WooCommerce's native order-actions REST endpoint (WooCommerce 9.8+); older WooCommerce versions don't expose it.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wc.order_email_sent"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "order_id": {
+            "description": "Numeric WooCommerce order id",
+            "exclusiveMinimum": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "template_id": {
+            "default": "",
+            "description": "Which email template to send, e.g. 'customer_invoice', 'customer_completed_order', 'customer_on_hold_order'. Leave empty to send the generic order-details email (same as 'customer_invoice').",
+            "title": "Template Id",
+            "type": "string"
+          },
+          "email": {
+            "default": "",
+            "description": "Send to this address instead of the order's own billing email",
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "order_id"
+        ],
+        "title": "ResendOrderEmailParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "order_id": {
+            "default": 0,
+            "title": "Order Id",
+            "type": "integer"
+          },
+          "template_id": {
+            "default": "",
+            "title": "Template Id",
+            "type": "string"
+          },
+          "sent_to": {
+            "default": "",
+            "title": "Sent To",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "OrderEmailResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.resend_order_email",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
       "name": "get_customer",
       "description": "Read one WooCommerce customer profile without postal addresses or phone numbers.",
       "action_type": "read",
