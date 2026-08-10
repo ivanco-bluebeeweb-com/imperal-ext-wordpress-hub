@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -25665,6 +25665,348 @@
         "x-sdl": "entity"
       },
       "event": "wordpress-hub.reset_indexnow_key",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "get_llms_txt_settings",
+      "description": "Read Rank Math's llms.txt settings -- which post types and taxonomies are listed in the dynamically-served /llms.txt file (the AI-crawler guidance file, an analogue of robots.txt aimed at LLMs), the per-type link limit, extra Markdown appended to the file, whether Rank Math's llms-txt module is active (it is NOT active by default), and the file's live URL. Requires the Imperal Bridge plugin.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "LlmsTxtParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Rank Math's llms.txt settings -- which post types/taxonomies are listed in the\ndynamically-served /llms.txt file, how many links per type, and any extra Markdown\nappended to it. Requires the Imperal Bridge plugin (SECTION 8) and Rank Math's own\nllms-txt module active on the site (it is NOT active by default, unlike robots.txt).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "module_active": {
+            "default": false,
+            "title": "Module Active",
+            "type": "boolean"
+          },
+          "llms_txt_url": {
+            "default": "",
+            "title": "Llms Txt Url",
+            "type": "string"
+          },
+          "post_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Post Types",
+            "type": "array"
+          },
+          "taxonomies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Taxonomies",
+            "type": "array"
+          },
+          "limit": {
+            "default": 100,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "extra_content": {
+            "default": "",
+            "title": "Extra Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "LlmsTxtSettings",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "update_llms_txt_settings",
+      "description": "Update Rank Math's llms.txt settings: which post types/taxonomies to list, the per-type link limit, and/or extra Markdown appended to the file. Only the fields you pass are changed -- omit a field to leave it as-is. Pass an empty string for extra_content to clear it. Does not turn the llms-txt module itself on or off -- that is a Rank Math module-manager setting with no single-module REST toggle. Requires the Imperal Bridge plugin.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.llms_txt_settings_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Post type slugs to list in llms.txt. Omit to leave unchanged.",
+            "title": "Post Types"
+          },
+          "taxonomies": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Taxonomy slugs to list in llms.txt. Omit to leave unchanged.",
+            "title": "Taxonomies"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Max links per post type/taxonomy. Omit to leave unchanged.",
+            "title": "Limit"
+          },
+          "extra_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Free-text Markdown appended to the file. Pass an empty string to clear it, omit to leave unchanged.",
+            "title": "Extra Content"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "UpdateLlmsTxtParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Rank Math's llms.txt settings -- which post types/taxonomies are listed in the\ndynamically-served /llms.txt file, how many links per type, and any extra Markdown\nappended to it. Requires the Imperal Bridge plugin (SECTION 8) and Rank Math's own\nllms-txt module active on the site (it is NOT active by default, unlike robots.txt).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "module_active": {
+            "default": false,
+            "title": "Module Active",
+            "type": "boolean"
+          },
+          "llms_txt_url": {
+            "default": "",
+            "title": "Llms Txt Url",
+            "type": "string"
+          },
+          "post_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Post Types",
+            "type": "array"
+          },
+          "taxonomies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Taxonomies",
+            "type": "array"
+          },
+          "limit": {
+            "default": 100,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "extra_content": {
+            "default": "",
+            "title": "Extra Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "LlmsTxtSettings",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.update_llms_txt_settings",
       "background": false,
       "long_running": false,
       "scopes": [],
