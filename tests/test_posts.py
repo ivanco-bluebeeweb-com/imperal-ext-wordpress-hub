@@ -311,8 +311,10 @@ async def test_create_post_body_markdown_renders_real_links_not_plain_text():
     assert result.status == "success"
     post_call = next(c for c in seen if c[0] == POSTS)
     content = post_call[1]["json"]["content"]
-    assert '<a href="https://climtec.md/ru/filters/">читайте здесь</a>' in content
-    assert '<a href="https://climtec.md/ru/noise/">шумит ли ночью</a>' in content
+    # site_id="x-com" connects https://x.com -- climtec.md is a DIFFERENT
+    # domain, so both links are external and must be marked accordingly.
+    assert '<a href="https://climtec.md/ru/filters/" target="_blank" rel="nofollow noopener noreferrer">читайте здесь</a>' in content
+    assert '<a href="https://climtec.md/ru/noise/" target="_blank" rel="nofollow noopener noreferrer">шумит ли ночью</a>' in content
     # the raw markdown bracket/paren syntax must never leak through as plain text
     assert "(https://climtec.md/ru/filters/)" not in content
     assert "(https://climtec.md/ru/noise/)" not in content
@@ -349,8 +351,91 @@ async def test_update_post_body_markdown_renders_real_link():
     ))
     assert result.status == "success"
     _, kwargs = seen[0]
-    assert '<a href="https://climtec.md/ru/guide/">our guide</a>' in kwargs["json"]["content"]
+    # climtec.md differs from the connected site's own domain (x.com) -- external
+    assert '<a href="https://climtec.md/ru/guide/" target="_blank" rel="nofollow noopener noreferrer">our guide</a>' in kwargs["json"]["content"]
     assert "(https://climtec.md/ru/guide/)" not in kwargs["json"]["content"]
+
+
+# ─── external-link policy: nofollow + new tab, automatically ─────────────
+#
+# The pipeline rule: every external link (different host than the connected
+# site) gets target="_blank" rel="nofollow noopener noreferrer" without the
+# article writer having to mark it by hand. A link back to the SAME site
+# stays a normal, followed, same-tab link -- only external links are touched.
+
+async def test_create_post_internal_link_stays_plain_no_nofollow():
+    ctx = await _ctx()
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello",
+        body_markdown="See our [other article](https://x.com/ru/other-article/) for more.",
+        **SEO_OK,
+    ))
+    assert result.status == "success"
+    post_call = next(c for c in seen if c[0] == POSTS)
+    content = post_call[1]["json"]["content"]
+    assert '<a href="https://x.com/ru/other-article/">other article</a>' in content
+    assert "nofollow" not in content
+    assert "target=" not in content
+
+
+async def test_create_post_mixed_internal_and_external_links_marked_correctly():
+    ctx = await _ctx()
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    markdown = (
+        "See our [internal guide](https://x.com/ru/guide/) and this "
+        "[external source](https://en.wikipedia.org/wiki/Heat_recovery) too."
+    )
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello", body_markdown=markdown, **SEO_OK,
+    ))
+    assert result.status == "success"
+    post_call = next(c for c in seen if c[0] == POSTS)
+    content = post_call[1]["json"]["content"]
+    assert '<a href="https://x.com/ru/guide/">internal guide</a>' in content
+    assert '<a href="https://en.wikipedia.org/wiki/Heat_recovery" target="_blank" rel="nofollow noopener noreferrer">external source</a>' in content
+
+
+async def test_create_post_www_prefix_still_counts_as_internal():
+    ctx = await _ctx()
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello",
+        body_markdown="See [this page](https://www.x.com/ru/page/) for more.",
+        **SEO_OK,
+    ))
+    assert result.status == "success"
+    post_call = next(c for c in seen if c[0] == POSTS)
+    content = post_call[1]["json"]["content"]
+    assert '<a href="https://www.x.com/ru/page/">this page</a>' in content
+    assert "nofollow" not in content
 
 
 # ─────────── tags ───────────
