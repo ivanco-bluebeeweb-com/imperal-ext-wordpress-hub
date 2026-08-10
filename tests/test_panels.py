@@ -321,6 +321,20 @@ async def test_center_commerce_orders_has_status_change_and_note_forms():
     assert "update_order_status" in s
     assert "update_order_status_risky" in s
     assert "add_private_order_note" in s
+    assert "add_customer_order_note" in s
+
+
+async def test_commerce_tab_has_categories_subtab_with_create_form():
+    """Categories sub-tab used to not exist at all -- list_product_categories/
+    create_product_category were chat-tool-only despite full read+write support."""
+    ctx = await _store_panel_ctx()
+    ctx.http.mock_get("https://shop.com/wp-json/wc/v3/products/categories",
+                      [{"id": 9, "name": "Mugs", "count": 3, "parent": 0}], 200)
+    node = await panels.center(ctx, view="", site_id="shop-com",
+                               group_tab="commerce", commerce_tab="categories")
+    s = str(node)
+    assert "Mugs" in s
+    assert "create_product_category" in s
 
 
 async def test_center_detail_shows_alert_on_missing_credential():

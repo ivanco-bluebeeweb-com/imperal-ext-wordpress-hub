@@ -553,6 +553,11 @@ def _render_orders_block(items, site_id):
             defaults={"site_id": site_id, "order_id": oid},
             children=[ui.Input(param_name="note", placeholder="Internal note (not seen by customer)")],
         )
+        customer_note_form = ui.Form(
+            action="add_customer_order_note", submit_label="Send note to customer (confirm required)",
+            defaults={"site_id": site_id, "order_id": oid, "customer_visible": True},
+            children=[ui.Input(param_name="note", placeholder="Note visible to the customer — WooCommerce may email it")],
+        )
         return ui.ListItem(
             id=str(oid), title=f"Order #{oid}",
             subtitle=f"{it.get('total', '')} {it.get('currency', '')}".strip(),
@@ -563,6 +568,7 @@ def _render_orders_block(items, site_id):
                     ui.Card(title="Change status", content=status_form),
                     ui.Card(title="Cancel / fail / refund status", content=risky_form),
                     ui.Card(title="Add private note", content=note_form),
+                    ui.Card(title="Add customer-visible note", content=customer_note_form),
                 ]),
             ],
         )
@@ -658,6 +664,37 @@ def _render_coupons_block(items, site_id):
         )
 
     return ui.Stack(gap=3, children=[ui.List(items=[_row(it) for it in items]), create_form])
+
+
+# ── Product categories (WooCommerce) ─────────────────────────────────────────────
+# list_product_categories/create_product_category existed as chat-tools only --
+# no click path anywhere on the detail screen despite full read+write support.
+
+def _render_product_categories_block(items, site_id):
+    if items is None:
+        return ui.Alert(message="Could not load product categories — check the "
+                                "connected user's permissions.", type="info")
+    create_form = ui.Card(title="New category", content=ui.Form(
+        action="create_product_category", submit_label="Create category",
+        defaults={"site_id": site_id},
+        children=[
+            ui.Input(param_name="name", placeholder="Category name"),
+            ui.Input(param_name="parent_id", placeholder="Parent category id (optional, 0 = top level)"),
+        ],
+    ))
+    if not items:
+        return ui.Stack(gap=3, children=[ui.Empty(message="No product categories found."), create_form])
+
+    rows = [
+        ui.ListItem(
+            id=str(it.get("id", "")),
+            title=it.get("name", ""),
+            subtitle=f"{it.get('count', 0)} product(s)",
+            meta=(f"parent #{it.get('parent')}" if it.get("parent") else "top level"),
+        )
+        for it in items
+    ]
+    return ui.Stack(gap=3, children=[ui.List(items=rows), create_form])
 
 
 def _render_content_table(items, tab):
@@ -1413,6 +1450,7 @@ async def _render_detail(ctx, site_id,
             _item_btn("Overview", "overview", commerce_tab, "commerce_tab"),
             _item_btn("Orders", "orders", commerce_tab, "commerce_tab"),
             _item_btn("Products", "products", commerce_tab, "commerce_tab"),
+            _item_btn("Categories", "categories", commerce_tab, "commerce_tab"),
             _item_btn("Customers", "customers", commerce_tab, "commerce_tab"),
             _item_btn("Coupons", "coupons", commerce_tab, "commerce_tab"),
             _item_btn("Reviews", "reviews", commerce_tab, "commerce_tab"),
@@ -1423,6 +1461,12 @@ async def _render_detail(ctx, site_id,
                 {"per_page": 50, "orderby": "date", "order": "desc"},
             )
             commerce_body = _render_reviews_block(reviews_data, site_id)
+        elif commerce_tab == "categories":
+            categories_data = await _list(
+                "/wp-json/wc/v3/products/categories",
+                {"per_page": 50, "orderby": "name", "order": "asc"},
+            )
+            commerce_body = _render_product_categories_block(categories_data, site_id)
         elif commerce_tab == "customers":
             customers_data = await _list(
                 "/wp-json/wc/v3/customers",
