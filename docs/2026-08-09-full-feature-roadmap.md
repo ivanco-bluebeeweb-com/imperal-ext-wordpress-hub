@@ -53,7 +53,7 @@ currently 100% unsupported beyond viewing. This is Priority 1.
 | **`create_user`** (role, email — WordPress emails the password reset link itself) | ✅ done |
 | **`update_user`** (role change, email, display name) | ✅ done |
 | **`delete_user`** (with reassign-content-to option) | ✅ done |
-| **`reset_user_password`** (trigger WP's own reset-link email) | ❌ still missing — low priority, deferred (WordPress core has no REST trigger for this; would need a Bridge addition) |
+| **`reset_user_password`** (trigger WP's own reset-link email) | ✅ done 2026-08-10 — shipped via a new Imperal Bridge SECTION 6 (Users): `POST /imperal/v1/users/{id}/reset-password` calls WordPress's own `retrieve_password()` directly (bridge bumped to 2.3.0). Wired into the Users panel as a per-row action. |
 
 **Why this mattered:** "add my new copywriter as an Author" is now a completely reasonable ask we
 can do. Priority 2 — DONE.
@@ -265,7 +265,7 @@ expose them — verify per-feature before assuming a Bridge change is needed.
    Bridge addition after all (WooCommerce 9.8+ has a native order-actions REST endpoint); the
    earlier deferral note above was simply wrong about that, corrected now that it shipped. Wired
    into the Orders panel UI. 121 functions total now.
-11. **Everything still explicitly deferred**: reset_user_password, sitemap status/regenerate,
+11. **Everything still explicitly deferred**: sitemap status/regenerate,
    robots.txt editor, SEO analysis score, 404 monitor, schema type per post, theme activation,
    4.2 (builder extensions), 3.7 (shipping/tax), plugin/core updates via
    WP-CLI. Revisit only when a real, recurring user need appears. Do not build speculatively —

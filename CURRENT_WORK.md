@@ -80,7 +80,6 @@ clean: 122 functions (was 121), 0 errors/0 warnings/1 info. Version 1.11.0 -> 1.
 source, not just the doc): everything genuinely still missing needs a NEW Bridge/PHP addition
 (no native WP/WooCommerce REST route exists) and was already a deliberate, documented deferral —
 not an accidental gap:
-- `reset_user_password` (WP core has no REST trigger for this)
 - `activate_theme` (no core REST route for switching)
 - `get_sitemap_status`/`trigger_sitemap_regenerate`, `get_robots_txt`/`update_robots_txt`,
   `get_seo_analysis_score`, `list_404_hits` (all need Rank Math's own stored data exposed via a
