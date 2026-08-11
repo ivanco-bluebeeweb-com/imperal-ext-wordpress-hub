@@ -379,6 +379,103 @@ async def test_auth_rejection_maps_to_credential_message():
 
 # ── contract: every error carries a structural code ──────────────────────────
 
+# ── heading_outline: text-safe heading visibility, never compacted ──────────
+#
+# `elements` is a nested list, so display clients that compact EntityList
+# rows down to id/title/kind can hide it from the user entirely. This is
+# exactly what made g4s.md/climtec.md h1.missing and heading_skip findings
+# look unreachable in a live session even though the bridge returns full
+# data. heading_outline is a plain string field carrying the same
+# information — strings are never compacted — so callers can always see
+# heading structure without needing a raw dump of `elements`.
+
+async def test_heading_outline_lists_elementor_heading_with_its_level():
+    ctx = await _ctx()
+    payload = _tree_payload(builders={
+        "elementor": {
+            "elements": [_elementor_row(
+                id="abc123", settings={"title": "Welcome Home", "header_size": "h1"})],
+            "state_token": "tok-1", "element_count": 1,
+        }
+    })
+    ctx.http.mock_get(TREE, payload, 200)
+    r = await hb.get_builder_content(ctx, GetBuilderContentParams(site_id="x-com", post_id=42))
+    row = r.data.items[0]
+    assert row.heading_outline == "h1: Welcome Home (id=abc123)"
+    assert "1 heading(s)" in r.summary
+
+
+async def test_heading_outline_lists_bricks_heading_with_its_tag():
+    ctx = await _ctx()
+    payload = {
+        "id": 7, "slug": "landing", "type": "page", "link": "https://x.com/landing",
+        "active_builders": ["bricks"],
+        "builders": {
+            "bricks": {
+                "zones": {
+                    "content": {
+                        "elements": [
+                            {"id": "e1", "parent_id": None, "el_type": "heading",
+                             "widget_type": "", "settings": {"tag": "h3", "text": "Our Services"},
+                             "zone": "content"},
+                            {"id": "e2", "parent_id": None, "el_type": "section",
+                             "widget_type": "", "settings": {}, "zone": "content"},
+                        ],
+                        "state_token": "tok-content",
+                    },
+                    "header": {"elements": [], "state_token": "tok-header"},
+                    "footer": {"elements": [], "state_token": "tok-footer"},
+                }
+            }
+        },
+    }
+    ctx.http.mock_get(TREE, payload, 200)
+    r = await hb.get_builder_content(ctx, GetBuilderContentParams(site_id="x-com", post_id=7))
+    zones = {row.zone: row for row in r.data.items}
+    assert zones["content"].heading_outline == "h3: Our Services (id=e1)"
+    assert zones["header"].heading_outline == ""
+
+
+async def test_heading_outline_strips_inline_html_from_bricks_text():
+    ctx = await _ctx()
+    payload = {
+        "id": 7, "slug": "landing", "type": "page", "link": "https://x.com/landing",
+        "active_builders": ["bricks"],
+        "builders": {
+            "bricks": {
+                "zones": {
+                    "content": {
+                        "elements": [
+                            {"id": "e1", "parent_id": None, "el_type": "heading",
+                             "widget_type": "", "settings": {"tag": "h2", "text": "<strong>Bold</strong> Title"},
+                             "zone": "content"},
+                        ],
+                        "state_token": "tok-content",
+                    },
+                }
+            }
+        },
+    }
+    ctx.http.mock_get(TREE, payload, 200)
+    r = await hb.get_builder_content(ctx, GetBuilderContentParams(site_id="x-com", post_id=7))
+    assert r.data.items[0].heading_outline == "h2: Bold Title (id=e1)"
+
+
+async def test_summary_flags_true_absence_of_any_heading():
+    ctx = await _ctx()
+    payload = _tree_payload(builders={
+        "elementor": {
+            "elements": [{"id": "e1", "parent_id": None, "el_type": "widget",
+                          "widget_type": "text-editor", "settings": {}}],
+            "state_token": "tok-1", "element_count": 1,
+        }
+    })
+    ctx.http.mock_get(TREE, payload, 200)
+    r = await hb.get_builder_content(ctx, GetBuilderContentParams(site_id="x-com", post_id=42))
+    assert r.data.items[0].heading_outline == ""
+    assert "NO HEADINGS AT ALL" in r.summary
+
+
 async def test_every_error_path_has_a_code():
     import ast
     import pathlib

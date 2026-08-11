@@ -27,6 +27,8 @@ parent_id, el_type, widget_type, settings) so a caller only needs one mental
 model for both builders.
 """
 
+import re
+
 from imperal_sdk import ActionResult, sdl
 
 from app import chat
@@ -35,6 +37,47 @@ from models import (GetBuilderContentParams, UpdateBuilderFieldParams,
                     BuilderScanItem, BuilderSupport, SiteIdParams)
 from wp_client import wp_get, wp_post, wp_error_message, wp_error_code
 import storage
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _strip_tags(text: str) -> str:
+    return _TAG_RE.sub("", text or "").strip()
+
+
+def _heading_row(el: BuilderElement) -> tuple[str, str] | None:
+    """If this element is a heading widget, return (tag, plain-text label).
+
+    Elementor headings: el_type=='widget', widget_type=='heading', settings
+    has header_size ('h1'..'h6', default 'h2') and title (plain text).
+    Bricks headings: el_type=='heading' (the Bricks 'name'), settings has
+    'tag' ('h1'..'h6', default 'h2') and 'text' (may carry inline HTML).
+    """
+    el_type = (el.el_type or "").strip().lower()
+    widget_type = (el.widget_type or "").strip().lower()
+    settings = el.settings or {}
+
+    is_elementor_heading = el_type == "widget" and widget_type == "heading"
+    is_bricks_heading = el_type == "heading"
+    if not (is_elementor_heading or is_bricks_heading):
+        return None
+
+    tag = str(settings.get("header_size") or settings.get("tag") or "h2").strip().lower()
+    if tag not in ("h1", "h2", "h3", "h4", "h5", "h6"):
+        tag = "h2"
+    raw_text = settings.get("title") or settings.get("text") or ""
+    label = _strip_tags(str(raw_text)) or "(empty)"
+    return tag, label
+
+
+def _build_heading_outline(elements: list[BuilderElement]) -> str:
+    lines = []
+    for el in elements:
+        found = _heading_row(el)
+        if found:
+            tag, label = found
+            lines.append(f"{tag}: {label} (id={el.element_id})")
+    return "\n".join(lines)
 
 BRIDGE_PATH = "/wp-json/imperal/v1/builder"
 BRIDGE_FIELD_PATH = "/wp-json/imperal/v1/builder/field"
@@ -147,6 +190,7 @@ def _content_rows(payload: dict) -> list[BuilderContent]:
             builder="elementor", zone="", state_token=elementor.get("state_token", "") or "",
             element_count=int(elementor.get("element_count", len(elements)) or len(elements)),
             elements=elements,
+            heading_outline=_build_heading_outline(elements),
         ))
 
     bricks = builders.get("bricks")
@@ -161,6 +205,7 @@ def _content_rows(payload: dict) -> list[BuilderContent]:
                 builder="bricks", zone=str(zone), state_token=zone_payload.get("state_token", "") or "",
                 element_count=len(elements),
                 elements=elements,
+                heading_outline=_build_heading_outline(elements),
             ))
 
     return rows
@@ -170,10 +215,16 @@ def _summarise_content(rows: list[BuilderContent]) -> str:
     if not rows:
         return "No builder content found."
     bits = []
+    all_headings: list[str] = []
     for row in rows:
         label = row.builder if not row.zone else f"{row.builder}/{row.zone}"
-        bits.append(f"{label}: {row.element_count} element(s)")
-    return f"Item #{rows[0].post_id}: " + ", ".join(bits)
+        heading_lines = [l for l in row.heading_outline.split("\n") if l]
+        bits.append(f"{label}: {row.element_count} element(s), {len(heading_lines)} heading(s)")
+        all_headings.extend(f"{label} {l}" for l in heading_lines)
+    header = f"Item #{rows[0].post_id}: " + ", ".join(bits)
+    if not all_headings:
+        return header + " — NO HEADINGS AT ALL (no H1..H6 widget found in any zone read)."
+    return header + "\nHeadings in document order:\n" + "\n".join(all_headings)
 
 
 @chat.function(

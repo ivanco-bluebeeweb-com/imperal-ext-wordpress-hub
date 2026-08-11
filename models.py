@@ -1083,6 +1083,16 @@ class BuilderContent(sdl.Entity):
     state_token: str = ""
     element_count: int = 0
     elements: list[BuilderElement] = Field(default_factory=list)
+    heading_outline: str = Field(
+        default="",
+        description=(
+            "Plain-text outline of every heading widget/element found in this builder/zone, "
+            "one per line as 'h2: Some Title (id=abc123)' in document order — always fully "
+            "readable as text (unlike `elements`, which display clients may show as a compact "
+            "summary card). Use this to check heading hierarchy (e.g. H1->H3 skips) or confirm "
+            "a true absence of any H1 without needing to inspect `elements` directly."
+        ),
+    )
 
 
 class BuilderFieldUpdateResult(sdl.Entity):
@@ -1705,3 +1715,209 @@ class UpdateLlmsTxtParams(BaseModel):
         default=None,
         description="Free-text Markdown appended to the file. Pass an empty string to clear it, "
                     "omit to leave unchanged.")
+
+
+# ─────────── Generic meta (Bridge SECTION 9: /imperal/v1/postmeta|usermeta|termmeta|option) ───────────
+
+class GetPostMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(description="WordPress post/page/CPT item id")
+
+
+class PostMetaSet(sdl.Entity):
+    """All custom-field meta on one post/page/CPT item, including keys WordPress core's own \
+REST API would hide because they were never registered with show_in_rest."""
+    post_id: int = 0
+    meta: dict = Field(default_factory=dict)
+
+
+class UpdatePostMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(description="WordPress post/page/CPT item id")
+    meta: dict = Field(min_length=1, description="One or more meta key/value pairs to set. "
+                        "Values must be plain strings/numbers/booleans/arrays — never a "
+                        "serialized PHP object, which is refused for safety.")
+
+
+class PostMetaUpdateResult(sdl.Entity):
+    post_id: int = 0
+    updated: list[str] = Field(default_factory=list)
+
+
+class DeletePostMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(description="WordPress post/page/CPT item id")
+    key: str = Field(min_length=1, description="Meta key to remove")
+
+
+class PostMetaDeleteResult(sdl.Entity):
+    post_id: int = 0
+    deleted: str = ""
+
+
+class GetUserMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    user_id: int = Field(description="WordPress user id")
+
+
+class UserMetaSet(sdl.Entity):
+    """All custom-field meta on one WordPress user account."""
+    user_id: int = 0
+    meta: dict = Field(default_factory=dict)
+
+
+class UpdateUserMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    user_id: int = Field(description="WordPress user id")
+    meta: dict = Field(min_length=1, description="One or more meta key/value pairs to set. "
+                        "Values must be plain strings/numbers/booleans/arrays — never a "
+                        "serialized PHP object, which is refused for safety.")
+
+
+class UserMetaUpdateResult(sdl.Entity):
+    user_id: int = 0
+    updated: list[str] = Field(default_factory=list)
+
+
+class DeleteUserMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    user_id: int = Field(description="WordPress user id")
+    key: str = Field(min_length=1, description="Meta key to remove")
+
+
+class UserMetaDeleteResult(sdl.Entity):
+    user_id: int = 0
+    deleted: str = ""
+
+
+class GetTermMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    term_id: int = Field(description="Taxonomy term id (category, tag, or custom taxonomy term)")
+
+
+class TermMetaSet(sdl.Entity):
+    """All custom-field meta on one taxonomy term (category, tag, or custom taxonomy)."""
+    term_id: int = 0
+    meta: dict = Field(default_factory=dict)
+
+
+class UpdateTermMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    term_id: int = Field(description="Taxonomy term id (category, tag, or custom taxonomy term)")
+    meta: dict = Field(min_length=1, description="One or more meta key/value pairs to set. "
+                        "Values must be plain strings/numbers/booleans/arrays — never a "
+                        "serialized PHP object, which is refused for safety.")
+
+
+class TermMetaUpdateResult(sdl.Entity):
+    term_id: int = 0
+    updated: list[str] = Field(default_factory=list)
+
+
+class DeleteTermMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    term_id: int = Field(description="Taxonomy term id (category, tag, or custom taxonomy term)")
+    key: str = Field(min_length=1, description="Meta key to remove")
+
+
+class TermMetaDeleteResult(sdl.Entity):
+    term_id: int = 0
+    deleted: str = ""
+
+
+class GetOptionParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    name: str = Field(min_length=1, description="Option name to read — must be on the Bridge's "
+                       "hard allowlist (Rank Math's own settings, site title/tagline, and a few "
+                       "WooCommerce store-settings names). Never siteurl/home/active_plugins/etc.")
+
+
+class OptionValue(sdl.Entity):
+    """One named row from wp_options — only names on the Bridge's hard allowlist are readable/writable."""
+    name: str = ""
+    value: str = ""
+    exists: bool = False
+
+
+class UpdateOptionParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    name: str = Field(min_length=1, description="Option name to write — must be on the Bridge's "
+                       "hard allowlist. Never siteurl/home/active_plugins/etc.")
+    value: str = Field(description="New value. Must not be a serialized PHP object — refused for safety.")
+
+
+class AcfFieldsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_type: str = Field(default="post", description="Post type to list ACF field groups for")
+
+
+class AcfField(BaseModel):
+    key: str = ""
+    name: str = ""
+    label: str = ""
+    type: str = ""
+
+
+class AcfFieldGroup(BaseModel):
+    group_key: str = ""
+    group_title: str = ""
+    fields: list[AcfField] = Field(default_factory=list)
+
+
+class AcfFieldsResult(sdl.Entity):
+    """Registered Advanced Custom Fields field groups for one post type, if ACF is active on the site."""
+    post_type: str = ""
+    field_groups: list[AcfFieldGroup] = Field(default_factory=list)
+
+
+# ─────────── Transients & Object Cache (SSH/WP-CLI) ───────────
+
+class TransientItem(sdl.Entity):
+    """One transient row from `wp transient list`."""
+    name: str = ""
+    value: str = ""
+    expiration: str = ""
+
+
+class DeleteTransientParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    name: str = Field(min_length=1, description="Transient name from list_transients")
+
+
+class TransientActionResult(sdl.Entity):
+    site_id: str = ""
+    output: str = ""
+
+
+class ObjectCacheStatus(sdl.Entity):
+    """Whether a persistent object cache (Redis/Memcached/etc.) is active, per `wp cache type`."""
+    site_id: str = ""
+    cache_type: str = ""
+
+
+# ─────────── Cron (SSH/WP-CLI, beyond the existing run_wp_cron) ───────────
+
+class CronEventItem(sdl.Entity):
+    """One scheduled WP-Cron event from `wp cron event list`."""
+    hook: str = ""
+    next_run_gmt: str = ""
+    next_run_relative: str = ""
+    recurrence: str = ""
+
+
+class CronEventActionParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    hook: str = Field(min_length=1, description="Cron hook name from list_cron_events")
+
+
+class CronEventActionResult(sdl.Entity):
+    site_id: str = ""
+    hook: str = ""
+    output: str = ""
+
+
+class CronScheduleItem(sdl.Entity):
+    """One registered cron recurrence interval from `wp cron schedule list`."""
+    name: str = ""
+    display: str = ""
+    interval: int = 0

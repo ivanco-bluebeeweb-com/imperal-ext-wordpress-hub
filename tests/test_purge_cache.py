@@ -99,3 +99,55 @@ async def test_purge_cache_surfaces_the_ssh_error_without_claiming_success(monke
 
     assert result.status == "error"
     assert "SSH connection failed" in result.error
+
+
+async def test_purge_cache_runs_w3tc_flush_when_active(monkeypatch):
+    ctx = await _ssh_ctx()
+
+    async def fake_list_plugins(_cred):
+        return _plugins(["w3-total-cache"]), None
+
+    async def fake_purge(cred):
+        return "Flushed all caches.", None
+
+    monkeypatch.setattr(hr.wp_cli, "list_plugins", fake_list_plugins)
+    monkeypatch.setattr(hr.wp_cli, "purge_w3tc_cache", fake_purge)
+    result = await hr.purge_cache(ctx, PurgeCacheParams(site_id="x-com"))
+
+    assert result.status == "success"
+    assert result.data.cache_plugin == "w3-total-cache"
+    assert result.data.output == "Flushed all caches."
+
+
+async def test_purge_cache_prefers_litespeed_when_both_active(monkeypatch):
+    ctx = await _ssh_ctx()
+
+    async def fake_list_plugins(_cred):
+        return _plugins(["litespeed-cache", "w3-total-cache"]), None
+
+    async def fake_ls_purge(cred, scope):
+        return "Purged LiteSpeed.", None
+
+    monkeypatch.setattr(hr.wp_cli, "list_plugins", fake_list_plugins)
+    monkeypatch.setattr(hr.wp_cli, "purge_litespeed_cache", fake_ls_purge)
+    result = await hr.purge_cache(ctx, PurgeCacheParams(site_id="x-com"))
+
+    assert result.status == "success"
+    assert result.data.cache_plugin == "litespeed-cache"
+
+
+async def test_purge_cache_surfaces_w3tc_ssh_error(monkeypatch):
+    ctx = await _ssh_ctx()
+
+    async def fake_list_plugins(_cred):
+        return _plugins(["w3-total-cache"]), None
+
+    async def fake_purge(_cred):
+        return None, "SSH connection failed"
+
+    monkeypatch.setattr(hr.wp_cli, "list_plugins", fake_list_plugins)
+    monkeypatch.setattr(hr.wp_cli, "purge_w3tc_cache", fake_purge)
+    result = await hr.purge_cache(ctx, PurgeCacheParams(site_id="x-com"))
+
+    assert result.status == "error"
+    assert "SSH connection failed" in result.error

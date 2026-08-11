@@ -779,7 +779,7 @@ async def list_plugins(ctx, params: SiteIdParams) -> ActionResult:
 @chat.function(
     "purge_cache",
     description=("Purge the site's page cache. Auto-detects an active cache plugin "
-                 "(currently LiteSpeed Cache) from the site's real, live plugin list — "
+                 "(LiteSpeed Cache or W3 Total Cache) from the site's real, live plugin list — "
                  "if none is found, reports that clearly instead of silently doing nothing. "
                  "Requires SSH access configured with add_ssh."),
     action_type="write",
@@ -788,11 +788,18 @@ async def list_plugins(ctx, params: SiteIdParams) -> ActionResult:
     event="wordpress-hub.purge_cache",
 )
 async def purge_cache(ctx, params: PurgeCacheParams) -> ActionResult:
-    """Purge the site's cache via `wp litespeed-purge` over SSH.
+    """Purge the site's cache via `wp litespeed-purge` or `wp w3-total-cache flush all` over SSH.
 
-    Detects LiteSpeed Cache from the site's own live plugin list rather than
-    assuming it is installed — a purge command for a cache plugin that is not
-    even active would silently do nothing, which is worse than refusing.
+    Detects the active cache plugin from the site's own live plugin list
+    rather than assuming one is installed -- a purge command for a cache
+    plugin that is not even active would silently do nothing, which is
+    worse than refusing. Covers LiteSpeed Cache and W3 Total Cache, whose
+    WP-CLI purge commands are both bundled with the plugin itself (verified
+    against each plugin's own docs before writing this) -- WP Rocket and WP
+    Super Cache are deliberately NOT covered here because their WP-CLI
+    support ships as a SEPARATE package that may not be installed on an
+    arbitrary server, so silently trying it could misreport a real failure
+    as "no cache plugin found".
     """
     scope = (params.scope or "all").strip().lower()
     if scope not in ("all", "front"):
@@ -816,32 +823,42 @@ async def purge_cache(ctx, params: PurgeCacheParams) -> ActionResult:
         return ActionResult.error(f"Could not read the plugin list: {cli_error}", retryable=True)
 
     active = {str(row.get("name", "")) for row in rows if row.get("status") == "active"}
-    if "litespeed-cache" not in active:
+
+    if "litespeed-cache" in active:
+        plugin_slug = "litespeed-cache"
+        try:
+            output, run_error = await wp_cli.purge_litespeed_cache(cred, scope)
+        except Exception as error:
+            await ctx.log(f"purge_cache: {error}", level="error")
+            return ActionResult.error("Could not purge the cache over SSH.", retryable=True)
+    elif "w3-total-cache" in active:
+        plugin_slug = "w3-total-cache"
+        try:
+            output, run_error = await wp_cli.purge_w3tc_cache(cred)
+        except Exception as error:
+            await ctx.log(f"purge_cache: {error}", level="error")
+            return ActionResult.error("Could not purge the cache over SSH.", retryable=True)
+    else:
         await ctx.log(
             f"purge_cache: rejected — no known cache plugin active on site_id={params.site_id}",
             level="info",
         )
         return ActionResult.error(
-            "No supported cache plugin (LiteSpeed Cache) is active on this site. "
-            "Call list_plugins to see what's installed.", retryable=False
+            "No supported cache plugin (LiteSpeed Cache or W3 Total Cache) is active on this "
+            "site. Call list_plugins to see what's installed.", retryable=False
         )
 
-    try:
-        output, run_error = await wp_cli.purge_litespeed_cache(cred, scope)
-    except Exception as error:
-        await ctx.log(f"purge_cache: {error}", level="error")
-        return ActionResult.error("Could not purge the cache over SSH.", retryable=True)
     if run_error:
         await ctx.log(f"purge_cache: SSH/WP-CLI error — {run_error}", level="error")
         return ActionResult.error(run_error, retryable=True)
 
-    await ctx.log(f"purge_cache: executed — scope={scope} site_id={params.site_id}", level="info")
+    await ctx.log(f"purge_cache: executed — scope={scope} plugin={plugin_slug} site_id={params.site_id}", level="info")
     return ActionResult.success(
         CacheActionResult(
-            id=params.site_id, title="litespeed-cache purge", kind="wp_cache_action",
-            scope=scope, cache_plugin="litespeed-cache", output=(output or "").strip(),
+            id=params.site_id, title=f"{plugin_slug} purge", kind="wp_cache_action",
+            scope=scope, cache_plugin=plugin_slug, output=(output or "").strip(),
         ),
-        summary=f"Purged litespeed-cache cache ({scope}).",
+        summary=f"Purged {plugin_slug} cache ({scope}).",
     )
 
 

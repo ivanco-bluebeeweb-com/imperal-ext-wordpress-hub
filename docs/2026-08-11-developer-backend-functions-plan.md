@@ -38,7 +38,7 @@ function names is 87, confirmed by set-diffing against `imperal.json`'s actual t
 
 ---
 
-## Group A — Custom Fields / Post Meta (generic, not just SEO)
+## Group A — Custom Fields / Post Meta (generic, not just SEO) — ✅ SHIPPED 2026-08-11
 
 WordPress core exposes `meta` as a registered-field passthrough on `/wp/v2/<type>/<id>` but only for
 meta keys explicitly registered with `register_post_meta(..., show_in_rest => true)` — most
@@ -76,7 +76,7 @@ post") and today we have zero generic answer for it beyond SEO-specific meta.
 14. `count_post_type_rows` / `count_orphaned_postmeta` — common "is my DB clean" backend-dev
     diagnostic, WP-CLI `wp post list --format=count` / raw meta orphan query
 
-## Group C — Transients & Object Cache
+## Group C — Transients & Object Cache — ✅ SHIPPED 2026-08-11
 
 15. `list_transients` — read `wp_options` rows matching `_transient_%`/`_site_transient_%` with
     expiry (Bridge or WP-CLI `wp transient list` if the transient command is available)
@@ -85,10 +85,14 @@ post") and today we have zero generic answer for it beyond SEO-specific meta.
 18. `get_object_cache_status` — is a persistent object cache (Redis/Memcached) active, and basic
     stats if so (WP-CLI `wp cache type` / plugin-specific)
 19. `flush_object_cache` — WP-CLI `wp cache flush`
-20. `purge_cache` — already exists (LiteSpeed-specific per main roadmap 5.2); extend/generalize to
-    detect WP Rocket / W3 Total Cache / WP Super Cache if present, rather than LiteSpeed-only
+20. `purge_cache` — ✅ EXTENDED 2026-08-11: now auto-detects W3 Total Cache in addition to
+    LiteSpeed Cache (`wp w3-total-cache flush all`, verified bundled with the plugin itself, same
+    safety class as LiteSpeed's own `litespeed-purge`). WP Rocket and WP Super Cache deliberately
+    NOT added — their WP-CLI support ships as a separate package
+    (wp-media/wp-rocket-cli, wp-cli/wp-super-cache-cli) not guaranteed present on an arbitrary
+    server, so calling it could misreport a real absence as success/failure noise.
 
-## Group D — Cron Jobs (beyond the existing single `run_wp_cron`)
+## Group D — Cron Jobs (beyond the existing single `run_wp_cron`) — ✅ SHIPPED 2026-08-11
 
 21. `list_cron_events` — WP-CLI `wp cron event list`: every scheduled hook, next run time, recurrence
 22. `run_cron_event` — trigger ONE named cron hook by name (`wp cron event run <hook>`), more

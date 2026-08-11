@@ -142,6 +142,30 @@ async def purge_litespeed_cache(cred: dict, scope: str) -> tuple[str | None, str
         return await _run(host, port, user, key_path, command)
 
 
+async def purge_w3tc_cache(cred: dict) -> tuple[str | None, str | None]:
+    """Purge W3 Total Cache's page cache through its own WP-CLI namespace.
+
+    `wp w3-total-cache flush all` -- verified as a command bundled WITH the
+    W3 Total Cache plugin itself (github.com/BoldGrid/w3-total-cache wiki
+    WP-CLI page), the same safety class as purge_litespeed_cache above, NOT
+    a separately-installed wp-cli package (unlike WP Rocket's/WP Super
+    Cache's own CLI add-ons, which this app deliberately does not call since
+    their presence on an arbitrary server cannot be verified in advance).
+    Caller is responsible for confirming w3-total-cache is the active plugin
+    before calling this (see list_plugins).
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp w3-total-cache flush all --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command)
+
+
 async def install_plugin(cred: dict, source: str, activate: bool) -> tuple[dict | None, str | None]:
     """Install a plugin via WP-CLI from a WordPress.org slug or a direct .zip URL.
 
@@ -240,6 +264,186 @@ async def run_wp_cron(cred: dict) -> tuple[str | None, str | None]:
     command = f"wp cron event run --due-now --path={wp_path} --allow-root"
     async with _key_file(cred["key"]) as key_path:
         return await _run(host, port, user, key_path, command, timeout=60)
+
+
+async def list_transients(cred: dict) -> tuple[list | None, str | None]:
+    """List transients via `wp transient list --format=json` (wp-cli/cache-command).
+
+    Verified command shape against developer.wordpress.org/cli/commands/transient/list/
+    before writing this. Returns raw wp-cli rows (name, value, expiration).
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp transient list --format=json --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command)
+    if output is None:
+        return None, error or "SSH connection failed"
+    try:
+        rows = json.loads(output) if output else []
+    except json.JSONDecodeError:
+        return None, "WP-CLI returned an invalid transient list"
+    if not isinstance(rows, list):
+        return None, "WP-CLI returned an unexpected transient list"
+    return rows, None
+
+
+async def delete_transient(cred: dict, name: str) -> tuple[str | None, str | None]:
+    """Delete one named transient via `wp transient delete <name>`.
+
+    `name` is restricted to safe option-key characters so it cannot inject
+    extra shell arguments, matching this file's existing slug-validation bar.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    if not name or not all(ch.isalnum() or ch in "-_." for ch in name):
+        return None, "Invalid transient name — use a name from list_transients."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp transient delete {name} --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command)
+
+
+async def flush_all_transients(cred: dict) -> tuple[str | None, str | None]:
+    """Delete every transient via `wp transient delete --all`.
+
+    Fixed shape, no `--expired`-only variant exposed separately -- callers who
+    want the full flush use this; a narrower cleanup is not this app's job.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp transient delete --all --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command, timeout=60)
+
+
+async def get_cache_type(cred: dict) -> tuple[str | None, str | None]:
+    """Detect the active object-cache implementation via `wp cache type`."""
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp cache type --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command)
+
+
+async def flush_object_cache(cred: dict) -> tuple[str | None, str | None]:
+    """Flush the WordPress object cache via `wp cache flush`."""
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp cache flush --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command, timeout=60)
+
+
+async def list_cron_events(cred: dict) -> tuple[list | None, str | None]:
+    """List scheduled cron events via `wp cron event list --format=json`."""
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = (
+        "wp cron event list --format=json "
+        "--fields=hook,next_run_gmt,next_run_relative,recurrence "
+        f"--path={wp_path} --allow-root"
+    )
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command)
+    if output is None:
+        return None, error or "SSH connection failed"
+    try:
+        rows = json.loads(output) if output else []
+    except json.JSONDecodeError:
+        return None, "WP-CLI returned an invalid cron event list"
+    if not isinstance(rows, list):
+        return None, "WP-CLI returned an unexpected cron event list"
+    return rows, None
+
+
+async def run_cron_event(cred: dict, hook: str) -> tuple[str | None, str | None]:
+    """Run one named cron event now via `wp cron event run <hook>`.
+
+    `hook` is restricted to safe characters (letters/digits/-_./) so it
+    cannot inject extra shell arguments, matching this file's existing
+    slug-validation bar for update_plugin/delete_transient.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    if not hook or not all(ch.isalnum() or ch in "-_./" for ch in hook):
+        return None, "Invalid hook name — use a hook from list_cron_events."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp cron event run {hook} --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command, timeout=60)
+
+
+async def delete_cron_event(cred: dict, hook: str) -> tuple[str | None, str | None]:
+    """Unschedule every occurrence of one cron hook via `wp cron event delete <hook>`."""
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    if not hook or not all(ch.isalnum() or ch in "-_./" for ch in hook):
+        return None, "Invalid hook name — use a hook from list_cron_events."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp cron event delete {hook} --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command)
+
+
+async def list_cron_schedules(cred: dict) -> tuple[list | None, str | None]:
+    """List registered cron recurrence intervals via `wp cron schedule list --format=json`."""
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp cron schedule list --format=json --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command)
+    if output is None:
+        return None, error or "SSH connection failed"
+    try:
+        rows = json.loads(output) if output else []
+    except json.JSONDecodeError:
+        return None, "WP-CLI returned an invalid cron schedule list"
+    if not isinstance(rows, list):
+        return None, "WP-CLI returned an unexpected cron schedule list"
+    return rows, None
 
 
 async def get_server_info(cred: dict) -> dict:

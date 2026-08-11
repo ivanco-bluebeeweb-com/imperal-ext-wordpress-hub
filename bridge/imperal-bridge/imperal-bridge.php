@@ -3207,3 +3207,315 @@ function imperal_llmstxt_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_llmstxt_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 9 — GENERIC META (post/user/term meta, wp_options)
+ *
+ * WordPress core only exposes post meta over the REST API when it is
+ * registered with register_post_meta(..., 'show_in_rest' => true). Almost no
+ * real-world custom field is registered this way -- ACF fields, raw
+ * update_post_meta() calls, and most plugin-added meta are all invisible to
+ * /wp/v2/<type>/<id>?context=edit. This section is a generic bridge for
+ * exactly that gap: arbitrary meta on posts/users/terms, plus a hard-gated
+ * allowlist subset of wp_options.
+ *
+ * Safety boundary (matches this plugin's existing bar for install_plugin /
+ * WP-CLI-equivalent power): wp_options access is an ALLOWLIST of known-safe
+ * option names only -- Rank Math's own options, blogname/blogdescription, and
+ * a short list of WooCommerce store-settings option names. Never siteurl,
+ * home, active_plugins, template, stylesheet, or any option value that looks
+ * like a serialized PHP object (a serialized-object payload is refused
+ * outright: accepting one could let a caller trigger arbitrary
+ * __wakeup()/__destruct() side effects on unserialize() -- a known PHP
+ * object-injection risk class, not a hypothetical one).
+ * ============================================================================= */
+
+define( 'IMPERAL_META_BRIDGE_NAMESPACE', 'imperal/v1' );
+define( 'IMPERAL_META_BRIDGE_VERSION', '1.0.0' );
+
+/**
+ * Options this bridge will read/write. Deliberately short and explicit --
+ * grow this list only for options that are themselves plain settings
+ * arrays/strings, never core identity/security options.
+ *
+ * @return string[]
+ */
+function imperal_meta_bridge_option_allowlist() {
+	return array(
+		'rank-math-options-general',
+		'rank-math-options-titles',
+		'rank-math-options-sitemap',
+		'blogname',
+		'blogdescription',
+		'woocommerce_store_address',
+		'woocommerce_store_address_2',
+		'woocommerce_store_city',
+		'woocommerce_default_country',
+		'woocommerce_store_postcode',
+		'woocommerce_currency',
+	);
+}
+
+/**
+ * Reject any value containing a serialized PHP object (O:) token, whether
+ * sent as a literal string or nested inside JSON. Plain
+ * arrays/strings/numbers/booleans pass.
+ *
+ * @param mixed $value
+ * @return bool true if safe to store
+ */
+function imperal_meta_bridge_value_is_safe( $value ) {
+	$serialized = is_scalar( $value ) ? (string) $value : wp_json_encode( $value );
+	if ( false === $serialized ) {
+		return false;
+	}
+	return ! preg_match( '/\bO:\d+:"/', $serialized );
+}
+
+function imperal_meta_bridge_get_post_meta( WP_REST_Request $request ) {
+	$post_id = (int) $request['id'];
+	if ( ! get_post( $post_id ) ) {
+		return new WP_Error( 'imperal_meta_no_post', __( 'Post not found.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+	$meta = get_post_meta( $post_id );
+	$out  = array();
+	foreach ( $meta as $key => $values ) {
+		$out[ $key ] = 1 === count( $values ) ? maybe_unserialize( $values[0] ) : array_map( 'maybe_unserialize', $values );
+	}
+	return rest_ensure_response( array( 'post_id' => $post_id, 'meta' => $out ) );
+}
+
+function imperal_meta_bridge_update_post_meta( WP_REST_Request $request ) {
+	$post_id = (int) $request['id'];
+	if ( ! get_post( $post_id ) ) {
+		return new WP_Error( 'imperal_meta_no_post', __( 'Post not found.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+	$meta = $request->get_param( 'meta' );
+	if ( ! is_array( $meta ) || empty( $meta ) ) {
+		return new WP_Error( 'imperal_meta_bad_payload', __( 'meta must be a non-empty object of key/value pairs.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+	$updated = array();
+	foreach ( $meta as $key => $value ) {
+		if ( ! imperal_meta_bridge_value_is_safe( $value ) ) {
+			return new WP_Error( 'imperal_meta_unsafe_value', sprintf( __( 'Value for "%s" looks like a serialized PHP object and was refused.', 'imperal-bridge' ), $key ), array( 'status' => 400 ) );
+		}
+		update_post_meta( $post_id, sanitize_key( $key ), $value );
+		$updated[] = sanitize_key( $key );
+	}
+	return rest_ensure_response( array( 'post_id' => $post_id, 'updated' => $updated ) );
+}
+
+function imperal_meta_bridge_delete_post_meta( WP_REST_Request $request ) {
+	$post_id = (int) $request['id'];
+	$key     = sanitize_key( $request['key'] );
+	if ( ! get_post( $post_id ) ) {
+		return new WP_Error( 'imperal_meta_no_post', __( 'Post not found.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+	delete_post_meta( $post_id, $key );
+	return rest_ensure_response( array( 'post_id' => $post_id, 'deleted' => $key ) );
+}
+
+function imperal_meta_bridge_get_user_meta( WP_REST_Request $request ) {
+	$user_id = (int) $request['id'];
+	if ( ! get_userdata( $user_id ) ) {
+		return new WP_Error( 'imperal_meta_no_user', __( 'User not found.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+	$meta = get_user_meta( $user_id );
+	$out  = array();
+	foreach ( $meta as $key => $values ) {
+		$out[ $key ] = 1 === count( $values ) ? maybe_unserialize( $values[0] ) : array_map( 'maybe_unserialize', $values );
+	}
+	return rest_ensure_response( array( 'user_id' => $user_id, 'meta' => $out ) );
+}
+
+function imperal_meta_bridge_update_user_meta( WP_REST_Request $request ) {
+	$user_id = (int) $request['id'];
+	if ( ! get_userdata( $user_id ) ) {
+		return new WP_Error( 'imperal_meta_no_user', __( 'User not found.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+	$meta = $request->get_param( 'meta' );
+	if ( ! is_array( $meta ) || empty( $meta ) ) {
+		return new WP_Error( 'imperal_meta_bad_payload', __( 'meta must be a non-empty object of key/value pairs.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+	$updated = array();
+	foreach ( $meta as $key => $value ) {
+		if ( ! imperal_meta_bridge_value_is_safe( $value ) ) {
+			return new WP_Error( 'imperal_meta_unsafe_value', sprintf( __( 'Value for "%s" looks like a serialized PHP object and was refused.', 'imperal-bridge' ), $key ), array( 'status' => 400 ) );
+		}
+		update_user_meta( $user_id, sanitize_key( $key ), $value );
+		$updated[] = sanitize_key( $key );
+	}
+	return rest_ensure_response( array( 'user_id' => $user_id, 'updated' => $updated ) );
+}
+
+function imperal_meta_bridge_delete_user_meta( WP_REST_Request $request ) {
+	$user_id = (int) $request['id'];
+	$key     = sanitize_key( $request['key'] );
+	if ( ! get_userdata( $user_id ) ) {
+		return new WP_Error( 'imperal_meta_no_user', __( 'User not found.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+	delete_user_meta( $user_id, $key );
+	return rest_ensure_response( array( 'user_id' => $user_id, 'deleted' => $key ) );
+}
+
+function imperal_meta_bridge_get_term_meta( WP_REST_Request $request ) {
+	$term_id = (int) $request['id'];
+	$term    = get_term( $term_id );
+	if ( ! $term || is_wp_error( $term ) ) {
+		return new WP_Error( 'imperal_meta_no_term', __( 'Term not found.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+	$meta = get_term_meta( $term_id );
+	$out  = array();
+	foreach ( $meta as $key => $values ) {
+		$out[ $key ] = 1 === count( $values ) ? maybe_unserialize( $values[0] ) : array_map( 'maybe_unserialize', $values );
+	}
+	return rest_ensure_response( array( 'term_id' => $term_id, 'meta' => $out ) );
+}
+
+function imperal_meta_bridge_update_term_meta( WP_REST_Request $request ) {
+	$term_id = (int) $request['id'];
+	$term    = get_term( $term_id );
+	if ( ! $term || is_wp_error( $term ) ) {
+		return new WP_Error( 'imperal_meta_no_term', __( 'Term not found.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+	$meta = $request->get_param( 'meta' );
+	if ( ! is_array( $meta ) || empty( $meta ) ) {
+		return new WP_Error( 'imperal_meta_bad_payload', __( 'meta must be a non-empty object of key/value pairs.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+	$updated = array();
+	foreach ( $meta as $key => $value ) {
+		if ( ! imperal_meta_bridge_value_is_safe( $value ) ) {
+			return new WP_Error( 'imperal_meta_unsafe_value', sprintf( __( 'Value for "%s" looks like a serialized PHP object and was refused.', 'imperal-bridge' ), $key ), array( 'status' => 400 ) );
+		}
+		update_term_meta( $term_id, sanitize_key( $key ), $value );
+		$updated[] = sanitize_key( $key );
+	}
+	return rest_ensure_response( array( 'term_id' => $term_id, 'updated' => $updated ) );
+}
+
+function imperal_meta_bridge_delete_term_meta( WP_REST_Request $request ) {
+	$term_id = (int) $request['id'];
+	$key     = sanitize_key( $request['key'] );
+	$term    = get_term( $term_id );
+	if ( ! $term || is_wp_error( $term ) ) {
+		return new WP_Error( 'imperal_meta_no_term', __( 'Term not found.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+	delete_term_meta( $term_id, $key );
+	return rest_ensure_response( array( 'term_id' => $term_id, 'deleted' => $key ) );
+}
+
+function imperal_meta_bridge_get_option( WP_REST_Request $request ) {
+	$name = sanitize_key( $request['name'] );
+	if ( ! in_array( $name, imperal_meta_bridge_option_allowlist(), true ) ) {
+		return new WP_Error( 'imperal_meta_option_not_allowed', __( 'This option name is not on the allowed list.', 'imperal-bridge' ), array( 'status' => 403 ) );
+	}
+	$value = get_option( $name );
+	return rest_ensure_response( array( 'name' => $name, 'value' => $value, 'exists' => false !== $value ) );
+}
+
+function imperal_meta_bridge_update_option( WP_REST_Request $request ) {
+	$name = sanitize_key( $request['name'] );
+	if ( ! in_array( $name, imperal_meta_bridge_option_allowlist(), true ) ) {
+		return new WP_Error( 'imperal_meta_option_not_allowed', __( 'This option name is not on the allowed list.', 'imperal-bridge' ), array( 'status' => 403 ) );
+	}
+	$value = $request->get_param( 'value' );
+	if ( null === $value ) {
+		return new WP_Error( 'imperal_meta_bad_payload', __( 'value is required.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+	if ( ! imperal_meta_bridge_value_is_safe( $value ) ) {
+		return new WP_Error( 'imperal_meta_unsafe_value', __( 'Value looks like a serialized PHP object and was refused.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+	update_option( $name, $value );
+	return rest_ensure_response( array( 'name' => $name, 'value' => get_option( $name ) ) );
+}
+
+function imperal_meta_bridge_list_acf_fields( WP_REST_Request $request ) {
+	if ( ! function_exists( 'acf_get_field_groups' ) ) {
+		return new WP_Error( 'imperal_meta_acf_not_active', __( 'Advanced Custom Fields is not active on this site.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+	$post_type    = sanitize_key( $request->get_param( 'post_type' ) ?: 'post' );
+	$field_groups = acf_get_field_groups( array( 'post_type' => $post_type ) );
+	$out          = array();
+	foreach ( $field_groups as $group ) {
+		$fields = function_exists( 'acf_get_fields' ) ? acf_get_fields( $group ) : array();
+		$out[]  = array(
+			'group_key'   => $group['key'] ?? '',
+			'group_title' => $group['title'] ?? '',
+			'fields'      => array_map(
+				static function ( $field ) {
+					return array(
+						'key'   => $field['key'] ?? '',
+						'name'  => $field['name'] ?? '',
+						'label' => $field['label'] ?? '',
+						'type'  => $field['type'] ?? '',
+					);
+				},
+				$fields ?: array()
+			),
+		);
+	}
+	return rest_ensure_response( array( 'post_type' => $post_type, 'field_groups' => $out ) );
+}
+
+function imperal_meta_bridge_register_routes() {
+	$manage_options_perm = function () {
+		return current_user_can( 'manage_options' );
+	};
+	$edit_posts_perm     = function () {
+		return current_user_can( 'edit_posts' );
+	};
+
+	register_rest_route(
+		IMPERAL_META_BRIDGE_NAMESPACE,
+		'/postmeta/(?P<id>\d+)',
+		array(
+			array( 'methods' => WP_REST_Server::READABLE, 'callback' => 'imperal_meta_bridge_get_post_meta', 'permission_callback' => $edit_posts_perm ),
+			array( 'methods' => WP_REST_Server::EDITABLE, 'callback' => 'imperal_meta_bridge_update_post_meta', 'permission_callback' => $edit_posts_perm ),
+		)
+	);
+	register_rest_route(
+		IMPERAL_META_BRIDGE_NAMESPACE,
+		'/postmeta/(?P<id>\d+)/(?P<key>[a-zA-Z0-9_\-]+)',
+		array( 'methods' => WP_REST_Server::DELETABLE, 'callback' => 'imperal_meta_bridge_delete_post_meta', 'permission_callback' => $edit_posts_perm )
+	);
+	register_rest_route(
+		IMPERAL_META_BRIDGE_NAMESPACE,
+		'/usermeta/(?P<id>\d+)',
+		array(
+			array( 'methods' => WP_REST_Server::READABLE, 'callback' => 'imperal_meta_bridge_get_user_meta', 'permission_callback' => $manage_options_perm ),
+			array( 'methods' => WP_REST_Server::EDITABLE, 'callback' => 'imperal_meta_bridge_update_user_meta', 'permission_callback' => $manage_options_perm ),
+		)
+	);
+	register_rest_route(
+		IMPERAL_META_BRIDGE_NAMESPACE,
+		'/usermeta/(?P<id>\d+)/(?P<key>[a-zA-Z0-9_\-]+)',
+		array( 'methods' => WP_REST_Server::DELETABLE, 'callback' => 'imperal_meta_bridge_delete_user_meta', 'permission_callback' => $manage_options_perm )
+	);
+	register_rest_route(
+		IMPERAL_META_BRIDGE_NAMESPACE,
+		'/termmeta/(?P<id>\d+)',
+		array(
+			array( 'methods' => WP_REST_Server::READABLE, 'callback' => 'imperal_meta_bridge_get_term_meta', 'permission_callback' => $edit_posts_perm ),
+			array( 'methods' => WP_REST_Server::EDITABLE, 'callback' => 'imperal_meta_bridge_update_term_meta', 'permission_callback' => $edit_posts_perm ),
+		)
+	);
+	register_rest_route(
+		IMPERAL_META_BRIDGE_NAMESPACE,
+		'/termmeta/(?P<id>\d+)/(?P<key>[a-zA-Z0-9_\-]+)',
+		array( 'methods' => WP_REST_Server::DELETABLE, 'callback' => 'imperal_meta_bridge_delete_term_meta', 'permission_callback' => $edit_posts_perm )
+	);
+	register_rest_route(
+		IMPERAL_META_BRIDGE_NAMESPACE,
+		'/option/(?P<name>[a-zA-Z0-9_\-]+)',
+		array(
+			array( 'methods' => WP_REST_Server::READABLE, 'callback' => 'imperal_meta_bridge_get_option', 'permission_callback' => $manage_options_perm ),
+			array( 'methods' => WP_REST_Server::EDITABLE, 'callback' => 'imperal_meta_bridge_update_option', 'permission_callback' => $manage_options_perm ),
+		)
+	);
+	register_rest_route(
+		IMPERAL_META_BRIDGE_NAMESPACE,
+		'/acf-fields',
+		array( 'methods' => WP_REST_Server::READABLE, 'callback' => 'imperal_meta_bridge_list_acf_fields', 'permission_callback' => $edit_posts_perm )
+	);
+}
+add_action( 'rest_api_init', 'imperal_meta_bridge_register_routes' );
