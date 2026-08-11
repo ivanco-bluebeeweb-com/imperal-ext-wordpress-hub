@@ -2000,3 +2000,50 @@ class OrphanedPostmetaResult(sdl.Entity):
     """Count of wp_postmeta rows whose post no longer exists — a common DB-hygiene diagnostic."""
     site_id: str = ""
     orphaned_rows: int = 0
+
+
+class ListRestRoutesParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    namespace: str | None = Field(
+        default=None,
+        description="Optional namespace filter, e.g. 'wp/v2' or 'wc/v3' — omit to list every registered route on the site")
+
+
+class RestRoute(sdl.Entity):
+    """One registered REST route from the site's own root index (GET /wp-json/)."""
+    route: str = ""
+    namespace: str = ""
+    methods: list[str] = Field(default_factory=list)
+
+
+class GetRestRouteSchemaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    route: str = Field(min_length=1, description="Exact route path from list_rest_routes, e.g. '/wp/v2/posts/(?P<id>[\\d]+)'")
+
+
+class RestRouteSchema(sdl.Entity):
+    """Full endpoint detail for one REST route — methods and each endpoint's declared args, from the site's own root index."""
+    route: str = ""
+    namespace: str = ""
+    endpoints: list[dict] = Field(default_factory=list)
+
+
+class ApplicationPassword(sdl.Entity):
+    """One registered Application Password for the connected WordPress user (never the secret itself)."""
+    uuid: str = ""
+    app_id: str = ""
+    name: str = ""
+    created: str = ""
+    last_used: str = ""
+    last_ip: str = ""
+
+
+class RevokeApplicationPasswordParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    uuid: str = Field(min_length=1, description="Application password uuid from list_application_passwords")
+
+
+class ApplicationPasswordRevokeResult(sdl.Entity):
+    site_id: str = ""
+    uuid: str = ""
+    revoked: bool = False
