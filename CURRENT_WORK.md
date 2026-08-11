@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-08-12 — Mandatory complete pricing gate
+
+**Every registered `@chat.function` must always have an explicit, non-zero per-action price.**
+Whenever a function is added, renamed, or removed, the release workflow must: (1) rebuild the
+complete `tool_prices` map from the validated manifest, (2) verify an exact one-to-one match — no
+missing or extra keys — and (3) save the **entire** map through `developer.update_pricing` while
+the app is suspended, before deployment. Never use a partial `save_pricing` update: it can leave
+previous functions unpriced. Policy remains based on real work: 1 for a single lightweight read,
+2 for a standard state change or remote action, 4 for an aggregate/preview/heavy action, and 6 for
+CSV apply/import work. The restored baseline is 213 functions: all priced, none zero.
+
 ## 2026-08-11 (late night) — Group N: Rewrite Rules & Permalinks (4 functions, new Bridge SECTION 17)
 
 **Status:** SHIPPED, tested (741/741 Python + 501 PHP across all 9 bridge harnesses — up from
