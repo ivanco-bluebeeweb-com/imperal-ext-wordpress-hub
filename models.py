@@ -2047,3 +2047,36 @@ class ApplicationPasswordRevokeResult(sdl.Entity):
     site_id: str = ""
     uuid: str = ""
     revoked: bool = False
+
+
+class PhpInfo(sdl.Entity):
+    """PHP runtime facts read via the Imperal Bridge plugin (no SSH needed) — Group F."""
+    site_id: str = ""
+    php_version: str = ""
+    extensions: list[str] = Field(default_factory=list)
+    memory_limit: str = ""
+    max_execution_time: str = ""
+    upload_max_filesize: str = ""
+    post_max_size: str = ""
+    source: str = ""  # "bridge" or "ssh"
+
+
+class DebugModeStatus(sdl.Entity):
+    """WP_DEBUG / WP_DEBUG_LOG / WP_DEBUG_DISPLAY constants — should normally be off in production."""
+    site_id: str = ""
+    wp_debug: bool = False
+    wp_debug_log: bool = False
+    wp_debug_display: bool = False
+
+
+class ListAdminUsersParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    limit: int = Field(default=20, ge=1, le=100, description="Max items to return, 1-100")
+
+
+class FilePermissionsStatus(sdl.Entity):
+    """Octal permission bits for wp-config.php and wp-content — the two most commonly misconfigured paths."""
+    site_id: str = ""
+    wp_config_exists: bool = False
+    wp_config_permissions: str | None = None
+    wp_content_permissions: str | None = None

@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.5.0
+ * Version:           2.6.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.5.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.6.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security' ),
 		)
 	);
 }
@@ -3519,3 +3519,120 @@ function imperal_meta_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_meta_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 10 — SECURITY / HARDENING DIAGNOSTICS
+ *
+ * PHP runtime facts (version, loaded extensions, memory/upload/execution
+ * limits), the WP_DEBUG/WP_DEBUG_LOG constants, and a basic wp-config.php /
+ * wp-content permissions sanity check -- all plain PHP built-ins
+ * (phpversion(), get_loaded_extensions(), ini_get(), defined()/constant(),
+ * fileperms()) or simple filesystem stat calls. None of it needs a shell.
+ * Gated behind manage_options like SECTION 4 (server-wide diagnostic data).
+ * ============================================================================= */
+
+define( 'IMPERAL_SECURITY_BRIDGE_NAMESPACE', 'imperal/v1' );
+
+/**
+ * GET /imperal/v1/security/php-info — PHP version, loaded extensions, and
+ * the handful of ini limits that gate media uploads / long-running requests.
+ */
+function imperal_security_bridge_php_info() {
+	return rest_ensure_response(
+		array(
+			'php_version'         => PHP_VERSION,
+			'extensions'          => get_loaded_extensions(),
+			'memory_limit'        => (string) ini_get( 'memory_limit' ),
+			'max_execution_time'  => (string) ini_get( 'max_execution_time' ),
+			'upload_max_filesize' => (string) ini_get( 'upload_max_filesize' ),
+			'post_max_size'       => (string) ini_get( 'post_max_size' ),
+		)
+	);
+}
+
+/**
+ * GET /imperal/v1/security/debug-mode — whether WP_DEBUG / WP_DEBUG_LOG /
+ * WP_DEBUG_DISPLAY are on. These should normally be OFF in production;
+ * WP_DEBUG_DISPLAY leaking PHP notices/warnings to visitors is a common,
+ * genuinely risky misconfiguration.
+ */
+function imperal_security_bridge_debug_mode() {
+	return rest_ensure_response(
+		array(
+			'wp_debug'         => defined( 'WP_DEBUG' ) && WP_DEBUG,
+			'wp_debug_log'     => defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG,
+			'wp_debug_display' => defined( 'WP_DEBUG_DISPLAY' ) ? (bool) WP_DEBUG_DISPLAY : true,
+		)
+	);
+}
+
+/**
+ * GET /imperal/v1/security/file-permissions — octal permission bits for
+ * wp-config.php and the wp-content directory, the two most commonly
+ * misconfigured paths (wp-config.php world-readable leaks DB credentials;
+ * wp-content writable-by-everyone allows arbitrary file drops). Read-only:
+ * this never chmod()s anything, only reports what it finds.
+ */
+function imperal_security_bridge_file_permissions() {
+	$wp_config_path = ABSPATH . 'wp-config.php';
+	if ( ! file_exists( $wp_config_path ) ) {
+		// wp-config.php can legitimately live one directory above ABSPATH.
+		$wp_config_path = dirname( ABSPATH ) . '/wp-config.php';
+	}
+	$wp_content_path = defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : ABSPATH . 'wp-content';
+
+	$perm = function ( $path ) {
+		if ( ! file_exists( $path ) ) {
+			return null;
+		}
+		return substr( sprintf( '%o', fileperms( $path ) ), -4 );
+	};
+
+	return rest_ensure_response(
+		array(
+			'wp_config_exists'      => file_exists( $wp_config_path ),
+			'wp_config_permissions' => $perm( $wp_config_path ),
+			'wp_content_permissions'=> $perm( $wp_content_path ),
+		)
+	);
+}
+
+function imperal_security_bridge_register_routes() {
+	$manage_options_perm = function () {
+		return current_user_can( 'manage_options' );
+	};
+	register_rest_route(
+		IMPERAL_SECURITY_BRIDGE_NAMESPACE,
+		'/security/php-info',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_security_bridge_php_info',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_SECURITY_BRIDGE_NAMESPACE,
+		'/security/debug-mode',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_security_bridge_debug_mode',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_SECURITY_BRIDGE_NAMESPACE,
+		'/security/file-permissions',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_security_bridge_file_permissions',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_security_bridge_register_routes' );
