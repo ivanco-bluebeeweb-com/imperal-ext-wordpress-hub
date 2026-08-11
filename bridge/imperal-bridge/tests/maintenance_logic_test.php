@@ -89,9 +89,14 @@ $GLOBALS['_active_plugins'] = array();
 $GLOBALS['_fired_do_actions'] = array();
 $GLOBALS['_w3tc_flush_all_calls'] = array();
 $GLOBALS['_w3tc_flush_url_calls'] = array();
+$GLOBALS['_plugin_updates'] = array(); // plugin_file => object with ->update->new_version, set per-test
 
 function is_plugin_active( $plugin ) {
 	return in_array( $plugin, $GLOBALS['_active_plugins'], true );
+}
+
+function get_plugin_updates() {
+	return $GLOBALS['_plugin_updates'];
 }
 
 function home_url( $path = '' ) {
@@ -244,6 +249,8 @@ function reset_maintenance_fixtures() {
 	$GLOBALS['_activate_calls'] = array();
 	$GLOBALS['_activate_result'] = true;
 	$GLOBALS['_plugins_api_result'] = null;
+	$GLOBALS['_active_plugins'] = array();
+	$GLOBALS['_plugin_updates'] = array();
 }
 
 // ─────────── update_plugin ───────────
@@ -464,15 +471,58 @@ assert_true( 1 === count( $GLOBALS['_w3tc_flush_url_calls'] ), 'purge_cache W3TC
 assert_true( 'https://example.com/' === $GLOBALS['_w3tc_flush_url_calls'][0], 'purge_cache W3TC scope=front flushes the home URL' );
 assert_true( 0 === count( $GLOBALS['_w3tc_flush_all_calls'] ), 'purge_cache W3TC scope=front does not call w3tc_flush_all' );
 
+// ─────────── list_plugins ───────────
+
+reset_maintenance_fixtures();
+$saved_plugins           = $GLOBALS['_plugins'];
+$GLOBALS['_plugins']     = array();
+$req    = new WP_REST_Request();
+$result = imperal_maintenance_bridge_list_plugins( $req );
+assert_true( ! is_wp_error( $result ), 'list_plugins succeeds with zero installed plugins' );
+assert_true( array() === $result['plugins'], 'list_plugins reports an empty list when nothing is installed' );
+$GLOBALS['_plugins'] = $saved_plugins;
+
+reset_maintenance_fixtures();
+$saved_plugins       = $GLOBALS['_plugins'];
+$GLOBALS['_plugins'] = array(
+	'akismet/akismet.php'             => array( 'Name' => 'Akismet', 'Version' => '5.3' ),
+	'litespeed-cache/litespeed-cache.php' => array( 'Name' => 'LiteSpeed Cache', 'Version' => '6.1' ),
+);
+$GLOBALS['_active_plugins'] = array( 'litespeed-cache/litespeed-cache.php' );
+$GLOBALS['_plugin_updates'] = array(
+	'akismet/akismet.php' => (object) array( 'update' => (object) array( 'new_version' => '5.4' ) ),
+);
+$req    = new WP_REST_Request();
+$result = imperal_maintenance_bridge_list_plugins( $req );
+assert_true( ! is_wp_error( $result ), 'list_plugins succeeds with installed plugins' );
+assert_true( 2 === count( $result['plugins'] ), 'list_plugins reports both installed plugins' );
+$akismet_row = $result['plugins'][0];
+assert_true( 'akismet/akismet.php' === $akismet_row['name'], 'list_plugins reports the plugin file as name' );
+assert_true( 'Akismet' === $akismet_row['title'], 'list_plugins reports the real plugin title' );
+assert_true( 'inactive' === $akismet_row['status'], 'list_plugins reports inactive for a plugin not in the active list' );
+assert_true( '5.3' === $akismet_row['version'], 'list_plugins reports the installed version' );
+assert_true( 'available' === $akismet_row['update'], 'list_plugins reports update=available when get_plugin_updates() lists it' );
+assert_true( '5.4' === $akismet_row['update_version'], 'list_plugins reports the real new_version from get_plugin_updates()' );
+$litespeed_row = $result['plugins'][1];
+assert_true( 'active' === $litespeed_row['status'], 'list_plugins reports active for a plugin in the active list' );
+assert_true( 'none' === $litespeed_row['update'], 'list_plugins reports update=none when get_plugin_updates() does not list it' );
+assert_true( '' === $litespeed_row['update_version'], 'list_plugins reports an empty update_version when there is no update' );
+$GLOBALS['_plugins'] = $saved_plugins;
+
 // ─────────── route registration ───────────
 
 assert_true( isset( $GLOBALS['_routes']['imperal/v1/maintenance/update-plugin'] ), 'update-plugin route registered' );
 assert_true( isset( $GLOBALS['_routes']['imperal/v1/maintenance/update-core'] ), 'update-core route registered' );
 assert_true( isset( $GLOBALS['_routes']['imperal/v1/maintenance/run-due-cron'] ), 'run-due-cron route registered' );
 assert_true( isset( $GLOBALS['_routes']['imperal/v1/maintenance/purge-cache'] ), 'purge-cache route registered' );
+assert_true( isset( $GLOBALS['_routes']['imperal/v1/maintenance/list-plugins'] ), 'list-plugins route registered' );
 assert_true(
 	WP_REST_Server::CREATABLE === $GLOBALS['_routes']['imperal/v1/maintenance/update-plugin']['methods'],
 	'update-plugin route is POST-only'
+);
+assert_true(
+	WP_REST_Server::READABLE === $GLOBALS['_routes']['imperal/v1/maintenance/list-plugins']['methods'],
+	'list-plugins route is GET-only'
 );
 
 echo "\n$passed passed, $failed failed\n";

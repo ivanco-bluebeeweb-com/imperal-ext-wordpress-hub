@@ -35,12 +35,14 @@ from models import (
 )
 import storage
 import wp_cli
-from wp_client import wp_post
+from wp_client import wp_get, wp_post
 
 BRIDGE_MAINTENANCE_UPDATE_PLUGIN_PATH = "/wp-json/imperal/v1/maintenance/update-plugin"
 BRIDGE_MAINTENANCE_UPDATE_CORE_PATH = "/wp-json/imperal/v1/maintenance/update-core"
 BRIDGE_MAINTENANCE_RUN_DUE_CRON_PATH = "/wp-json/imperal/v1/maintenance/run-due-cron"
 BRIDGE_MAINTENANCE_INSTALL_PLUGIN_PATH = "/wp-json/imperal/v1/maintenance/install-plugin"
+BRIDGE_MAINTENANCE_PURGE_CACHE_PATH = "/wp-json/imperal/v1/maintenance/purge-cache"
+BRIDGE_MAINTENANCE_LIST_PLUGINS_PATH = "/wp-json/imperal/v1/maintenance/list-plugins"
 
 
 async def _site_auth(ctx, site_id):
@@ -63,6 +65,18 @@ async def _bridge_post(ctx, base_url, username, pw, path, json_body=None):
     None to signal "fall back to SSH" -- never raises, this is a probe."""
     try:
         r = await wp_post(ctx, base_url, path, username=username, app_password=pw, json=json_body)
+    except Exception:
+        return None
+    if r.status_code != 200 or not isinstance(r.body, dict):
+        return None
+    return r.body
+
+
+async def _bridge_get(ctx, base_url, username, pw, path, params=None):
+    """GET a Bridge maintenance route. Returns the body dict on 200, else
+    None to signal "fall back to SSH" -- never raises, this is a probe."""
+    try:
+        r = await wp_get(ctx, base_url, path, username=username, app_password=pw, params=params)
     except Exception:
         return None
     if r.status_code != 200 or not isinstance(r.body, dict):

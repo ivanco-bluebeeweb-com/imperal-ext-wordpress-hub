@@ -736,31 +736,43 @@ async def list_users(ctx, params: ListContentParams) -> ActionResult:
 @chat.function(
     "list_plugins",
     description=("List plugins installed on a WordPress site: active/inactive status, "
-                 "installed version, and an available update version. Requires SSH access "
-                 "configured with add_ssh; this function is read-only."),
+                 "installed version, and an available update version. Reads through the "
+                 "Imperal Bridge plugin if it's installed (no SSH needed at all -- built "
+                 "from WordPress's own get_plugins()/is_plugin_active()/get_plugin_updates() "
+                 "calls, the same data wp-admin's own Plugins screen reads its update "
+                 "notices from), or falls back to SSH + WP-CLI (`wp plugin list`) if SSH is "
+                 "configured with add_ssh. Read-only."),
     action_type="read",
     data_model=sdl.EntityList[Plugin],
 )
 async def list_plugins(ctx, params: SiteIdParams) -> ActionResult:
-    """Return the WP-CLI plugin inventory without making any changes."""
-    cred = await storage.get_ssh_cred(ctx, params.site_id)
-    if not cred:
-        return ActionResult.error(
-            "SSH is not configured for this site. Add SSH access first.", retryable=False
-        )
+    """Bridge-first (/maintenance/list-plugins), SSH-fallback (`wp plugin list`)."""
+    auth, err = await handlers_maintenance._site_auth(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
 
-    try:
-        rows, cli_error = await wp_cli.list_plugins(cred)
-    except Exception as error:
-        await ctx.log(f"list_plugins: {error}", level="error")
-        return ActionResult.error("Could not read the plugin list over SSH.", retryable=True)
-    if cli_error:
-        return ActionResult.error(f"Could not read the plugin list: {cli_error}", retryable=True)
+    body = await handlers_maintenance._bridge_get(
+        ctx, base_url, username, pw, handlers_maintenance.BRIDGE_MAINTENANCE_LIST_PLUGINS_PATH,
+    )
+    if body is not None:
+        rows = body.get("plugins", [])
+    else:
+        cred = await storage.get_ssh_cred(ctx, params.site_id)
+        if not cred:
+            return handlers_maintenance._no_bridge_no_ssh_error()
+        try:
+            rows, cli_error = await wp_cli.list_plugins(cred)
+        except Exception as error:
+            await ctx.log(f"list_plugins: {error}", level="error")
+            return ActionResult.error("Could not read the plugin list over SSH.", retryable=True)
+        if cli_error:
+            return ActionResult.error(f"Could not read the plugin list: {cli_error}", retryable=True)
 
     items = [
         Plugin(
             id=str(row.get("name", "")),
-            title=str(row.get("name", "")),
+            title=str(row.get("title") or row.get("name", "")),
             kind="wp_plugin",
             status=str(row.get("status", "")),
             version=str(row.get("version", "")),
@@ -780,27 +792,28 @@ async def list_plugins(ctx, params: SiteIdParams) -> ActionResult:
 @chat.function(
     "purge_cache",
     description=("Purge the site's page cache. Auto-detects an active cache plugin "
-                 "(LiteSpeed Cache or W3 Total Cache) from the site's real, live plugin list — "
-                 "if none is found, reports that clearly instead of silently doing nothing. "
-                 "Requires SSH access configured with add_ssh."),
+                 "(LiteSpeed Cache or W3 Total Cache) — if none is found, reports that "
+                 "clearly instead of silently doing nothing. Reads through the Imperal Bridge "
+                 "plugin if it's installed (no SSH needed at all — fires the cache plugin's own "
+                 "real purge hook, litespeed_purge_all / w3tc_flush_all), or falls back to "
+                 "SSH + WP-CLI if SSH is configured with add_ssh instead."),
     action_type="write",
     data_model=CacheActionResult,
     effects=["wp.purge_cache"],
     event="wordpress-hub.purge_cache",
 )
 async def purge_cache(ctx, params: PurgeCacheParams) -> ActionResult:
-    """Purge the site's cache via `wp litespeed-purge` or `wp w3-total-cache flush all` over SSH.
+    """Purge the site's cache -- Bridge-first (imperal/v1/maintenance/purge-cache,
+    which fires litespeed_purge_all / w3tc_flush_all directly from inside the WP
+    process), SSH-fallback (`wp litespeed-purge` / `wp w3-total-cache flush all`).
 
-    Detects the active cache plugin from the site's own live plugin list
-    rather than assuming one is installed -- a purge command for a cache
-    plugin that is not even active would silently do nothing, which is
-    worse than refusing. Covers LiteSpeed Cache and W3 Total Cache, whose
-    WP-CLI purge commands are both bundled with the plugin itself (verified
-    against each plugin's own docs before writing this) -- WP Rocket and WP
-    Super Cache are deliberately NOT covered here because their WP-CLI
-    support ships as a SEPARATE package that may not be installed on an
-    arbitrary server, so silently trying it could misreport a real failure
-    as "no cache plugin found".
+    Both tiers detect the active cache plugin themselves rather than assuming
+    one is installed -- a purge for a cache plugin that is not even active
+    would silently do nothing, which is worse than refusing. Covers LiteSpeed
+    Cache and W3 Total Cache only; WP Rocket and WP Super Cache are
+    deliberately NOT covered because their WP-CLI support ships as a
+    SEPARATE package not guaranteed present, and their own PHP has no
+    equally-standard single purge-everything hook confirmed the same way.
     """
     scope = (params.scope or "all").strip().lower()
     if scope not in ("all", "front"):
@@ -808,11 +821,29 @@ async def purge_cache(ctx, params: PurgeCacheParams) -> ActionResult:
             f"Invalid scope '{params.scope}' — use 'all' or 'front'.", retryable=False
         )
 
+    auth, err = await handlers_maintenance._site_auth(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+
+    body = await handlers_maintenance._bridge_post(
+        ctx, base_url, username, pw, handlers_maintenance.BRIDGE_MAINTENANCE_PURGE_CACHE_PATH,
+        json_body={"scope": scope},
+    )
+    if body is not None:
+        plugin_slug = body.get("cache_plugin", "")
+        await ctx.log(f"purge_cache: executed via Bridge — scope={scope} plugin={plugin_slug} site_id={params.site_id}", level="info")
+        return ActionResult.success(
+            CacheActionResult(
+                id=params.site_id, title=f"{plugin_slug} purge", kind="wp_cache_action",
+                scope=scope, cache_plugin=plugin_slug, output="",
+            ),
+            summary=f"Purged {plugin_slug} cache ({scope}).",
+        )
+
     cred = await storage.get_ssh_cred(ctx, params.site_id)
     if not cred:
-        return ActionResult.error(
-            "SSH is not configured for this site. Add SSH access first.", retryable=False
-        )
+        return handlers_maintenance._no_bridge_no_ssh_error()
 
     try:
         rows, cli_error = await wp_cli.list_plugins(cred)
@@ -853,7 +884,7 @@ async def purge_cache(ctx, params: PurgeCacheParams) -> ActionResult:
         await ctx.log(f"purge_cache: SSH/WP-CLI error — {run_error}", level="error")
         return ActionResult.error(run_error, retryable=True)
 
-    await ctx.log(f"purge_cache: executed — scope={scope} plugin={plugin_slug} site_id={params.site_id}", level="info")
+    await ctx.log(f"purge_cache: executed via SSH — scope={scope} plugin={plugin_slug} site_id={params.site_id}", level="info")
     return ActionResult.success(
         CacheActionResult(
             id=params.site_id, title=f"{plugin_slug} purge", kind="wp_cache_action",

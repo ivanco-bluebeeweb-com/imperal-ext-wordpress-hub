@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.12.0
+ * Version:           2.13.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.12.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.13.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -4945,6 +4945,47 @@ function imperal_maintenance_bridge_purge_cache( WP_REST_Request $request ) {
 	);
 }
 
+/**
+ * GET /imperal/v1/maintenance/list-plugins — the same plugin inventory shape
+ * as `wp plugin list --fields=name,status,version,update,update_version`,
+ * built from three plain WordPress core calls instead of a shell: `get_plugins()`
+ * (wp-admin/includes/plugin.php -- every installed plugin's own header data,
+ * keyed by its plugin file), `is_plugin_active()` for each one's real
+ * activation state, and `get_plugin_updates()` (wp-admin/includes/update.php
+ * -- the same list wp-admin's own "Plugins" screen reads its update
+ * notices from) for which ones have a newer version available.
+ */
+function imperal_maintenance_bridge_list_plugins( WP_REST_Request $request ) {
+	if ( ! function_exists( 'get_plugins' ) || ! function_exists( 'is_plugin_active' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	}
+	if ( ! function_exists( 'get_plugin_updates' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/update.php';
+	}
+
+	$all_plugins    = get_plugins();
+	$plugin_updates = get_plugin_updates();
+
+	$rows = array();
+	foreach ( $all_plugins as $plugin_file => $data ) {
+		$has_update     = isset( $plugin_updates[ $plugin_file ] );
+		$update_version = '';
+		if ( $has_update && isset( $plugin_updates[ $plugin_file ]->update->new_version ) ) {
+			$update_version = $plugin_updates[ $plugin_file ]->update->new_version;
+		}
+		$rows[] = array(
+			'name'           => $plugin_file,
+			'title'          => isset( $data['Name'] ) ? $data['Name'] : $plugin_file,
+			'status'         => is_plugin_active( $plugin_file ) ? 'active' : 'inactive',
+			'version'        => isset( $data['Version'] ) ? $data['Version'] : '',
+			'update'         => $has_update ? 'available' : 'none',
+			'update_version' => $update_version,
+		);
+	}
+
+	return rest_ensure_response( array( 'plugins' => $rows ) );
+}
+
 function imperal_maintenance_bridge_register_routes() {
 	$manage_options_perm = function () {
 		return current_user_can( 'manage_options' );
@@ -4990,6 +5031,17 @@ function imperal_maintenance_bridge_register_routes() {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => 'imperal_maintenance_bridge_install_plugin',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_MAINTENANCE_BRIDGE_NAMESPACE,
+		'/maintenance/list-plugins',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_maintenance_bridge_list_plugins',
 				'permission_callback' => $manage_options_perm,
 			),
 		)
@@ -5349,4 +5401,169 @@ function imperal_as_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_as_bridge_register_routes' );
+
+/**
+ * ---------------------------------------------------------------------------
+ * SECTION 17 — REWRITE RULES & PERMALINKS
+ *
+ * WordPress core's own `/wp/v2/settings` endpoint has never reliably exposed
+ * `permalink_structure`: core added it in 4.9 (#41014/[42359]) then it was
+ * removed again ([42575], #45017 fallout) because plain-permalink sites
+ * (`permalink_structure` === '') collided with the REST index's own use of
+ * that field name — whether it is present at all is a version/configuration
+ * gamble, and it has never round-tripped `category_base`/`tag_base` at all.
+ * `WP_Rewrite::set_permalink_structure()` is the same core method
+ * `wp-admin/options-permalink.php` calls when you press "Save Changes" —
+ * but it deliberately does NOT flush rewrite rules itself (it only updates
+ * the option and re-inits `$wp_rewrite`), matching the real risk that a
+ * changed permastruct leaves stale rules until something flushes them; this
+ * section always flushes explicitly right after, the same two-step wp-admin
+ * itself performs on that screen. Read access needs no separate capability
+ * check beyond `manage_options`, matching every other site-wide-state
+ * section above (SECTION 4, SECTION 12).
+ */
+
+define( 'IMPERAL_REWRITE_BRIDGE_NAMESPACE', 'imperal/v1' );
+
+/**
+ * GET /imperal/v1/rewrite/structure — the site's current permalink
+ * structure plus its category/tag base slugs, straight from wp_options
+ * (the same three values `wp-admin/options-permalink.php` reads and the
+ * same three `wp rewrite structure` can set).
+ */
+function imperal_rewrite_bridge_get_structure( WP_REST_Request $request ) {
+	return rest_ensure_response(
+		array(
+			'permalink_structure' => (string) get_option( 'permalink_structure', '' ),
+			'category_base'       => (string) get_option( 'category_base', '' ),
+			'tag_base'            => (string) get_option( 'tag_base', '' ),
+		)
+	);
+}
+
+/**
+ * POST /imperal/v1/rewrite/structure { permalink_structure, category_base?,
+ * tag_base? } — sets the new structure via WP_Rewrite's own setters (the
+ * exact core API the permalinks admin screen calls), then always flushes
+ * rewrite rules so the change takes effect immediately instead of leaving
+ * stale rules in place until the next unrelated flush.
+ */
+function imperal_rewrite_bridge_update_structure( WP_REST_Request $request ) {
+	if ( ! $request->has_param( 'permalink_structure' ) ) {
+		return new WP_Error( 'imperal_rewrite_missing_structure', __( 'permalink_structure is required (use an empty string for plain links).', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+	$permalink_structure = (string) $request->get_param( 'permalink_structure' );
+	$category_base       = $request->get_param( 'category_base' );
+	$tag_base            = $request->get_param( 'tag_base' );
+
+	global $wp_rewrite;
+	if ( ! ( $wp_rewrite instanceof WP_Rewrite ) ) {
+		return new WP_Error( 'imperal_rewrite_unavailable', __( 'WP_Rewrite is not available on this site.', 'imperal-bridge' ), array( 'status' => 500 ) );
+	}
+
+	$wp_rewrite->set_permalink_structure( $permalink_structure );
+	if ( null !== $category_base ) {
+		$wp_rewrite->set_category_base( (string) $category_base );
+	}
+	if ( null !== $tag_base ) {
+		$wp_rewrite->set_tag_base( (string) $tag_base );
+	}
+	$wp_rewrite->flush_rules();
+
+	return rest_ensure_response(
+		array(
+			'permalink_structure' => (string) get_option( 'permalink_structure', '' ),
+			'category_base'       => (string) get_option( 'category_base', '' ),
+			'tag_base'            => (string) get_option( 'tag_base', '' ),
+		)
+	);
+}
+
+/**
+ * POST /imperal/v1/rewrite/flush — resets rewrite rules from every
+ * registered post type/taxonomy/endpoint, matching `wp rewrite flush` /
+ * visiting the permalinks settings screen. Soft flush only (no .htaccess
+ * rewrite) — `true` hard-flush needs filesystem write access this REST
+ * context does not assume, same reasoning already applied to every other
+ * filesystem-touching path in this plugin.
+ */
+function imperal_rewrite_bridge_flush( WP_REST_Request $request ) {
+	global $wp_rewrite;
+	if ( ! ( $wp_rewrite instanceof WP_Rewrite ) ) {
+		return new WP_Error( 'imperal_rewrite_unavailable', __( 'WP_Rewrite is not available on this site.', 'imperal-bridge' ), array( 'status' => 500 ) );
+	}
+	$wp_rewrite->flush_rules( false );
+	$rules = get_option( 'rewrite_rules' );
+	return rest_ensure_response(
+		array(
+			'flushed'    => true,
+			'rule_count' => is_array( $rules ) ? count( $rules ) : 0,
+		)
+	);
+}
+
+/**
+ * GET /imperal/v1/rewrite/rules — the site's compiled rewrite rules, the
+ * same `pattern => query` map stored in the `rewrite_rules` option and
+ * printed by `wp rewrite list`.
+ */
+function imperal_rewrite_bridge_list_rules( WP_REST_Request $request ) {
+	$rules = get_option( 'rewrite_rules' );
+	$out   = array();
+	if ( is_array( $rules ) ) {
+		foreach ( $rules as $match => $query ) {
+			$out[] = array(
+				'match' => (string) $match,
+				'query' => (string) $query,
+			);
+		}
+	}
+	return rest_ensure_response( array( 'rules' => $out, 'count' => count( $out ) ) );
+}
+
+function imperal_rewrite_bridge_register_routes() {
+	$manage_options_perm = function () {
+		return current_user_can( 'manage_options' );
+	};
+
+	register_rest_route(
+		IMPERAL_REWRITE_BRIDGE_NAMESPACE,
+		'/rewrite/structure',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_rewrite_bridge_get_structure',
+				'permission_callback' => $manage_options_perm,
+			),
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_rewrite_bridge_update_structure',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_REWRITE_BRIDGE_NAMESPACE,
+		'/rewrite/flush',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_rewrite_bridge_flush',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_REWRITE_BRIDGE_NAMESPACE,
+		'/rewrite/rules',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_rewrite_bridge_list_rules',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_rewrite_bridge_register_routes' );
 
