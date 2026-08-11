@@ -29158,7 +29158,7 @@
     },
     {
       "name": "list_database_tables",
-      "description": "List every table in the site's own database, with its size on disk, via WP-CLI (`wp db size --tables`). Requires SSH access configured with add_ssh. Use before run_db_search_replace or export_database_dump to see real table names/wildcards, never invent one.",
+      "description": "List every table in the site's own database, with its size on disk. Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all); falls back to SSH + WP-CLI (`wp db size --tables`) when the Bridge isn't there yet or doesn't answer. Use before run_db_search_replace or export_database_dump to see real table names/wildcards, never invent one.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -29323,7 +29323,7 @@
     },
     {
       "name": "run_db_search_replace",
-      "description": "PREVIEW a database search-and-replace across the site's own tables via WP-CLI (`wp search-replace --dry-run`) -- the standard way to migrate a domain (staging to production, http to https) across serialized WordPress data. This ALWAYS runs as a dry-run and only reports how many rows WOULD change; nothing is written. Pass the returned replacement count to apply_db_search_replace to actually run it.",
+      "description": "PREVIEW a database search-and-replace across the site's own tables -- the standard way to migrate a domain (staging to production, http to https) across serialized WordPress data. Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all); falls back to SSH + WP-CLI (`wp search-replace --dry-run`) otherwise. This ALWAYS runs as a dry-run and only reports how many rows WOULD change; nothing is written. Pass the returned replacement count to apply_db_search_replace to actually run it.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -29474,7 +29474,7 @@
     },
     {
       "name": "apply_db_search_replace",
-      "description": "Actually run a database search-and-replace via WP-CLI (`wp search-replace`), after previewing it with run_db_search_replace. Re-checks a fresh dry-run immediately before writing and refuses to proceed if the replacement count no longer matches expected_replacements -- protects against a stale preview on a database that changed in between. This changes live data; there is no dry-run undo, so back up first if unsure.",
+      "description": "Actually run a database search-and-replace, after previewing it with run_db_search_replace. Reads/writes through the Imperal Bridge plugin if it's installed (no SSH needed at all); falls back to SSH + WP-CLI (`wp search-replace`) otherwise. Re-checks a fresh dry-run immediately before writing and refuses to proceed if the replacement count no longer matches expected_replacements -- protects against a stale preview on a database that changed in between. This changes live data; there is no dry-run undo, so back up first if unsure.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -29634,7 +29634,7 @@
     },
     {
       "name": "optimize_database_tables",
-      "description": "Defragment and optimize every database table via WP-CLI (`wp db optimize`). Requires SSH access configured with add_ssh. Safe routine maintenance -- reclaims space after heavy deletes, does not change any data.",
+      "description": "Defragment and optimize every database table -- reclaims space after heavy deletes, does not change any data. Reads/writes through the Imperal Bridge plugin if it's installed (no SSH needed at all); falls back to SSH + WP-CLI (`wp db optimize`) otherwise. Safe routine maintenance.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -29753,7 +29753,7 @@
     },
     {
       "name": "check_database_repair",
-      "description": "Check every database table for corruption via WP-CLI (`wp db check`), and repair any that are damaged (`wp db repair`) if repair=true. Requires SSH access configured with add_ssh. Use check-only first (repair=false, the default) to see if anything is actually broken before repairing.",
+      "description": "Check every database table for corruption, and repair any that are damaged if repair=true. Reads/writes through the Imperal Bridge plugin if it's installed (no SSH needed at all); falls back to SSH + WP-CLI (`wp db check`/`wp db repair`) otherwise. Use check-only first (repair=false, the default) to see if anything is actually broken before repairing.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -29878,7 +29878,7 @@
     },
     {
       "name": "export_database_dump",
-      "description": "Export a SQL dump of the site's database via WP-CLI (`wp db export`), returned inline as text. Requires SSH access configured with add_ssh. Capped at roughly 2MB of SQL text -- pass specific `tables` from list_database_tables to scope a large database down if the export is refused as too large.",
+      "description": "Export a SQL dump of the site's database, returned inline as text. Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all); falls back to SSH + WP-CLI (`wp db export`) otherwise. Capped at roughly 2MB of SQL text -- pass specific `tables` from list_database_tables to scope a large database down if the export is refused as too large.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -30015,7 +30015,7 @@
     },
     {
       "name": "count_post_type_rows",
-      "description": "Count how many rows of one post type exist (any status) via WP-CLI (`wp post list --format=count`). Requires SSH access configured with add_ssh. Pass a post_type slug from list_custom_posts or the site's own /wp/v2/types, e.g. post, page, product.",
+      "description": "Count how many rows of one post type exist (any status). Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all); falls back to SSH + WP-CLI (`wp post list --format=count`) otherwise. Pass a post_type slug from list_custom_posts or the site's own /wp/v2/types, e.g. post, page, product.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -30143,7 +30143,7 @@
     },
     {
       "name": "count_orphaned_postmeta",
-      "description": "Count wp_postmeta rows whose post no longer exists -- a common 'is my database clean' diagnostic, useful after bulk deletes or a messy plugin uninstall. Requires SSH access configured with add_ssh. Read-only; does not delete anything.",
+      "description": "Count wp_postmeta rows whose post no longer exists -- a common 'is my database clean' diagnostic, useful after bulk deletes or a messy plugin uninstall. Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all); falls back to SSH + WP-CLI otherwise. Read-only; does not delete anything.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -32113,6 +32113,418 @@
           "title"
         ],
         "title": "EnvironmentType",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "tail_debug_log",
+      "description": "Read the last N lines of a connected WordPress site's wp-content/debug.log (the file WP_DEBUG_LOG writes to) via SSH/WP-CLI. Requires SSH access configured with add_ssh. If the site has WP_DEBUG_LOG off, or has never logged an error, there is honestly no file -- reported as exists=false, never fabricated content.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "lines": {
+            "default": 100,
+            "description": "How many trailing lines to read (1-1000)",
+            "maximum": 1000,
+            "minimum": 1,
+            "title": "Lines",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "TailLogParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "The last N lines of a log file on the server, read via SSH/WP-CLI.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "site_id": {
+            "default": "",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "title": "Path",
+            "type": "string"
+          },
+          "exists": {
+            "default": false,
+            "title": "Exists",
+            "type": "boolean"
+          },
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "LogTail",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "clear_debug_log",
+      "description": "Truncate a connected WordPress site's wp-content/debug.log to empty via SSH/WP-CLI (the file is truncated in place, never deleted, so WordPress can keep writing to it without recreating it). Requires SSH access configured with add_ssh.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.clear_debug_log"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "site_id": {
+            "default": "",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "title": "Path",
+            "type": "string"
+          },
+          "cleared": {
+            "default": false,
+            "title": "Cleared",
+            "type": "boolean"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ClearLogResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.clear_debug_log",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "tail_php_error_log",
+      "description": "Read the last N lines of a connected WordPress site's PHP error log, at the path PHP itself reports via ini_get('error_log') -- never a guessed distro-specific path. Requires SSH access configured with add_ssh. If PHP has no error_log configured (likely logging to the web server's own error log instead), this is reported honestly rather than fabricating a path.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "lines": {
+            "default": 100,
+            "description": "How many trailing lines to read (1-1000)",
+            "maximum": 1000,
+            "minimum": 1,
+            "title": "Lines",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "TailLogParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "The last N lines of a log file on the server, read via SSH/WP-CLI.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "site_id": {
+            "default": "",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "title": "Path",
+            "type": "string"
+          },
+          "exists": {
+            "default": false,
+            "title": "Exists",
+            "type": "boolean"
+          },
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "LogTail",
         "type": "object",
         "x-sdl": "entity"
       },

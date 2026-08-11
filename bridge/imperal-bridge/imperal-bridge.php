@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.7.0
+ * Version:           2.8.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.7.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.8.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy', 'database' ),
 		)
 	);
 }
@@ -3790,4 +3790,458 @@ function imperal_deploy_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_deploy_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 12 — DATABASE (search-replace migration, table maintenance, exports)
+ *
+ * Every one of these used to require SSH + WP-CLI (`wp search-replace`,
+ * `wp db size`, `wp db optimize`, `wp db check`/`repair`, `wp db export`,
+ * `wp post list --format=count`) purely because that was the only way this
+ * connector could reach the database from OUTSIDE the WordPress process.
+ * From inside it, every one of them is a plain $wpdb operation with no shell
+ * involved at all -- the same reasoning SECTION 4 already applied to server
+ * diagnostics. This section reimplements the same WP-CLI *behaviour*
+ * (verified against wp-cli/db-command and wp-cli/entity-command's own PHP
+ * source) natively:
+ *
+ * - search-replace walks every text/blob column of every targeted table,
+ *   correctly recursing into PHP-serialized values (arrays/objects encoded
+ *   with maybe_serialize()) rather than naively string-replacing the raw
+ *   serialized blob, which would corrupt the embedded length prefixes -- the
+ *   exact bug class WP-CLI's own recursive replacer exists to avoid. GUID
+ *   columns are always skipped, matching `--skip-columns=guid`.
+ * - only tables carrying this site's own $wpdb->prefix (or explicitly passed
+ *   by the caller, still prefix-checked) are ever touched -- never another
+ *   site's tables in a shared-database multisite-style setup.
+ * - the preview/apply split from the connector side is preserved server-side
+ *   too: this endpoint always takes a `dry_run` flag and NEVER writes when
+ *   it's true, so the two-step safety story doesn't rely on trusting the
+ *   caller alone.
+ * ============================================================================= */
+
+define( 'IMPERAL_DATABASE_BRIDGE_NAMESPACE', 'imperal/v1' );
+
+/**
+ * Every table for THIS site's own $wpdb->prefix -- never another site's
+ * tables in a shared database. Matches wp-cli's own table_prefix scoping.
+ *
+ * @return string[]
+ */
+function imperal_database_bridge_own_tables() {
+	global $wpdb;
+	$like  = $wpdb->esc_like( $wpdb->prefix ) . '%';
+	$rows  = $wpdb->get_col( $wpdb->prepare( 'SHOW TABLES LIKE %s', $like ) );
+	return array_map( 'strval', (array) $rows );
+}
+
+/**
+ * Validate caller-supplied table names/wildcards against this site's own
+ * tables, expanding any '*' wildcard the same way wp-cli's --tables does.
+ * Returns null (meaning "every own table") if $requested is empty/null.
+ *
+ * @param array|null $requested
+ * @return array|WP_Error
+ */
+function imperal_database_bridge_resolve_tables( $requested ) {
+	$own = imperal_database_bridge_own_tables();
+	if ( empty( $requested ) ) {
+		return $own;
+	}
+	$resolved = array();
+	foreach ( (array) $requested as $name ) {
+		$name = (string) $name;
+		if ( '' === $name || ! preg_match( '/^[A-Za-z0-9_\-\.\*]+$/', $name ) ) {
+			return new WP_Error( 'imperal_db_bad_table', sprintf( __( 'Invalid table name or wildcard: %s', 'imperal-bridge' ), $name ), array( 'status' => 400 ) );
+		}
+		if ( false === strpos( $name, '*' ) ) {
+			if ( ! in_array( $name, $own, true ) ) {
+				return new WP_Error( 'imperal_db_unknown_table', sprintf( __( 'Table "%s" does not belong to this site.', 'imperal-bridge' ), $name ), array( 'status' => 400 ) );
+			}
+			$resolved[] = $name;
+			continue;
+		}
+		$pattern = '/^' . str_replace( '\*', '.*', preg_quote( $name, '/' ) ) . '$/';
+		foreach ( $own as $table ) {
+			if ( preg_match( $pattern, $table ) ) {
+				$resolved[] = $table;
+			}
+		}
+	}
+	return array_values( array_unique( $resolved ) );
+}
+
+/**
+ * Recursively replace $old with $new inside a value, correctly re-serializing
+ * PHP-serialized arrays/objects rather than naively string-replacing the raw
+ * blob (which would desync the embedded length prefixes and corrupt the
+ * value). Mirrors wp-cli's own recurse_value() from src/Search_Replace_Command.php.
+ *
+ * @param mixed  $value
+ * @param string $old
+ * @param string $new
+ * @param int    $count Running replacement count, passed by reference.
+ * @return mixed
+ */
+function imperal_database_bridge_recursive_replace( $value, $old, $new, &$count ) {
+	if ( is_array( $value ) ) {
+		$out = array();
+		foreach ( $value as $k => $v ) {
+			$out[ $k ] = imperal_database_bridge_recursive_replace( $v, $old, $new, $count );
+		}
+		return $out;
+	}
+	if ( is_object( $value ) ) {
+		$out = clone $value;
+		foreach ( get_object_vars( $value ) as $k => $v ) {
+			$out->$k = imperal_database_bridge_recursive_replace( $v, $old, $new, $count );
+		}
+		return $out;
+	}
+	if ( is_string( $value ) ) {
+		if ( is_serialized( $value, false ) ) {
+			$unserialized = @unserialize( $value ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+			// unserialize() can legitimately return false for a serialized
+			// `false` scalar -- only fall through to plain string replace
+			// when the string was NOT actually parseable as serialized data.
+			if ( false !== $unserialized || 'b:0;' === $value ) {
+				$replaced = imperal_database_bridge_recursive_replace( $unserialized, $old, $new, $count );
+				return serialize( $replaced );
+			}
+		}
+		$occurrences = substr_count( $value, $old );
+		if ( $occurrences > 0 ) {
+			$count += $occurrences;
+			return str_replace( $old, $new, $value );
+		}
+		return $value;
+	}
+	return $value;
+}
+
+/**
+ * Run (or dry-run) a search-replace across one table's text/blob columns.
+ * GUID columns are always skipped, matching wp-cli's --skip-columns=guid.
+ *
+ * @param string $table
+ * @param string $old
+ * @param string $new
+ * @param bool   $dry_run
+ * @return int Replacement count for this table.
+ */
+function imperal_database_bridge_replace_table( $table, $old, $new, $dry_run ) {
+	global $wpdb;
+
+	$columns = $wpdb->get_results( "DESCRIBE `{$table}`" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+	if ( ! $columns ) {
+		return 0;
+	}
+
+	$primary_key = null;
+	$text_cols   = array();
+	foreach ( $columns as $col ) {
+		if ( 'PRI' === $col->Key && null === $primary_key ) {
+			$primary_key = $col->Field;
+		}
+		if ( 'guid' === $col->Field ) {
+			continue;
+		}
+		if ( preg_match( '/char|text|blob|json/i', $col->Type ) ) {
+			$text_cols[] = $col->Field;
+		}
+	}
+	if ( ! $primary_key || empty( $text_cols ) ) {
+		return 0;
+	}
+
+	$count = 0;
+	$page  = 0;
+	$size  = 500;
+	do {
+		$col_list = '`' . $primary_key . '`, `' . implode( '`, `', $text_cols ) . '`';
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT {$col_list} FROM `{$table}` LIMIT %d OFFSET %d", $size, $page * $size ), ARRAY_A );
+		if ( ! $rows ) {
+			break;
+		}
+		foreach ( $rows as $row ) {
+			$pk_value = $row[ $primary_key ];
+			$updates  = array();
+			foreach ( $text_cols as $col ) {
+				$before      = $row[ $col ];
+				$row_count   = 0;
+				$after       = imperal_database_bridge_recursive_replace( $before, $old, $new, $row_count );
+				if ( $row_count > 0 ) {
+					$count += $row_count;
+					$updates[ $col ] = $after;
+				}
+			}
+			if ( ! $dry_run && ! empty( $updates ) ) {
+				$wpdb->update( $table, $updates, array( $primary_key => $pk_value ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			}
+		}
+		$page++;
+	} while ( count( $rows ) === $size );
+
+	return $count;
+}
+
+/**
+ * POST /imperal/v1/database/search-replace — preview (dry_run=true, default)
+ * or execute a search-replace across this site's own tables.
+ */
+function imperal_database_bridge_search_replace( WP_REST_Request $request ) {
+	$old     = (string) $request->get_param( 'old' );
+	$new     = (string) $request->get_param( 'new' );
+	$dry_run = null === $request->get_param( 'dry_run' ) ? true : (bool) $request->get_param( 'dry_run' );
+	$tables  = $request->get_param( 'tables' );
+
+	if ( '' === $old ) {
+		return new WP_Error( 'imperal_db_bad_params', __( 'old must not be empty.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+
+	$resolved = imperal_database_bridge_resolve_tables( $tables );
+	if ( is_wp_error( $resolved ) ) {
+		return $resolved;
+	}
+	if ( empty( $resolved ) ) {
+		return new WP_Error( 'imperal_db_no_tables', __( 'No matching tables found for this site.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+
+	$total = 0;
+	foreach ( $resolved as $table ) {
+		$total += imperal_database_bridge_replace_table( $table, $old, $new, $dry_run );
+	}
+
+	return rest_ensure_response(
+		array(
+			'dry_run'      => $dry_run,
+			'replacements' => $total,
+			'tables'       => $resolved,
+		)
+	);
+}
+
+/**
+ * GET /imperal/v1/database/tables — every table for this site's own prefix,
+ * with its data+index size in a human-readable form (matches `wp db size --tables`).
+ */
+function imperal_database_bridge_list_tables() {
+	global $wpdb;
+	$like = $wpdb->esc_like( $wpdb->prefix ) . '%';
+	// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+	$rows = $wpdb->get_results(
+		$wpdb->prepare(
+			"SELECT table_name AS name, (data_length + index_length) AS bytes
+			 FROM information_schema.tables
+			 WHERE table_schema = %s AND table_name LIKE %s
+			 ORDER BY table_name",
+			DB_NAME,
+			$like
+		)
+	);
+	$out = array();
+	foreach ( (array) $rows as $row ) {
+		$mb    = round( ( (float) $row->bytes ) / 1048576, 2 );
+		$out[] = array( 'name' => $row->name, 'size' => $mb . 'MB' );
+	}
+	return rest_ensure_response( array( 'tables' => $out ) );
+}
+
+/**
+ * POST /imperal/v1/database/optimize — `OPTIMIZE TABLE` on every one of this
+ * site's own tables (matches `wp db optimize`).
+ */
+function imperal_database_bridge_optimize() {
+	global $wpdb;
+	$tables = imperal_database_bridge_own_tables();
+	$lines  = array();
+	foreach ( $tables as $table ) {
+		$row     = $wpdb->get_row( "OPTIMIZE TABLE `{$table}`", ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$status  = $row['Msg_text'] ?? 'OK';
+		$lines[] = "{$table}: {$status}";
+	}
+	return rest_ensure_response( array( 'output' => implode( "\n", $lines ) ) );
+}
+
+/**
+ * POST /imperal/v1/database/check — `CHECK TABLE` (repair=false) or
+ * `CHECK TABLE` + `REPAIR TABLE` for any damaged table (repair=true) on
+ * every one of this site's own tables (matches `wp db check` / `wp db repair`).
+ */
+function imperal_database_bridge_check( WP_REST_Request $request ) {
+	global $wpdb;
+	$repair = (bool) $request->get_param( 'repair' );
+	$tables = imperal_database_bridge_own_tables();
+	$lines  = array();
+	foreach ( $tables as $table ) {
+		$row    = $wpdb->get_row( "CHECK TABLE `{$table}`", ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$status = $row['Msg_text'] ?? 'unknown';
+		if ( $repair && 'OK' !== $status ) {
+			$repair_row = $wpdb->get_row( "REPAIR TABLE `{$table}`", ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			$status     = 'repaired: ' . ( $repair_row['Msg_text'] ?? 'unknown' );
+		}
+		$lines[] = "{$table}: {$status}";
+	}
+	return rest_ensure_response( array( 'output' => implode( "\n", $lines ) ) );
+}
+
+/**
+ * GET /imperal/v1/database/export — a plain-SQL dump (INSERT statements only,
+ * matches `wp db export`'s data) of this site's own tables, capped to keep
+ * the REST response bounded. Refuses (400) rather than silently truncating
+ * when a table's dump would exceed the cap -- callers should scope `tables`
+ * down instead of getting a corrupt partial dump.
+ */
+function imperal_database_bridge_export( WP_REST_Request $request ) {
+	global $wpdb;
+	$cap      = 2 * 1024 * 1024; // ~2MB, mirrors the connector's own docstring cap.
+	$tables   = $request->get_param( 'tables' );
+	$resolved = imperal_database_bridge_resolve_tables( $tables );
+	if ( is_wp_error( $resolved ) ) {
+		return $resolved;
+	}
+	if ( empty( $resolved ) ) {
+		return new WP_Error( 'imperal_db_no_tables', __( 'No matching tables found for this site.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+
+	$sql = '';
+	foreach ( $resolved as $table ) {
+		$create = $wpdb->get_row( "SHOW CREATE TABLE `{$table}`", ARRAY_N ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		if ( $create && isset( $create[1] ) ) {
+			$sql .= $create[1] . ";\n\n";
+		}
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$rows = $wpdb->get_results( "SELECT * FROM `{$table}`", ARRAY_A );
+		foreach ( (array) $rows as $row ) {
+			$cols   = '`' . implode( '`, `', array_keys( $row ) ) . '`';
+			$quoted = array_map(
+				function ( $v ) use ( $wpdb ) {
+					return null === $v ? 'NULL' : "'" . $wpdb->_real_escape( $v ) . "'";
+				},
+				array_values( $row )
+			);
+			$vals = implode( ', ', $quoted );
+			$sql .= "INSERT INTO `{$table}` ({$cols}) VALUES ({$vals});\n";
+			if ( strlen( $sql ) > $cap ) {
+				return new WP_Error( 'imperal_db_export_too_large', __( 'This export exceeds the size cap — scope `tables` down to fewer tables.', 'imperal-bridge' ), array( 'status' => 400 ) );
+			}
+		}
+		$sql .= "\n";
+	}
+
+	return rest_ensure_response( array( 'sql' => $sql, 'size_bytes' => strlen( $sql ) ) );
+}
+
+/**
+ * GET /imperal/v1/database/post-count?post_type=X — row count for one post
+ * type, any status (matches `wp post list --format=count`).
+ */
+function imperal_database_bridge_post_count( WP_REST_Request $request ) {
+	global $wpdb;
+	$post_type = sanitize_key( (string) $request->get_param( 'post_type' ) );
+	if ( '' === $post_type ) {
+		return new WP_Error( 'imperal_db_bad_params', __( 'post_type must not be empty.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+	// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+	$count = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = %s", $post_type ) );
+	return rest_ensure_response( array( 'post_type' => $post_type, 'count' => $count ) );
+}
+
+/**
+ * GET /imperal/v1/database/orphaned-postmeta — count of wp_postmeta rows
+ * whose post no longer exists (matches the connector's own `wp db query`
+ * anti-pattern check, now via $wpdb directly).
+ */
+function imperal_database_bridge_orphaned_postmeta() {
+	global $wpdb;
+	// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+	$count = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->postmeta} pm LEFT JOIN {$wpdb->posts} p ON pm.post_id = p.ID WHERE p.ID IS NULL"
+	);
+	return rest_ensure_response( array( 'orphaned_postmeta' => $count ) );
+}
+
+function imperal_database_bridge_register_routes() {
+	$manage_options_perm = function () {
+		return current_user_can( 'manage_options' );
+	};
+	register_rest_route(
+		IMPERAL_DATABASE_BRIDGE_NAMESPACE,
+		'/database/search-replace',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_database_bridge_search_replace',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_DATABASE_BRIDGE_NAMESPACE,
+		'/database/tables',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_database_bridge_list_tables',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_DATABASE_BRIDGE_NAMESPACE,
+		'/database/optimize',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_database_bridge_optimize',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_DATABASE_BRIDGE_NAMESPACE,
+		'/database/check',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_database_bridge_check',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_DATABASE_BRIDGE_NAMESPACE,
+		'/database/export',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_database_bridge_export',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_DATABASE_BRIDGE_NAMESPACE,
+		'/database/post-count',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_database_bridge_post_count',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_DATABASE_BRIDGE_NAMESPACE,
+		'/database/orphaned-postmeta',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_database_bridge_orphaned_postmeta',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_database_bridge_register_routes' );
 

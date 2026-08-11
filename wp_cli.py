@@ -741,3 +741,124 @@ async def get_server_info(cred: dict) -> dict:
         "cron_count":          _int(cron_r),
         "db_size_mb":          (db_r[0] or "").strip(),
     }
+
+
+# ─── Group I — Logs ──────────────────────────────────────────────────────
+#
+# WP_DEBUG_LOG's default location is WP_CONTENT_DIR/debug.log (WordPress
+# core's own documented default). We discover WP_CONTENT_DIR itself via
+# `wp eval`, never assume 'wp-content' -- some sites relocate it. The PHP
+# error log path is read from PHP's own `ini_get('error_log')`, never
+# guessed at a distro-specific path -- if it's empty, PHP is likely logging
+# to the web server's own error log instead, which is out of WP-CLI's reach
+# and reported honestly as such, never fabricated.
+
+async def _wp_content_dir(host, port, user, key_path, wp_path) -> tuple[str | None, str | None]:
+    """Discover the site's real WP_CONTENT_DIR -- never hardcode 'wp-content'."""
+    command = f"wp eval 'echo WP_CONTENT_DIR;' --path={wp_path} --allow-root"
+    output, error = await _run(host, port, user, key_path, command)
+    if output is None:
+        return None, error or "SSH connection failed"
+    path = output.strip()
+    if not path or not path.startswith("/"):
+        return None, "Could not determine WP_CONTENT_DIR from this site."
+    return path, None
+
+
+async def tail_debug_log(cred: dict, lines: int = 100) -> tuple[dict | None, str | None]:
+    """Last N lines of wp-content/debug.log -- the file WP_DEBUG_LOG writes to.
+
+    Discovers the real WP_CONTENT_DIR first (never hardcodes 'wp-content'),
+    then checks the file exists before tailing it -- a site with WP_DEBUG_LOG
+    off, or one that has never errored, legitimately has no debug.log, and
+    that is reported honestly (exists=False, empty lines) rather than as an
+    error.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    lines = max(1, min(int(lines), 1000))
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    async with _key_file(cred["key"]) as key_path:
+        content_dir, err = await _wp_content_dir(host, port, user, key_path, wp_path)
+        if content_dir is None:
+            return None, err
+        log_path = f"{content_dir}/debug.log"
+        exists_out, exists_err = await _run(host, port, user, key_path, f"test -f {log_path} && echo yes || echo no")
+        if exists_out is None:
+            return None, exists_err or "SSH connection failed"
+        if exists_out.strip() != "yes":
+            return {"path": log_path, "exists": False, "lines": []}, None
+        output, error = await _run(host, port, user, key_path, f"tail -n {lines} {log_path}")
+        if output is None:
+            return None, error or "Could not read the debug log — check file permissions."
+        return {"path": log_path, "exists": True, "lines": output.splitlines()}, None
+
+
+async def clear_debug_log(cred: dict) -> tuple[dict | None, str | None]:
+    """Truncate wp-content/debug.log to empty via `: > <path>` (never deletes the file).
+
+    Truncating (not deleting) preserves the file's ownership/permissions so
+    WordPress can keep writing to it without needing to recreate it.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    async with _key_file(cred["key"]) as key_path:
+        content_dir, err = await _wp_content_dir(host, port, user, key_path, wp_path)
+        if content_dir is None:
+            return None, err
+        log_path = f"{content_dir}/debug.log"
+        exists_out, exists_err = await _run(host, port, user, key_path, f"test -f {log_path} && echo yes || echo no")
+        if exists_out is None:
+            return None, exists_err or "SSH connection failed"
+        if exists_out.strip() != "yes":
+            return {"path": log_path, "cleared": False, "note": "No debug.log file exists to clear."}, None
+        output, error = await _run(host, port, user, key_path, f": > {log_path}")
+        if output is None and error:
+            return None, error
+        return {"path": log_path, "cleared": True}, None
+
+
+async def tail_php_error_log(cred: dict, lines: int = 100) -> tuple[dict | None, str | None]:
+    """Last N lines of PHP's own configured error_log, via `php -r ini_get('error_log')`.
+
+    Never guesses a distro-specific path (e.g. /var/log/apache2/error.log) --
+    only reads PHP's own declared setting. An empty ini_get means PHP is
+    logging elsewhere (typically the web server's own error log), which is
+    outside WP-CLI's reach and reported honestly, never fabricated.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    lines = max(1, min(int(lines), 1000))
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    async with _key_file(cred["key"]) as key_path:
+        path_out, path_err = await _run(
+            host, port, user, key_path,
+            f"wp eval 'echo ini_get(\"error_log\");' --path={wp_path} --allow-root")
+        if path_out is None:
+            return None, path_err or "SSH connection failed"
+        log_path = path_out.strip()
+        if not log_path or not log_path.startswith("/"):
+            return {"path": "", "exists": False, "lines": [],
+                    "note": "PHP has no error_log path configured (likely logging to the web server's own error log, outside WP-CLI's reach)."}, None
+        exists_out, exists_err = await _run(host, port, user, key_path, f"test -f {log_path} && echo yes || echo no")
+        if exists_out is None:
+            return None, exists_err or "SSH connection failed"
+        if exists_out.strip() != "yes":
+            return {"path": log_path, "exists": False, "lines": []}, None
+        output, error = await _run(host, port, user, key_path, f"tail -n {lines} {log_path}")
+        if output is None:
+            return None, error or "Could not read the PHP error log — check file permissions."
+        return {"path": log_path, "exists": True, "lines": output.splitlines()}, None

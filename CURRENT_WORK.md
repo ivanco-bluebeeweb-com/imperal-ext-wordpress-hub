@@ -5,6 +5,111 @@
 
 ---
 
+## 2026-08-11 (evening) — Shipped Group I (Logs, 3 functions) + fixed "No server data yet" Bridge gap for database tools; 181 → 184 functions
+
+**Status:** SHIPPED, tested (657/657), `imperal validate` clean (184 functions, 0 errors/0 warnings/1
+info), priced (184-key map applied via `update_pricing`), resubmitted for review (all 4 checks
+passed). Bridge zip rebuilt (v2.7.0 → v2.8.0). Commit + push + deploy pending as the final step of
+this same session.
+
+**Group I — Logs (3 functions, `handlers_logs.py`, new, SSH/WP-CLI only):** `tail_debug_log`,
+`clear_debug_log` (truncates, never deletes), `tail_php_error_log` (reads PHP's own
+`ini_get('error_log')` path, never a guessed distro path). All three honestly report "no file"
+rather than fabricating content. 9 new tests.
+
+**Bug fix (user-reported): "Imperal Bridge is installed on all 3 sites, but details still says
+'No server data yet' and refresh doesn't fix it."** Root cause: `handlers_database.py` (8
+functions: list_database_tables, run_db_search_replace, apply_db_search_replace,
+optimize_database_tables, check_database_repair, export_database_dump, count_post_type_rows,
+count_orphaned_postmeta) were SSH/WP-CLI-only and returned `SSH_NOT_CONFIGURED` even on sites
+with the Bridge installed — the Bridge plugin (2.7.0) had no `database` section at all, so these 8
+functions were structurally unreachable via any Bridge-only site, no matter how many times you hit
+refresh.
+
+Two-part fix:
+1. **Bridge SECTION 12 (database)** added to imperal-bridge.php, 2.7.0 → 2.8.0: 7 routes
+   (`/database/search-replace`, `/database/tables`, `/database/optimize`, `/database/check`,
+   `/database/export`, `/database/post-count`, `/database/orphaned-postmeta`), all plain `$wpdb`
+   calls from inside WordPress — zero shell. Serialization-safe recursive search-replace (matches
+   wp-cli's own approach to avoid corrupting PHP-serialized values), tables validated against this
+   site's own `$wpdb->prefix` only, `dry_run` always available and never writes when true. New
+   standalone PHP harness `tests/database_logic_test.php` (fake `$wpdb`, no real WordPress needed).
+2. **`handlers_database.py` rewritten Bridge-first, SSH-fallback** — same pattern as
+   `get_server_info` in `handlers_read.py`: try the Bridge route first (never raises, signals
+   "fall back to SSH" on 404/unreachable), only fall to SSH/WP-CLI if the Bridge doesn't answer.
+   A site running Bridge 2.8.0+ now gets all 8 database functions with zero SSH involved.
+   `tests/test_database.py` rewritten from scratch for the new contract (23 tests: bridge-success,
+   bridge-404-falls-back-to-ssh, neither-available), mirroring `tests/test_server_info.py`.
+
+**Process note:** `handlers_database.py` was accidentally wiped to 0 bytes twice during this
+session by a `write_file` call issued without real content (a tool-call slip, not deliberate).
+Both times caught immediately and restored cleanly via `git checkout HEAD -- handlers_database.py`
+since HEAD still had the last committed version — no data was actually lost, but it's a reminder to
+prefer `edit_file`/`multi_edit` over `write_file` for large existing files.
+
+Documented in full in the "ГЛАВНЫЙ ПЛАН" note (brand-strategy note id aaf4c105...) per the standing
+rule to record roadmap progress in notes, not just in this file.
+
+---
+
+## 2026-08-11 (afternoon, cont'd 3) — Shipped Group F (Security/Hardening, 4 functions) + Group G (Deploy/Environment Hygiene, 4 functions); repriced 181-key map; resubmitted
+
+**Status:** SHIPPED, tested, deployed at `669bec8a`, priced, resubmitted for review (`pending_review`,
+all 4 checks passed). Continuing through the remaining roadmap groups in the same session.
+
+**Group F — Security / Hardening Diagnostics (4 functions, `handlers_security.py`, new):**
+`get_php_info` (PHP version, loaded extensions, memory/execution/upload limits — Bridge SECTION 10
+`/security/php-info`, plain `phpversion()`/`get_loaded_extensions()`/`ini_get()`), `check_debug_mode`
+(WP_DEBUG/WP_DEBUG_LOG/WP_DEBUG_DISPLAY — Bridge `/security/debug-mode`, WP_DEBUG_DISPLAY correctly
+defaults to WP_DEBUG's own value when undefined, matching WP core), `check_file_permissions`
+(wp-config.php + wp-content octal perms, read-only, never `chmod()`s — Bridge `/security/file-permissions`),
+`list_admin_users` (thin wrapper over WordPress core's own native `GET /wp/v2/users?roles=administrator`
+filter — no Bridge/SSH needed at all, confirmed against developer.wordpress.org/rest-api/reference/users/,
+shipped in core since 4.7). Bridge bumped to v2.6.0 with new SECTION 10 (3 routes, `manage_options`-gated).
+`get_ssl_status` intentionally NOT built (web-tools' `ssl_check` already owns that surface — no
+duplication). `list_failed_login_attempts` intentionally NOT built (would require guessing a specific
+security plugin's internal storage shape without a real site to verify against — exactly the kind of
+fabrication the roadmap forbids).
+
+**Group G — Deploy / Environment Hygiene (4 functions, `handlers_deploy.py`, new):**
+`get_wp_config_constants` (hard-ALLOWLISTED subset of wp-config.php constants — WP_DEBUG, WP_CACHE,
+WP_ENVIRONMENT_TYPE, WP_HOME, WP_SITEURL, DISALLOW_FILE_EDIT/MODS, AUTOMATIC_UPDATER_DISABLED, plus
+`$wp_version`/`$table_prefix` — NEVER DB_NAME/DB_USER/DB_PASSWORD/DB_HOST and NEVER
+AUTH_KEY/SECURE_AUTH_KEY/LOGGED_IN_KEY/NONCE_KEY or their `_SALT` twins; the allowlist is hard-coded on
+the Bridge PHP side, no caller-supplied name can widen it), `list_must_use_plugins` (WordPress core's own
+`get_mu_plugins()` from `wp-admin/includes/plugin.php` — mu-plugins can't be deactivated so core
+deliberately excludes them from `list_plugins`/`list_native_plugins`, a real blind spot until now),
+`list_drop_ins` (core's own `get_dropins()`, same file — which drop-in files, e.g. `object-cache.php`,
+`advanced-cache.php`, `db.php`, are actually present, showing which caching/DB layer is really in play),
+`get_environment_type` (WordPress 5.5+'s own `wp_get_environment_type()` from `wp-includes/load.php` —
+production/staging/development/local, defaults to `production` if undeclared; verified against
+make.wordpress.org's own 5.5 announcement post and developer.wordpress.org's reference page). Bridge
+bumped to v2.7.0 with new SECTION 11 (4 routes, all `manage_options`-gated).
+
+**Tests:** 8 new for Group F (`tests/test_security.py`), 8 new for Group G (`tests/test_deploy.py`).
+Full suite 624→632→640, all green throughout. `imperal validate`: 0 errors/0 warnings, 181 functions
+(was 173 at the start of this session).
+
+**Pricing:** Repriced the complete map twice this session — 177-key (adding Group F) then 181-key
+(adding Group G) — via `update_pricing` (suspend→reprice→resubmit cycle each time), cross-checked byte-
+for-byte (Python set equality) against the live manifest's tool list before every submit. New functions
+priced at 1 each (single Bridge/native-REST GET call, matching the existing "price = real work volume"
+rule) — never priced by "importance" or "danger".
+
+**Committed:** `5282eed` (Group F code+tests), `1acae39` (Group G code+tests), `669bec8` (bridge zip
+rebuild w/ README). Deployed at `669bec8a`.
+
+**Roadmap doc:** `docs/2026-08-11-developer-backend-functions-plan.md` Groups F and G marked ✅ SHIPPED
+with full detail; cleaned up a duplicate-paragraph artifact left by the mid-edit note-taking (same
+class of glitch as the Group E entry earlier this session — caught and fixed the same way, by re-reading
+the file after editing rather than trusting the diff alone).
+
+**Next up:** Group H (Logs — `tail_debug_log`/`clear_debug_log`/`tail_error_log`, all SSH-based) is next
+per the roadmap's own group ordering; Group I (Custom Post Types & Taxonomies introspection) after that.
+Group (multisite, currently labelled G in some older notes but renumbered after this session's Security/
+Deploy insertions) remains gated until a real connected site is confirmed multisite.
+
+
 ## 2026-08-11 (afternoon, cont'd 2) — Shipped Group E (REST API introspection + App Password auditing, 4 functions); repriced 173-key map; resubmitted
 
 **Status:** SHIPPED, tested, deployed, priced, resubmitted for review. Continuing through the

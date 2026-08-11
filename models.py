@@ -2111,3 +2111,24 @@ class DropIn(sdl.Entity):
 class EnvironmentType(sdl.Entity):
     site_id: str = ""
     environment_type: str = ""
+
+
+class TailLogParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    lines: int = Field(default=100, ge=1, le=1000, description="How many trailing lines to read (1-1000)")
+
+
+class LogTail(sdl.Entity):
+    """The last N lines of a log file on the server, read via SSH/WP-CLI."""
+    site_id: str = ""
+    path: str = ""
+    exists: bool = False
+    lines: list[str] = Field(default_factory=list)
+    note: str = ""
+
+
+class ClearLogResult(sdl.Entity):
+    site_id: str = ""
+    path: str = ""
+    cleared: bool = False
+    note: str = ""
