@@ -5,6 +5,28 @@
 
 ---
 
+## 2026-08-11 (evening, cont'd 5) — Bridge SECTION 15 (maintenance): fixed SSH-required gap on update_plugin/update_core/run_wp_cron
+
+**Status:** SHIPPED, tested (702/702), `imperal validate` clean (193 functions — unchanged, this
+rewires 3 existing functions, doesn't add new ones), bridge zip rebuilt (now includes
+`maintenance_logic_test.php`) and README updated. No pricing change needed.
+
+**Fix:** Same bug pattern as SECTION 14 (cache/cron), found while continuing to sweep the codebase
+for other SSH-only functions predating the Bridge-first policy: `update_plugin`, `update_core`,
+`run_wp_cron` (`handlers_maintenance.py`) were SSH/WP-CLI-only since first shipped. Added Bridge
+SECTION 15 (`imperal-bridge.php` 2.10.0 → 2.11.0, `/imperal/v1/maintenance/*` routes) using
+WordPress's own upgrade machinery on the Bridge path — `Plugin_Upgrader`/`Core_Upgrader` driven by
+`Automatic_Upgrader_Skin` (the exact silent skin WordPress's own background auto-updates use,
+same as wp-admin's "Update Now" button), and the same `_get_cron_array()`/`do_action_ref_array()`
+primitives SECTION 14 uses, walking every hook already past its scheduled timestamp (matching
+`wp cron event run --due-now`). Rewired all 3 Python handlers to Bridge-first/SSH-fallback.
+Rewrote `tests/test_maintenance.py` for the three-way contract (Bridge-only / SSH-fallback /
+neither) — 12 → 15 tests, preserving the unsafe-slug shell-injection guard test on the SSH
+fallback path. `bridge/imperal-bridge/tests/maintenance_logic_test.php` (36 passing PHP tests)
+already existed uncommitted when found — folded into this same commit.
+
+---
+
 ## 2026-08-11 (evening, cont'd 4) — Bridge SECTION 14 (cache/cron): fixed SSH-required gap on the 8 existing transient/object-cache/cron functions
 
 **Status:** SHIPPED, tested (698/698, +10 from the Group L count), `imperal validate` clean (193

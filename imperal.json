@@ -24259,7 +24259,7 @@
     },
     {
       "name": "update_plugin",
-      "description": "Update ONE already-installed WordPress plugin to its latest version via WP-CLI (`wp plugin update <slug>`). Requires SSH access configured with add_ssh. Updates exactly one named plugin, never all plugins at once — call list_plugins first to see which ones have an update available.",
+      "description": "Update ONE already-installed WordPress plugin to its latest version. Reads through the Imperal Bridge plugin if it's installed (the same WordPress upgrader wp-admin's own 'Update Now' link uses), or falls back to SSH + WP-CLI (`wp plugin update <slug>`) if SSH is configured with add_ssh. Pass a slug from list_plugins/list_native_plugins — never a guessed slug.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -24386,7 +24386,7 @@
     },
     {
       "name": "update_core",
-      "description": "Update WordPress core to the latest version via WP-CLI (`wp core update`). Requires SSH access configured with add_ssh. Always updates to the latest release, matching wp-admin's own 'Update Now' button — no version pinning.",
+      "description": "Update WordPress core to the latest version. Reads through the Imperal Bridge plugin if it's installed (the same WordPress upgrader wp-admin's own 'Update Now' link uses), or falls back to SSH + WP-CLI (`wp core update`) if SSH is configured with add_ssh. Runs the update immediately with no version pinning — always the latest available core release.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -24500,7 +24500,7 @@
     },
     {
       "name": "run_wp_cron",
-      "description": "Force every due WordPress cron event to run now via WP-CLI (`wp cron event run --due-now`). Requires SSH access configured with add_ssh. Use this to unstick a site whose scheduled tasks (emails, publish-at-time posts, plugin housekeeping) have silently stopped firing on their own. Runs only events already due — never a single caller-chosen event by name.",
+      "description": "Force every due WordPress cron event to run now. Reads through the Imperal Bridge plugin if it's installed (the same _get_cron_array()/do_action_ref_array() WordPress core itself uses), or falls back to SSH + WP-CLI (`wp cron event run --due-now`) if SSH is configured with add_ssh. Only events already past their scheduled time are run — nothing is rescheduled early.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [

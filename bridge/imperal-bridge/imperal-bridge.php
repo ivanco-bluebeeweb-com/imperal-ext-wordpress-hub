@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.9.0
+ * Version:           2.11.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.10.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.11.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy', 'database', 'logs', 'cache_cron' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy', 'database', 'logs', 'cache_cron', 'maintenance' ),
 		)
 	);
 }
@@ -4675,4 +4675,176 @@ function imperal_cache_cron_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_cache_cron_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 15 — MAINTENANCE (plugin update, core update, force-run due cron)
+ *
+ * Every one of these used to require SSH + WP-CLI (`wp plugin update`,
+ * `wp core update`, `wp cron event run --due-now`) purely because that was
+ * the only way to reach WordPress's own upgrade machinery from OUTSIDE the
+ * process. From inside it, every one is the exact same WP core API the
+ * wp-admin "Update Now" button and WordPress's own background auto-updates
+ * call:
+ * - Plugin/core updates use `Plugin_Upgrader` / `Core_Upgrader` (core
+ *   classes in wp-admin/includes/class-wp-upgrader.php) driven by
+ *   `Automatic_Upgrader_Skin` -- the silent skin WordPress's own background
+ *   auto-update cron job uses, which writes via WP_Filesystem's "direct"
+ *   method (plain PHP file I/O) whenever the filesystem is server-writable
+ *   without credentials, exactly like clicking "Update Now" does on a
+ *   normal host. No shell, no FTP prompt.
+ * - Force-running due cron events reuses the exact same `_get_cron_array()`
+ *   + `do_action_ref_array()` primitives as SECTION 14's single-hook run,
+ *   just walking every hook whose timestamp has already passed --
+ *   matching `wp cron event run --due-now`.
+ */
+
+define( 'IMPERAL_MAINTENANCE_BRIDGE_NAMESPACE', 'imperal/v1' );
+
+/**
+ * POST /imperal/v1/maintenance/update-plugin { slug } — Plugin_Upgrader
+ * against one already-installed plugin, matching wp-admin's own "Update
+ * Now" link for a single plugin (not a bulk `--all`).
+ */
+function imperal_maintenance_bridge_update_plugin( WP_REST_Request $request ) {
+	$slug = (string) $request->get_param( 'slug' );
+	if ( '' === $slug ) {
+		return new WP_Error( 'imperal_maintenance_missing_slug', __( 'A plugin slug is required.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+
+	if ( ! class_exists( 'Plugin_Upgrader' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/misc.php';
+		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+		require_once ABSPATH . 'wp-admin/includes/class-automatic-upgrader-skin.php';
+		require_once ABSPATH . 'wp-admin/includes/class-plugin-upgrader.php';
+		require_once ABSPATH . 'wp-admin/includes/update.php';
+	}
+
+	if ( ! isset( get_plugins()[ $slug ] ) ) {
+		return new WP_Error( 'imperal_maintenance_plugin_not_found', __( 'No installed plugin with that slug — use the folder/file slug from list_plugins.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+
+	wp_update_plugins(); // refresh the update transient, same as `wp plugin update` does first.
+
+	$upgrader = new Plugin_Upgrader( new Automatic_Upgrader_Skin() );
+	$result   = $upgrader->upgrade( $slug );
+
+	if ( is_wp_error( $result ) ) {
+		return new WP_Error( 'imperal_maintenance_update_failed', $result->get_error_message(), array( 'status' => 500 ) );
+	}
+	if ( false === $result ) {
+		return new WP_Error( 'imperal_maintenance_update_failed', __( 'The plugin update did not complete — it may already be at the latest version.', 'imperal-bridge' ), array( 'status' => 500 ) );
+	}
+
+	$plugin_data = get_plugin_data( WP_PLUGIN_DIR . '/' . $slug );
+	return rest_ensure_response(
+		array(
+			'slug'    => $slug,
+			'version' => isset( $plugin_data['Version'] ) ? $plugin_data['Version'] : '',
+			'updated' => true,
+		)
+	);
+}
+
+/**
+ * POST /imperal/v1/maintenance/update-core — Core_Upgrader to the latest
+ * available core version, matching wp-admin's own "Update Now" for core.
+ * No version argument -- always latest, same restriction as the SSH path.
+ */
+function imperal_maintenance_bridge_update_core( WP_REST_Request $request ) {
+	if ( ! class_exists( 'Core_Upgrader' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/misc.php';
+		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+		require_once ABSPATH . 'wp-admin/includes/class-automatic-upgrader-skin.php';
+		require_once ABSPATH . 'wp-admin/includes/class-core-upgrader.php';
+		require_once ABSPATH . 'wp-admin/includes/update.php';
+	}
+
+	wp_version_check();
+	$updates = get_core_updates();
+	if ( empty( $updates ) || ! is_array( $updates ) || 'latest' === $updates[0]->response ) {
+		return rest_ensure_response(
+			array( 'updated' => false, 'version' => get_bloginfo( 'version' ), 'message' => __( 'WordPress core is already at the latest version.', 'imperal-bridge' ) )
+		);
+	}
+
+	$upgrader = new Core_Upgrader( new Automatic_Upgrader_Skin() );
+	$result   = $upgrader->upgrade( $updates[0] );
+
+	if ( is_wp_error( $result ) ) {
+		return new WP_Error( 'imperal_maintenance_update_failed', $result->get_error_message(), array( 'status' => 500 ) );
+	}
+
+	return rest_ensure_response(
+		array( 'updated' => true, 'version' => isset( $updates[0]->version ) ? $updates[0]->version : '' )
+	);
+}
+
+/**
+ * POST /imperal/v1/maintenance/run-due-cron — force-run every cron hook
+ * whose scheduled timestamp has already passed, matching
+ * `wp cron event run --due-now`.
+ */
+function imperal_maintenance_bridge_run_due_cron( WP_REST_Request $request ) {
+	$crons = _get_cron_array();
+	$ran   = array();
+	$now   = time();
+	if ( is_array( $crons ) ) {
+		foreach ( $crons as $timestamp => $hooks ) {
+			if ( (int) $timestamp > $now ) {
+				continue; // not due yet.
+			}
+			foreach ( (array) $hooks as $hook => $instances ) {
+				foreach ( (array) $instances as $instance ) {
+					do_action_ref_array( $hook, isset( $instance['args'] ) ? (array) $instance['args'] : array() );
+					$ran[] = $hook;
+				}
+			}
+		}
+	}
+	return rest_ensure_response( array( 'ran' => $ran, 'ran_count' => count( $ran ) ) );
+}
+
+function imperal_maintenance_bridge_register_routes() {
+	$manage_options_perm = function () {
+		return current_user_can( 'manage_options' );
+	};
+
+	register_rest_route(
+		IMPERAL_MAINTENANCE_BRIDGE_NAMESPACE,
+		'/maintenance/update-plugin',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_maintenance_bridge_update_plugin',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_MAINTENANCE_BRIDGE_NAMESPACE,
+		'/maintenance/update-core',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_maintenance_bridge_update_core',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_MAINTENANCE_BRIDGE_NAMESPACE,
+		'/maintenance/run-due-cron',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_maintenance_bridge_run_due_cron',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_maintenance_bridge_register_routes' );
 
