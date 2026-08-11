@@ -27,7 +27,7 @@ never do that for their own data:
 No Application Password can work around any of that. A companion plugin
 that runs *inside* WordPress, with real capability checks, is the only fix.
 
-## What's inside (five sections, one plugin)
+## What's inside (one plugin, many sections)
 
 | Section | Endpoints | Exposes |
 |---|---|---|

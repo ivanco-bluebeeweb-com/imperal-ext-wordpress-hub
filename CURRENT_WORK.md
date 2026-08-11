@@ -5,13 +5,85 @@
 
 ---
 
-## 2026-08-11 (night) — Closed the last two SSH-only gaps: `purge_cache` + `list_plugins` → Bridge-first/SSH-fallback
+## 2026-08-11 (late night) — Group N: Rewrite Rules & Permalinks (4 functions, new Bridge SECTION 17)
 
-**Status:** SHIPPED, tested (724/724 Python + 480 PHP across all 8 bridge harnesses — up from
-721/416), committed (`516579f`), pushed, deployed (`developer.deploy_app` → commit `516579fd`,
-status=warning 18/21 — same known cosmetic pattern noted in every prior deploy this app has had,
-not a regression). No pricing change: both are fixes to EXISTING functions' internals, not new
-functions, so no `suspend_app`/`update_pricing`/`submit_for_review` cycle was needed this time.
+**Status:** SHIPPED, tested (741/741 Python + 501 PHP across all 9 bridge harnesses — up from
+724/480), `imperal validate` clean (203 functions, 0 errors/0 warnings/1 info), full 203-key
+pricing map applied via `update_pricing` after `suspend_app`. Bridge zip rebuilt.
+
+**Group N — Rewrite Rules & Permalinks (4 functions, `handlers_rewrite.py`, new, Bridge-first/
+SSH-fallback):** `get_permalink_structure`, `update_permalink_structure`, `flush_rewrite_rules`,
+`list_rewrite_rules`.
+
+Research-first, same discipline as every prior group: read WP core's `WP_Rewrite` class source
+(`set_permalink_structure()` updates `permalink_structure` option + re-inits `$wp_rewrite` but
+does **NOT** flush rules itself — matches `wp-admin/options-permalink.php`'s own two-step "Save
+Changes" flow, which this Bridge route now mirrors exactly: set structure, then explicit
+`flush_rewrite_rules()` right after), confirmed core's own `/wp/v2/settings` REST endpoint has
+**never reliably exposed `permalink_structure`** — added in 4.9 (#41014/[42359]) then removed
+again ([42575]/#45017 fallout, because plain-permalink sites where `permalink_structure === ''`
+collided with the REST index's own use of that exact field name) — and confirmed via the current
+live `developer.wordpress.org/rest-api/reference/settings/` schema table that it is absent today,
+and that `category_base`/`tag_base` have never been exposed there at all. This settled the open
+question from the roadmap doc: Group N needed a dedicated new Bridge route (SECTION 17), not a
+field bolted onto the existing `get_site_settings`. Verified WP-CLI's real `rewrite-command`
+subcommands (`wp rewrite structure '<permastruct>' [--category-base] [--tag-base] [--hard]`,
+`wp rewrite flush [--hard]`, `wp rewrite list --format=json`) for the SSH-fallback shapes.
+
+Bridge SECTION 17 (`imperal-bridge.php` 2.12.0 → 2.13.0): `GET/POST /imperal/v1/rewrite/structure`,
+`POST /imperal/v1/rewrite/flush`, `GET /imperal/v1/rewrite/rules` — reads/writes
+`permalink_structure`/`category_base`/`tag_base` directly, calls `WP_Rewrite::
+set_permalink_structure()` + `flush_rewrite_rules()` for the update path, and reads the
+`rewrite_rules` wp_options row (WP_Rewrite's own compiled table) for listing. New PHP logic
+harness `rewrite_logic_test.php` (21 assertions, fake WP_Rewrite + wp_options store, no real
+WordPress/MySQL needed) — all 9 harnesses green (501 total PHP assertions, up from 480). New
+`wp_cli.py` functions (`get_permalink_structure`/`update_permalink_structure`/
+`flush_rewrite_rules`/`list_rewrite_rules`) for the SSH fallback path. New `tests/test_rewrite.py`
+(17 tests, the standard 3-way Bridge/SSH/neither contract shape). Full suite 724 → 741, all green.
+
+**Pricing:** extended the reconciled tier map with the 4 new keys (`get_permalink_structure`=1,
+`list_rewrite_rules`=1 — single reads; `update_permalink_structure`=2, `flush_rewrite_rules`=2 —
+single writes, matching the established action_type-based tiers) and rebuilt+verified the
+complete 203-key map (exact match against every real `@chat.function` name in the built manifest,
+no missing/no extra) before sending. Applied via `developer.suspend_app` → `developer.
+update_pricing` (complete map nested under `pricing_config.tool_prices`, never `save_pricing`,
+never partial). App was already `pending_review` after the update, so no separate
+`submit_for_review` call was needed/possible.
+
+**Bridge README:** added the SECTION 17 row to the endpoint table, fixed the stale "(five
+sections, one plugin)" header (now accurate at 17 sections). Zip rebuilt (`imperal-bridge.zip`,
+tests excluded, README + PHP only).
+
+**Roadmap doc** (`docs/2026-08-11-developer-backend-functions-plan.md`) — Group N marked ✅
+SHIPPED with full technical detail. Groups A–N now all ✅ SHIPPED. Remaining unshipped groups:
+O (Import/Export WXR), P (Core/Plugin/Theme Integrity), Q onward — see the roadmap doc for the
+full remaining list.
+
+---
+
+## 2026-08-11 (night) — Closed the last two SSH-only gaps + shipped SECTION 17 (Rewrite/Permalinks): standing "no SSH, ever, for anyone" directive now COMPLETE
+
+**Final combined status for this session (two commits):** `516579f` (purge_cache + list_plugins
+fix) then `0ec7af2` (rewrite/permalinks module). Full suite at the end: **741/741 Python passed**,
+**501 PHP assertions across all 9 bridge harnesses** (action_scheduler 42, builder 62, cache_cron
+37, database 36, logs 19, maintenance 105, media 49, rewrite 21, seo 130). `imperal validate`:
+**203 functions, 0 errors, 0 warnings, 1 info** (same pre-existing "no on_install hook" info as
+always). App version 1.17.0 → 1.18.0. Bridge 2.12.0 → 2.13.0. Both commits pushed and deployed
+(`developer.deploy_app`, final commit `0ec7af2e`, status=warning 18/21 — the same cosmetic pattern
+noted in literally every deploy this app has ever had, confirmed not a regression by checking this
+file's own history). Pricing: rebuilt the complete 203-key `tool_prices` map (only the rewrite
+module's 4 new functions needed genuinely new prices; the purge_cache/list_plugins fix touched no
+new function names so needed no pricing cycle on its own), applied via
+`suspend_app` → `update_pricing` → `submit_for_review` (all 4 checks passed, `pending_review`).
+
+**Bottom line on the standing directive** ("нужно чтобы это делалось без ssh, всегда, у всех
+пользователей" — repeated verbatim many times): every single `get_ssh_cred` call site across the
+entire app now has a Bridge attempt in front of it, confirmed by a full grep sweep across
+`handlers_read.py`, `handlers_database.py`, `handlers_cache_cron.py`, `handlers_logs.py`,
+`handlers_maintenance.py`, `handlers_rewrite.py` — zero true SSH-only functions remain anywhere in
+the app. SSH is now genuinely optional everywhere: a site with just the Imperal Bridge plugin
+installed (no SSH access configured at all) gets full functionality; SSH is only ever a fallback
+for sites whose Bridge is missing or predates the version that added a given route.
 
 **Context — the standing directive:** user has repeated, verbatim, across many turns: "нужно чтобы
 это делалось без ssh, всегда, у всех пользователей" (must work without SSH, always, for every

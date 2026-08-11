@@ -282,17 +282,28 @@ ActionScheduler/Store). Full suite 702→720, all green. `imperal validate`: 0 e
 functions. Repriced the complete 199-key map (1 credit for reads, 2 for writes — matches the
 existing tier convention), resubmitted — `pending_review`, all 4 checks passed.
 
-## Group N — Rewrite Rules & Permalinks
+## Group N — Rewrite Rules & Permalinks ✅ SHIPPED (2026-08-11)
 
-61. `get_permalink_structure` — the site's current permalink structure string (native
-    `/wp/v2/settings` already returns some of this — verify exact field before assuming a new
-    Bridge route is needed)
-62. `update_permalink_structure` — change it (Bridge; core has no REST route for
-    `update_option('permalink_structure', ...)` + `flush_rewrite_rules()` as one atomic action)
-63. `flush_rewrite_rules` — the single most common "why is this page 404ing" fix after a CPT/
-    permalink change (Bridge calling `flush_rewrite_rules()` directly, or WP-CLI `wp rewrite flush`)
-64. `list_rewrite_rules` — dump the actual compiled rewrite rule table for debugging routing
-    conflicts between plugins (WP-CLI `wp rewrite list`)
+61. `get_permalink_structure` ✅ — reads `permalink_structure`/`category_base`/`tag_base` from
+    wp_options. Verified core's `/wp/v2/settings` has NEVER reliably exposed `permalink_structure`
+    across versions (added 4.9 #41014/[42359], removed again over #45017 fallout — plain-permalink
+    sites collided with the REST index's own field of the same name) and never exposed
+    category/tag base at all — so this is a dedicated new Bridge route (SECTION 17), not a field
+    on the existing `get_site_settings`.
+62. `update_permalink_structure` ✅ — Bridge: `WP_Rewrite::set_permalink_structure()` (updates the
+    option + re-inits `$wp_rewrite`, same call `wp-admin/options-permalink.php`'s "Save Changes"
+    makes) followed by an explicit `flush_rewrite_rules()` — core's own method does NOT flush by
+    itself. SSH fallback: `wp rewrite structure` with `--category-base`/`--tag-base`.
+63. `flush_rewrite_rules` ✅ — Bridge calling `flush_rewrite_rules()` directly; SSH fallback
+    `wp rewrite flush`.
+64. `list_rewrite_rules` ✅ — Bridge reads the `rewrite_rules` wp_options row (WP_Rewrite's own
+    compiled table); SSH fallback `wp rewrite list --format=json`.
+
+New `handlers_rewrite.py`, Bridge SECTION 17 (`imperal-bridge.php` 2.12.0 → 2.13.0), 3 new
+`wp_cli.py` functions, 21 new PHP harness assertions (`rewrite_logic_test.php`), 17 new Python
+tests (`tests/test_rewrite.py`). Full suite 724→741, all green. `imperal validate`: 0 errors/0
+warnings, 203 functions. Repriced the complete 203-key map (1 for the 2 reads, 2 for the 2
+writes — matches the existing tier convention), resubmitted.
 
 ## Group O — Import / Export (WXR)
 
