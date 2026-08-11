@@ -27,9 +27,11 @@ from imperal_sdk import ActionResult
 from app import chat
 from models import (
     CoreUpdateResult,
+    ImperalBridgeUpdateResult,
     PluginUpdateResult,
     RunWpCronParams,
     UpdateCoreParams,
+    UpdateImperalBridgeParams,
     UpdatePluginParams,
     WpCronRunResult,
 )
@@ -37,6 +39,7 @@ import storage
 import wp_cli
 from wp_client import wp_get, wp_post
 
+BRIDGE_MAINTENANCE_UPDATE_IMPERAL_BRIDGE_PATH = "/wp-json/imperal/v1/maintenance/update-imperal-bridge"
 BRIDGE_MAINTENANCE_UPDATE_PLUGIN_PATH = "/wp-json/imperal/v1/maintenance/update-plugin"
 BRIDGE_MAINTENANCE_UPDATE_CORE_PATH = "/wp-json/imperal/v1/maintenance/update-core"
 BRIDGE_MAINTENANCE_RUN_DUE_CRON_PATH = "/wp-json/imperal/v1/maintenance/run-due-cron"
@@ -89,6 +92,50 @@ def _no_bridge_no_ssh_error():
         "Neither the Imperal Bridge plugin nor SSH is available for this site. "
         "Install the Bridge plugin, or add SSH access with add_ssh.", retryable=False,
         code="SSH_NOT_CONFIGURED")
+
+
+@chat.function(
+    "update_imperal_bridge",
+    description=(
+        "Update the installed Imperal Bridge companion plugin from Imperal's fixed, "
+        "official release ZIP. This cannot update arbitrary plugins or accept a caller-provided "
+        "URL; it only replaces Imperal Bridge after WordPress verifies the expected release version. "
+        "Requires Imperal Bridge 2.17.0+ already installed once manually."
+    ),
+    action_type="write",
+    data_model=ImperalBridgeUpdateResult,
+    effects=["wp.update_plugin"],
+    event="wordpress-hub.update_imperal_bridge",
+)
+async def update_imperal_bridge(ctx, params: UpdateImperalBridgeParams) -> ActionResult:
+    """Update only the installed companion Bridge via its fixed self-update route."""
+    auth, err = await _site_auth(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+    body = await _bridge_post(
+        ctx, base_url, username, pw, BRIDGE_MAINTENANCE_UPDATE_IMPERAL_BRIDGE_PATH,
+        json_body={},
+    )
+    if body is None:
+        return ActionResult.error(
+            "This site does not yet have Imperal Bridge 2.17.0+ with its secure self-update route. "
+            "Install the current Imperal Bridge ZIP manually once, then future Bridge updates can run here.",
+            retryable=False,
+            code="IMPERAL_BRIDGE_SELF_UPDATE_UNAVAILABLE",
+        )
+    updated = bool(body.get("updated"))
+    version = str(body.get("version", ""))
+    output = str(body.get("message", "Updated Imperal Bridge." if updated else "Imperal Bridge is already current."))
+    if version and version not in output:
+        output = f"{output} Version: {version}."
+    return ActionResult.success(
+        ImperalBridgeUpdateResult(
+            id=params.site_id, title="Imperal Bridge", kind="imperal_bridge_update",
+            version=version, updated=updated, output=output,
+        ),
+        summary=output,
+    )
 
 
 @chat.function(

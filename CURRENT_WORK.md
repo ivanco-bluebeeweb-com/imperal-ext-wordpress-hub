@@ -1746,3 +1746,13 @@ _Template:_
 **Next steps:**
 -
 ```
+
+## 2026-08-12 — Imperal Bridge self-update bootstrap (2.17.0)
+
+**Status:** implemented and packaged for the one-time manual upgrade. Bridge 2.17.0 adds the
+admin- and Application-Password-protected `POST /imperal/v1/maintenance/update-imperal-bridge`
+route. It accepts no caller-selected URL, ZIP, folder, or target: it fetches only Imperal's fixed
+release manifest and fixed ZIP URL, verifies the ZIP SHA-256, uses WordPress `Plugin_Upgrader` with
+`overwrite_package`, then verifies the installed version. Once 2.17.0 is installed manually on a
+site, `update_imperal_bridge` (16 credits: a standard single-plugin update) can perform later Bridge
+releases without SSH or a repeated manual ZIP upload. Release metadata is `bridge/release.json`.

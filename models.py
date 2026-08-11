@@ -767,6 +767,17 @@ class PluginUpdateResult(sdl.Entity):
     output: str = ""
 
 
+class ImperalBridgeUpdateResult(sdl.Entity):
+    """Result of updating the companion Bridge from its fixed release ZIP."""
+    version: str = ""
+    updated: bool = False
+    output: str = ""
+
+
+class UpdateImperalBridgeParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+
+
 class UpdateCoreParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
 

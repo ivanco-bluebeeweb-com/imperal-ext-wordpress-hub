@@ -211,5 +211,6 @@
   "update_webhook": 16,
   "upload_media": 20,
   "verify_core_checksums": 40,
-  "verify_plugin_checksums": 40
+  "verify_plugin_checksums": 40,
+  "update_imperal_bridge": 16
 }

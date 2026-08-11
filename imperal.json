@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.24.0",
+  "version": "1.25.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -693,6 +693,130 @@
         "x-sdl": "entity"
       },
       "event": "wordpress-hub.remove_ssh",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "update_imperal_bridge",
+      "description": "Update the installed Imperal Bridge companion plugin from Imperal's fixed, official release ZIP. This cannot update arbitrary plugins or accept a caller-provided URL; it only replaces Imperal Bridge after WordPress verifies the expected release version. Requires Imperal Bridge 2.17.0+ already installed once manually.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.update_plugin"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "UpdateImperalBridgeParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Result of updating the companion Bridge from its fixed release ZIP.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "version": {
+            "default": "",
+            "title": "Version",
+            "type": "string"
+          },
+          "updated": {
+            "default": false,
+            "title": "Updated",
+            "type": "boolean"
+          },
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ImperalBridgeUpdateResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.update_imperal_bridge",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -37337,7 +37461,8 @@
       "update_webhook": 16,
       "upload_media": 20,
       "verify_core_checksums": 40,
-      "verify_plugin_checksums": 40
+      "verify_plugin_checksums": 40,
+      "update_imperal_bridge": 16
     },
     "free_tools": [
       "add_ssh",

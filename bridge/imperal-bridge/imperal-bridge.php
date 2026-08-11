@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.14.0
+ * Version:           2.17.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.16.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.17.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -4827,6 +4827,88 @@ add_action( 'rest_api_init', 'imperal_cache_cron_bridge_register_routes' );
  */
 
 define( 'IMPERAL_MAINTENANCE_BRIDGE_NAMESPACE', 'imperal/v1' );
+define( 'IMPERAL_BRIDGE_PLUGIN_FILE', 'imperal-bridge/imperal-bridge.php' );
+define( 'IMPERAL_BRIDGE_RELEASE_MANIFEST_URL', 'https://raw.githubusercontent.com/ivanco-bluebeeweb-com/imperal-ext-wordpress-hub/main/bridge/release.json' );
+define( 'IMPERAL_BRIDGE_RELEASE_ZIP_URL', 'https://raw.githubusercontent.com/ivanco-bluebeeweb-com/imperal-ext-wordpress-hub/main/bridge/imperal-bridge.zip' );
+
+/** Read only Imperal's fixed release manifest and reject malformed metadata. */
+function imperal_bridge_release_manifest() {
+	$response = wp_remote_get( IMPERAL_BRIDGE_RELEASE_MANIFEST_URL, array( 'timeout' => 20 ) );
+	if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+		return new WP_Error( 'imperal_bridge_release_unavailable', __( 'Could not retrieve the official Imperal Bridge release manifest.', 'imperal-bridge' ), array( 'status' => 502 ) );
+	}
+	$manifest = json_decode( wp_remote_retrieve_body( $response ), true );
+	if ( ! is_array( $manifest ) || empty( $manifest['version'] ) || IMPERAL_BRIDGE_RELEASE_ZIP_URL !== ( $manifest['zip_url'] ?? '' ) || ! preg_match( '/^[a-f0-9]{64}$/', (string) ( $manifest['sha256'] ?? '' ) ) ) {
+		return new WP_Error( 'imperal_bridge_release_invalid', __( 'The official Imperal Bridge release manifest is invalid.', 'imperal-bridge' ), array( 'status' => 502 ) );
+	}
+	return $manifest;
+}
+
+/**
+ * POST /imperal/v1/maintenance/update-imperal-bridge — update ONLY this
+ * companion plugin from Imperal's fixed release ZIP. This is intentionally
+ * not a generic URL-to-plugin installer: callers cannot choose the package,
+ * folder, or plugin file. WordPress's own Plugin_Upgrader receives
+ * overwrite_package=true solely because the target is this installed Bridge.
+ */
+function imperal_maintenance_bridge_update_imperal_bridge( WP_REST_Request $request ) {
+	if ( ! function_exists( 'get_plugin_data' ) || ! class_exists( 'Plugin_Upgrader' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/misc.php';
+		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+		require_once ABSPATH . 'wp-admin/includes/class-automatic-upgrader-skin.php';
+		require_once ABSPATH . 'wp-admin/includes/class-plugin-upgrader.php';
+		require_once ABSPATH . 'wp-admin/includes/update.php';
+	}
+
+	$bridge_path = WP_PLUGIN_DIR . '/' . IMPERAL_BRIDGE_PLUGIN_FILE;
+	if ( ! file_exists( $bridge_path ) ) {
+		return new WP_Error( 'imperal_bridge_not_installed', __( 'Imperal Bridge is not installed at its expected plugin path.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+
+	$release = imperal_bridge_release_manifest();
+	if ( is_wp_error( $release ) ) {
+		return $release;
+	}
+	$release_version = (string) $release['version'];
+	$installed       = get_plugin_data( $bridge_path );
+	$current         = isset( $installed['Version'] ) ? (string) $installed['Version'] : '';
+	if ( '' !== $current && version_compare( $current, $release_version, '>=' ) ) {
+		return rest_ensure_response(
+			array( 'updated' => false, 'version' => $current, 'message' => __( 'Imperal Bridge is already at the current release version.', 'imperal-bridge' ) )
+		);
+	}
+
+	$package = download_url( IMPERAL_BRIDGE_RELEASE_ZIP_URL, 60 );
+	if ( is_wp_error( $package ) ) {
+		return new WP_Error( 'imperal_bridge_download_failed', $package->get_error_message(), array( 'status' => 502 ) );
+	}
+	$actual_hash = hash_file( 'sha256', $package );
+	if ( ! hash_equals( (string) $release['sha256'], (string) $actual_hash ) ) {
+		wp_delete_file( $package );
+		return new WP_Error( 'imperal_bridge_checksum_mismatch', __( 'The downloaded Imperal Bridge package did not match the official release checksum.', 'imperal-bridge' ), array( 'status' => 502 ) );
+	}
+
+	$upgrader = new Plugin_Upgrader( new Automatic_Upgrader_Skin() );
+	$result   = $upgrader->install(
+		$package,
+		array( 'overwrite_package' => true, 'clear_update_cache' => true )
+	);
+	wp_delete_file( $package );
+	if ( is_wp_error( $result ) || true !== $result ) {
+		$message = is_wp_error( $result ) ? $result->get_error_message() : __( 'The Imperal Bridge update did not complete.', 'imperal-bridge' );
+		return new WP_Error( 'imperal_bridge_update_failed', $message, array( 'status' => 500 ) );
+	}
+
+	$updated = get_plugin_data( $bridge_path );
+	$version = isset( $updated['Version'] ) ? (string) $updated['Version'] : '';
+	if ( $release_version !== $version ) {
+		return new WP_Error( 'imperal_bridge_update_unverified', __( 'The downloaded package did not report the expected Imperal Bridge version.', 'imperal-bridge' ), array( 'status' => 500 ) );
+	}
+
+	return rest_ensure_response( array( 'updated' => true, 'version' => $version ) );
+}
 
 /**
  * POST /imperal/v1/maintenance/update-plugin { slug } — Plugin_Upgrader
@@ -5119,6 +5201,17 @@ function imperal_maintenance_bridge_register_routes() {
 		return current_user_can( 'manage_options' );
 	};
 
+	register_rest_route(
+		IMPERAL_MAINTENANCE_BRIDGE_NAMESPACE,
+		'/maintenance/update-imperal-bridge',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_maintenance_bridge_update_imperal_bridge',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
 	register_rest_route(
 		IMPERAL_MAINTENANCE_BRIDGE_NAMESPACE,
 		'/maintenance/update-plugin',
