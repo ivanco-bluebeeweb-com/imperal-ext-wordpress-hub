@@ -37,6 +37,7 @@ that runs *inside* WordPress, with real capability checks, is the only fix.
 | Server | `GET /wp-json/imperal/v1/server/info` | WP-CLI-equivalent server diagnostics without a shell: core/PHP version, plugin/theme/core update lists, cron job count, database size in MB |
 | Redirects | `GET/POST /wp-json/imperal/v1/redirects`, `DELETE .../redirects/{id}`, `POST .../redirects/{id}/status` | Rank Math's URL Redirections module — list/create/delete a redirect, activate/deactivate/trash one — read/written directly against Rank Math's own `{prefix}rank_math_redirections` table, since Rank Math itself never exposes this over REST |
 | Security | `GET /wp-json/imperal/v1/security/php-info`, `.../security/debug-mode`, `.../security/file-permissions` | PHP runtime facts (version, loaded extensions, memory/upload/execution limits), whether WP_DEBUG/WP_DEBUG_LOG/WP_DEBUG_DISPLAY are on, and wp-config.php/wp-content permission bits — plain PHP built-ins, no shell needed |
+| Deploy | `GET /wp-json/imperal/v1/deploy/config-constants`, `.../deploy/mu-plugins`, `.../deploy/drop-ins`, `.../deploy/environment-type` | A hard-allowlisted safe subset of wp-config.php constants (never DB credentials or auth keys/salts), must-use plugins, drop-in files (object-cache.php/advanced-cache.php/db.php), and WordPress's own declared environment type |
 
 Sections beyond these (Users password-reset, Rank Math site-wide SEO score/
 robots.txt/sitemap/404-log, llms.txt, and the generic post/user/term meta +

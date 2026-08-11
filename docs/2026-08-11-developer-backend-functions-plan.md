@@ -136,20 +136,36 @@ these 8 + the previously-unpriced `get_builder_element`) via `update_pricing`, r
 warnings, 173 functions. Repriced the complete 173-key map, resubmitted — `pending_review`, all 4
 checks passed.
 
-## Group F — Security / Hardening Diagnostics — next up
+## Group F — Security / Hardening Diagnostics — ✅ SHIPPED 2026-08-11
 
-29. `get_php_info` — PHP version, loaded extensions, memory_limit/max_execution_time/upload
-    limits (WP-CLI `wp cli info` / `phpversion()` via Bridge) — feeds "is this site tech-eligible
-    for X" questions
-30. `check_file_permissions` — wp-config.php / wp-content permissions sanity check (Bridge/SSH)
-31. `list_admin_users` — filter `list_users` by administrator role specifically, a common security
-    audit ask ("who has admin on this site")
-32. `check_debug_mode` — is WP_DEBUG / WP_DEBUG_LOG on (should usually be OFF in production) —
-    Bridge reading the constant
-33. `get_ssl_status` — already partially covered elsewhere (web-tools app's `ssl_check` is the
-    proper home for this — do NOT duplicate; cross-reference instead of rebuilding)
-34. `list_failed_login_attempts` — only if a security plugin (Wordfence/Limit Login Attempts) is
-    active and exposes this; must degrade cleanly, never fabricate a log that isn't there
+29. `get_php_info` — ✅ PHP version, loaded extensions, memory_limit/max_execution_time/
+    upload_max_filesize/post_max_size — reads Bridge SECTION 10's `/security/php-info` route
+    (plain `phpversion()`/`get_loaded_extensions()`/`ini_get()`, no shell needed). Bridge-only
+    (no SSH fallback, consistent with SECTION 7's Bridge-only Rank Math site-wide functions) —
+    returns `SECURITY_BRIDGE_MISSING` if Bridge < 2.6.0.
+30. `check_file_permissions` — ✅ octal permission bits for wp-config.php and wp-content, the two
+    most commonly misconfigured paths (world-readable wp-config.php leaks DB credentials;
+    world-writable wp-content allows arbitrary file drops) — Bridge SECTION 10
+    `/security/file-permissions`, read-only (`fileperms()`, never `chmod()`s anything).
+31. `list_admin_users` — ✅ thin wrapper over WordPress core's own
+    `GET /wp/v2/users?roles=administrator` filter — no Bridge/SSH needed at all, confirmed
+    against developer.wordpress.org/rest-api/reference/users/ (the `roles` request arg has
+    shipped in WordPress core since 4.7).
+32. `check_debug_mode` — ✅ WP_DEBUG / WP_DEBUG_LOG / WP_DEBUG_DISPLAY constants — Bridge
+    SECTION 10 `/security/debug-mode` (`defined()`/constant reads, no shell). WP_DEBUG_DISPLAY
+    correctly defaults to WP_DEBUG's own value when undefined, matching WordPress core's
+    `wp-config-sample.php`/`load.php` default behaviour.
+33. `get_ssl_status` — intentionally NOT built here — web-tools' `ssl_check` already owns this
+    surface; duplicating it here would fork one fact across two apps.
+34. `list_failed_login_attempts` — intentionally NOT built here — would require guessing a
+    specific security plugin's (Wordfence / Limit Login Attempts Reloaded) internal storage
+    shape without a concrete site to verify against, exactly the kind of fabrication this
+    roadmap forbids. Revisit only if a real site running one of those plugins can be checked.
+
+4 functions in `handlers_security.py` (new). Bridge plugin bumped to v2.6.0 with new SECTION 10
+(3 routes, all gated `manage_options`). 8 new tests (`tests/test_security.py`). Full suite
+624→632, all green. `imperal validate`: 0 errors/0 warnings, 177 functions. Repriced the complete
+177-key map, resubmitted — `pending_review`, all 4 checks passed. Deployed at `5282eed9`.
 
 ## Group G — Multisite (only if real demand — currently unverified whether any connected site is multisite)
 

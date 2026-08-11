@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.6.0
+ * Version:           2.7.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.6.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.7.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy' ),
 		)
 	);
 }
@@ -3636,3 +3636,158 @@ function imperal_security_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_security_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 11 — DEPLOY / ENVIRONMENT HYGIENE
+ *
+ * A safe, hard-allowlisted subset of wp-config.php constants (never DB
+ * credentials, auth keys or salts), must-use plugins (wp-admin/includes/
+ * plugin.php's own get_mu_plugins() -- invisible to list_plugins/
+ * list_native_plugins because mu-plugins can't be deactivated and WP core
+ * deliberately excludes them from the plugins list), drop-in files
+ * (get_dropins(), same file -- object-cache.php/advanced-cache.php/db.php:
+ * which caching/DB layer is actually in play), and the environment type
+ * WordPress itself declares via wp_get_environment_type() (core since 5.5,
+ * wp-includes/load.php). All plain PHP built-ins, no shell needed.
+ * ============================================================================= */
+
+define( 'IMPERAL_DEPLOY_BRIDGE_NAMESPACE', 'imperal/v1' );
+
+/**
+ * GET /imperal/v1/deploy/config-constants — a hard-allowlisted subset of
+ * wp-config.php constants. NEVER DB_NAME/DB_USER/DB_PASSWORD/DB_HOST, NEVER
+ * AUTH_KEY/SECURE_AUTH_KEY/LOGGED_IN_KEY/NONCE_KEY (or their _SALT twins) --
+ * those are exactly the secrets a companion plugin must never expose.
+ */
+function imperal_deploy_bridge_config_constants() {
+	global $wp_version, $table_prefix;
+
+	$const_bool_or_null = function ( $name ) {
+		return defined( $name ) ? (bool) constant( $name ) : null;
+	};
+	$const_str_or_null = function ( $name ) {
+		return defined( $name ) ? (string) constant( $name ) : null;
+	};
+
+	return rest_ensure_response(
+		array(
+			'wp_version'          => isset( $wp_version ) ? $wp_version : get_bloginfo( 'version' ),
+			'table_prefix'        => isset( $table_prefix ) ? $table_prefix : '',
+			'wp_debug'            => $const_bool_or_null( 'WP_DEBUG' ),
+			'wp_cache'            => $const_bool_or_null( 'WP_CACHE' ),
+			'wp_environment_type' => $const_str_or_null( 'WP_ENVIRONMENT_TYPE' ),
+			'wp_home'             => $const_str_or_null( 'WP_HOME' ),
+			'wp_siteurl'          => $const_str_or_null( 'WP_SITEURL' ),
+			'disallow_file_edit'  => $const_bool_or_null( 'DISALLOW_FILE_EDIT' ),
+			'disallow_file_mods'  => $const_bool_or_null( 'DISALLOW_FILE_MODS' ),
+			'automatic_updater_disabled' => $const_bool_or_null( 'AUTOMATIC_UPDATER_DISABLED' ),
+		)
+	);
+}
+
+/**
+ * GET /imperal/v1/deploy/mu-plugins — must-use plugins, invisible to
+ * list_plugins/list_native_plugins (they can't be deactivated, so WP core
+ * deliberately excludes them from the regular plugins list).
+ */
+function imperal_deploy_bridge_mu_plugins() {
+	require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	$mu = get_mu_plugins();
+	$out = array();
+	foreach ( $mu as $file => $data ) {
+		$out[] = array(
+			'file'        => $file,
+			'name'        => isset( $data['Name'] ) ? $data['Name'] : $file,
+			'version'     => isset( $data['Version'] ) ? $data['Version'] : '',
+			'description' => isset( $data['Description'] ) ? $data['Description'] : '',
+		);
+	}
+	return rest_ensure_response( $out );
+}
+
+/**
+ * GET /imperal/v1/deploy/drop-ins — WP core drop-in files
+ * (object-cache.php, advanced-cache.php, db.php, etc.) that are actually
+ * present in wp-content, with their reported Name/Description so it's
+ * clear WHICH caching/DB plugin dropped each one in.
+ */
+function imperal_deploy_bridge_drop_ins() {
+	require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	$dropins = get_dropins();
+	$out = array();
+	foreach ( $dropins as $file => $data ) {
+		$out[] = array(
+			'file'        => $file,
+			'name'        => isset( $data['Name'] ) ? $data['Name'] : $file,
+			'description' => isset( $data['Description'] ) ? $data['Description'] : '',
+		);
+	}
+	return rest_ensure_response( $out );
+}
+
+/**
+ * GET /imperal/v1/deploy/environment-type — WordPress 5.5+'s own
+ * wp_get_environment_type(): local / development / staging / production
+ * (defaults to 'production' if the site never declared one).
+ */
+function imperal_deploy_bridge_environment_type() {
+	return rest_ensure_response(
+		array(
+			'environment_type' => function_exists( 'wp_get_environment_type' )
+				? wp_get_environment_type()
+				: 'production',
+		)
+	);
+}
+
+function imperal_deploy_bridge_register_routes() {
+	$manage_options_perm = function () {
+		return current_user_can( 'manage_options' );
+	};
+	register_rest_route(
+		IMPERAL_DEPLOY_BRIDGE_NAMESPACE,
+		'/deploy/config-constants',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_deploy_bridge_config_constants',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_DEPLOY_BRIDGE_NAMESPACE,
+		'/deploy/mu-plugins',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_deploy_bridge_mu_plugins',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_DEPLOY_BRIDGE_NAMESPACE,
+		'/deploy/drop-ins',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_deploy_bridge_drop_ins',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_DEPLOY_BRIDGE_NAMESPACE,
+		'/deploy/environment-type',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_deploy_bridge_environment_type',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_deploy_bridge_register_routes' );
+

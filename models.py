@@ -2080,3 +2080,34 @@ class FilePermissionsStatus(sdl.Entity):
     wp_config_exists: bool = False
     wp_config_permissions: str | None = None
     wp_content_permissions: str | None = None
+
+
+class WpConfigConstants(sdl.Entity):
+    """A hard-allowlisted safe subset of wp-config.php constants — never DB credentials or auth keys/salts."""
+    site_id: str = ""
+    wp_version: str = ""
+    table_prefix: str = ""
+    wp_debug: bool | None = None
+    wp_cache: bool | None = None
+    wp_environment_type: str | None = None
+    wp_home: str | None = None
+    wp_siteurl: str | None = None
+    disallow_file_edit: bool | None = None
+    disallow_file_mods: bool | None = None
+    automatic_updater_disabled: bool | None = None
+
+
+class MustUsePlugin(sdl.Entity):
+    file: str = ""
+    version: str = ""
+    description: str = ""
+
+
+class DropIn(sdl.Entity):
+    file: str = ""
+    description: str = ""
+
+
+class EnvironmentType(sdl.Entity):
+    site_id: str = ""
+    environment_type: str = ""
