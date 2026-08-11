@@ -23,9 +23,18 @@ Imperal Bridge section reading/writing a real, confirmed data source) before a l
 written. This doc is the candidate list + grouping; each slice still needs its own
 source-verification pass exactly like every prior slice in the main roadmap.
 
-Baseline: 139 functions today (`wordpress-hub` v1.17.0). Candidate list below is organized into 12
-groups, ~100+ candidate functions. Not everything here will ship — case-by-case verification first,
-same discipline as always.
+Baseline: 139 functions today (`wordpress-hub` v1.17.0). Candidate list below is organized into 21
+groups (A-U), 85 numbered items, **87 distinct new function names** (verified by diffing every
+backtick-quoted identifier in this doc against the current shipped function list in `imperal.json`
+and manually excluding non-function noise: DB table/column names, WP option keys, and one
+cross-app tool name (`domain_full_check`) mentioned only as an explicit exclusion). Not everything
+here will ship — case-by-case verification first, same discipline as always.
+
+**Count correction (2026-08-11):** an earlier claim of "~117 candidate functions" for this doc was
+wrong — that number was a raw count of every unique backtick-quoted token in the file, which
+included 14 already-shipped function names mentioned for context/comparison and several non-function
+tokens (table names, option keys, a foreign app's tool name). The real count of new candidate
+function names is 87, confirmed by set-diffing against `imperal.json`'s actual tool list.
 
 ---
 
