@@ -478,3 +478,15 @@ Suggested build order (highest-value / most-requested-pattern first):
 5. Group H/I/J/K/L — fill in as real demand appears; L (WooCommerce webhooks) is notably
    low-effort since it's already a native REST route, could be pulled forward.
 6. Group G (multisite) — gated on confirming real multisite demand first.
+
+## 2026-08-12 — Group G / Multisite — shipped (Bridge 2.18.0, Hub 1.26.0)
+
+`list_network_sites`, `list_network_plugins`, and `create_network_site` are now
+implemented through a deliberately narrow Bridge network section. Every route first rejects a
+non-Multisite install and requires WordPress's `manage_network_options` capability; site creation
+uses only core `wpmu_create_blog()` and requires an already-existing owner account. No arbitrary
+network settings, user creation, plugin installation, or cross-site bulk mutation was added.
+
+Groups **K**, **H**, and **T** were rechecked and were already covered by shipped functions:
+`list_reusable_blocks`/`list_block_patterns`; `get_wp_config_constants`, `list_must_use_plugins`,
+`list_drop_ins`, `get_environment_type`; and `list_rest_routes` plus `get_rest_route_schema`.

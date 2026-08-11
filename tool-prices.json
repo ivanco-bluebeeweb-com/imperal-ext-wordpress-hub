@@ -212,5 +212,8 @@
   "upload_media": 20,
   "verify_core_checksums": 40,
   "verify_plugin_checksums": 40,
-  "update_imperal_bridge": 16
+  "update_imperal_bridge": 16,
+  "list_network_sites": 8,
+  "list_network_plugins": 8,
+  "create_network_site": 16
 }

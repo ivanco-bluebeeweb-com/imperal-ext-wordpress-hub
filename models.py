@@ -14,6 +14,35 @@ class SiteIdParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
 
 
+class CreateNetworkSiteParams(BaseModel):
+    site_id: str = Field(description="Multisite network id from a previous list_network_sites/list_sites call — never invent it")
+    domain: str = Field(min_length=1, max_length=253, description="Domain for the new network site, e.g. shop.example.com")
+    path: str = Field(min_length=1, max_length=255, description="Path for the new network site, e.g. /shop/")
+    title: str = Field(min_length=1, max_length=200, description="Human-readable title for the new network site")
+    owner_email: str = Field(min_length=3, max_length=254, description="Email of an existing network user who will own the new site")
+
+
+class NetworkSite(sdl.Entity):
+    """One WordPress Multisite subsite returned by WordPress core."""
+    blog_id: int = 0
+    domain: str = ""
+    path: str = ""
+    site_url: str = ""
+    public: bool = False
+    archived: bool = False
+    spam: bool = False
+    deleted: bool = False
+    registered: str = ""
+
+
+class NetworkPlugin(sdl.Entity):
+    """One plugin and whether it is active across a WordPress Multisite network."""
+    plugin_file: str = ""
+    name: str = ""
+    version: str = ""
+    network_active: bool = False
+
+
 class ListContentParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     limit: int = Field(default=20, ge=1, le=100, description="Max items to return, 1-100")

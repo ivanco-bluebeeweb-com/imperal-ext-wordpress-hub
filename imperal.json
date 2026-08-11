@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.25.0",
+  "version": "1.26.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -37192,6 +37192,567 @@
       "long_running": false,
       "scopes": [],
       "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_network_sites",
+      "description": "List subsites in a connected WordPress Multisite network: blog ID, domain, path, public/archived/spam/deleted state, and registered date. Requires Imperal Bridge 2.18.0+ and a WordPress super-administrator; returns a clear result on a normal single-site installation.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "NetworkSite": {
+            "description": "One WordPress Multisite subsite returned by WordPress core.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "blog_id": {
+                "default": 0,
+                "title": "Blog Id",
+                "type": "integer"
+              },
+              "domain": {
+                "default": "",
+                "title": "Domain",
+                "type": "string"
+              },
+              "path": {
+                "default": "",
+                "title": "Path",
+                "type": "string"
+              },
+              "site_url": {
+                "default": "",
+                "title": "Site Url",
+                "type": "string"
+              },
+              "public": {
+                "default": false,
+                "title": "Public",
+                "type": "boolean"
+              },
+              "archived": {
+                "default": false,
+                "title": "Archived",
+                "type": "boolean"
+              },
+              "spam": {
+                "default": false,
+                "title": "Spam",
+                "type": "boolean"
+              },
+              "deleted": {
+                "default": false,
+                "title": "Deleted",
+                "type": "boolean"
+              },
+              "registered": {
+                "default": "",
+                "title": "Registered",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "NetworkSite",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/NetworkSite"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[NetworkSite]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_network_plugins",
+      "description": "List installed plugins on a connected WordPress Multisite network, including each plugin's file, name, version, and network-wide activation state. Requires Imperal Bridge 2.18.0+ and a WordPress super-administrator.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "NetworkPlugin": {
+            "description": "One plugin and whether it is active across a WordPress Multisite network.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "plugin_file": {
+                "default": "",
+                "title": "Plugin File",
+                "type": "string"
+              },
+              "name": {
+                "default": "",
+                "title": "Name",
+                "type": "string"
+              },
+              "version": {
+                "default": "",
+                "title": "Version",
+                "type": "string"
+              },
+              "network_active": {
+                "default": false,
+                "title": "Network Active",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "NetworkPlugin",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/NetworkPlugin"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[NetworkPlugin]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "create_network_site",
+      "description": "Create one new subsite in a connected WordPress Multisite network using its domain, path, title, and the existing owner user's email. Requires Imperal Bridge 2.18.0+ and a WordPress super-administrator. This does not create users, install plugins, or alter other network sites.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.create_network_site"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Multisite network id from a previous list_network_sites/list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "domain": {
+            "description": "Domain for the new network site, e.g. shop.example.com",
+            "maxLength": 253,
+            "minLength": 1,
+            "title": "Domain",
+            "type": "string"
+          },
+          "path": {
+            "description": "Path for the new network site, e.g. /shop/",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "title": {
+            "description": "Human-readable title for the new network site",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "owner_email": {
+            "description": "Email of an existing network user who will own the new site",
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Owner Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "domain",
+          "path",
+          "title",
+          "owner_email"
+        ],
+        "title": "CreateNetworkSiteParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One WordPress Multisite subsite returned by WordPress core.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "blog_id": {
+            "default": 0,
+            "title": "Blog Id",
+            "type": "integer"
+          },
+          "domain": {
+            "default": "",
+            "title": "Domain",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "title": "Path",
+            "type": "string"
+          },
+          "site_url": {
+            "default": "",
+            "title": "Site Url",
+            "type": "string"
+          },
+          "public": {
+            "default": false,
+            "title": "Public",
+            "type": "boolean"
+          },
+          "archived": {
+            "default": false,
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "spam": {
+            "default": false,
+            "title": "Spam",
+            "type": "boolean"
+          },
+          "deleted": {
+            "default": false,
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "registered": {
+            "default": "",
+            "title": "Registered",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "NetworkSite",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.create_network_site",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
     }
   ],
   "signals": [],
@@ -37462,7 +38023,10 @@
       "upload_media": 20,
       "verify_core_checksums": 40,
       "verify_plugin_checksums": 40,
-      "update_imperal_bridge": 16
+      "update_imperal_bridge": 16,
+      "list_network_sites": 8,
+      "list_network_plugins": 8,
+      "create_network_site": 16
     },
     "free_tools": [
       "add_ssh",

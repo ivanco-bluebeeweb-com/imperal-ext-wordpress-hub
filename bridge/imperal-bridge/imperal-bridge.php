@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.17.0
+ * Version:           2.18.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.17.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.18.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -5196,6 +5196,88 @@ function imperal_maintenance_bridge_list_plugins( WP_REST_Request $request ) {
 	return rest_ensure_response( array( 'plugins' => $rows ) );
 }
 
+/* =============================================================================
+ * SECTION 18 — WORDPRESS MULTISITE (narrow network inventory + site creation)
+ * ========================================================================== */
+
+function imperal_network_bridge_permission() {
+	if ( ! is_multisite() ) {
+		return new WP_Error( 'imperal_network_not_multisite', __( 'This WordPress installation is not a Multisite network.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+	return current_user_can( 'manage_network_options' );
+}
+
+/** GET /imperal/v1/network/sites — plain WordPress get_sites() network inventory. */
+function imperal_network_bridge_list_sites( WP_REST_Request $request ) {
+	$sites = get_sites( array( 'number' => 0 ) );
+	$rows  = array();
+	foreach ( $sites as $site ) {
+		$rows[] = array(
+			'blog_id'    => (int) $site->blog_id,
+			'domain'     => (string) $site->domain,
+			'path'       => (string) $site->path,
+			'site_url'   => get_site_url( (int) $site->blog_id ),
+			'public'     => (bool) $site->public,
+			'archived'   => (bool) $site->archived,
+			'spam'       => (bool) $site->spam,
+			'deleted'    => (bool) $site->deleted,
+			'registered' => (string) $site->registered,
+		);
+	}
+	return rest_ensure_response( array( 'sites' => $rows ) );
+}
+
+/** GET /imperal/v1/network/plugins — installed plugins plus active_sitewide_plugins state. */
+function imperal_network_bridge_list_plugins( WP_REST_Request $request ) {
+	if ( ! function_exists( 'get_plugins' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	}
+	$active = get_site_option( 'active_sitewide_plugins', array() );
+	$rows   = array();
+	foreach ( get_plugins() as $plugin_file => $plugin ) {
+		$rows[] = array(
+			'plugin_file'    => (string) $plugin_file,
+			'name'           => isset( $plugin['Name'] ) ? (string) $plugin['Name'] : (string) $plugin_file,
+			'version'        => isset( $plugin['Version'] ) ? (string) $plugin['Version'] : '',
+			'network_active' => isset( $active[ $plugin_file ] ),
+		);
+	}
+	return rest_ensure_response( array( 'plugins' => $rows ) );
+}
+
+/** POST /imperal/v1/network/sites — create one site for an existing network user. */
+function imperal_network_bridge_create_site( WP_REST_Request $request ) {
+	$domain      = sanitize_text_field( (string) $request->get_param( 'domain' ) );
+	$path        = (string) $request->get_param( 'path' );
+	$title       = sanitize_text_field( (string) $request->get_param( 'title' ) );
+	$owner_email = sanitize_email( (string) $request->get_param( 'owner_email' ) );
+	if ( '' === $domain || '' === $path || '' === $title || ! is_email( $owner_email ) ) {
+		return new WP_Error( 'imperal_network_invalid_site', __( 'Domain, path, title, and an existing owner email are required.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+	if ( '/' !== substr( $path, 0, 1 ) ) {
+		$path = '/' . $path;
+	}
+	if ( '/' !== substr( $path, -1 ) ) {
+		$path .= '/';
+	}
+	$user = get_user_by( 'email', $owner_email );
+	if ( ! $user ) {
+		return new WP_Error( 'imperal_network_owner_not_found', __( 'The owner email must belong to an existing network user.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+	$network = get_network();
+	$blog_id = wpmu_create_blog( $domain, $path, $title, (int) $user->ID, array(), (int) $network->id );
+	if ( is_wp_error( $blog_id ) ) {
+		return $blog_id;
+	}
+	$site = get_site( (int) $blog_id );
+	return rest_ensure_response( array(
+		'blog_id' => (int) $site->blog_id, 'domain' => (string) $site->domain, 'path' => (string) $site->path,
+		'site_url' => get_site_url( (int) $site->blog_id ), 'public' => (bool) $site->public,
+		'archived' => (bool) $site->archived, 'spam' => (bool) $site->spam, 'deleted' => (bool) $site->deleted,
+		'registered' => (string) $site->registered,
+	) );
+}
+
 function imperal_maintenance_bridge_register_routes() {
 	$manage_options_perm = function () {
 		return current_user_can( 'manage_options' );
@@ -5280,6 +5362,25 @@ function imperal_maintenance_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_maintenance_bridge_register_routes' );
+
+function imperal_network_bridge_register_routes() {
+	register_rest_route(
+		IMPERAL_BRIDGE_NAMESPACE,
+		'/network/sites',
+		array(
+			array( 'methods' => WP_REST_Server::READABLE, 'callback' => 'imperal_network_bridge_list_sites', 'permission_callback' => 'imperal_network_bridge_permission' ),
+			array( 'methods' => WP_REST_Server::CREATABLE, 'callback' => 'imperal_network_bridge_create_site', 'permission_callback' => 'imperal_network_bridge_permission' ),
+		)
+	);
+	register_rest_route(
+		IMPERAL_BRIDGE_NAMESPACE,
+		'/network/plugins',
+		array(
+			array( 'methods' => WP_REST_Server::READABLE, 'callback' => 'imperal_network_bridge_list_plugins', 'permission_callback' => 'imperal_network_bridge_permission' ),
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_network_bridge_register_routes' );
 
 /* =============================================================================
  * SECTION 16 — ACTION SCHEDULER (WooCommerce's background job queue)
