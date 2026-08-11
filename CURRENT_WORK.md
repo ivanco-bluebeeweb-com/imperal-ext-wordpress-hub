@@ -7,14 +7,19 @@
 
 ## 2026-08-12 — Mandatory complete pricing gate
 
-**Every registered `@chat.function` must always have an explicit, non-zero per-action price.**
-Whenever a function is added, renamed, or removed, the release workflow must: (1) rebuild the
-complete `tool_prices` map from the validated manifest, (2) verify an exact one-to-one match — no
-missing or extra keys — and (3) save the **entire** map through `developer.update_pricing` while
-the app is suspended, before deployment. Never use a partial `save_pricing` update: it can leave
-previous functions unpriced. Policy remains based on real work: 1 for a single lightweight read,
-2 for a standard state change or remote action, 4 for an aggregate/preview/heavy action, and 6 for
-CSV apply/import work. The restored baseline is 213 functions: all priced, none zero.
+**Every registered `@chat.function` must always have an explicit per-action price.** Whenever a
+function is added, renamed, or removed, the release workflow must: (1) rebuild the complete
+`tool_prices` map from the validated manifest, (2) verify an exact one-to-one match — no missing
+or extra keys — and (3) save the **entire** map through `developer.update_pricing` while the app
+is suspended, before deployment. Never use a partial `save_pricing` update: it can leave previous
+functions unpriced.
+
+**Current token policy, confirmed from the active Media Studio tariff:** `0` for lightweight reads,
+local status/settings and connection setup; `8` for one standard WordPress action; `12` for a heavy
+aggregate, preview, or multi-step server action; `20` for CSV apply/import. Price is real work and
+server/provider load, never risk; confirmations govern risky actions separately. The complete
+213-function map is versioned in both `tool-prices.json` and `imperal.json.pricing`, and tests require
+them to remain identical.
 
 ## 2026-08-11 (late night) — Group N: Rewrite Rules & Permalinks (4 functions, new Bridge SECTION 17)
 
