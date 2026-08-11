@@ -344,22 +344,29 @@ and four catalog tools were synced.
     pending:** WordPress.org exposes the live `core/stable-check` source, but the exact support
     semantics and reliable per-version response need a dedicated contract before adding a tool.
 
-**Release candidate (v1.20.0):** `verify_core_checksums` and
+**✅ SHIPPED (2026-08-12, v1.20.0):** `verify_core_checksums` and
 `verify_plugin_checksums` are SSH/WP-CLI-only, using the documented WordPress.org checksum
 commands. Theme verification is intentionally not added: the official WP-CLI command reference
 provides core and plugin checksum commands, not a corresponding `wp theme verify-checksums`
 command; inventing one would be misleading. Complete 207-key pricing was saved with both checksum
-checks priced at 1; local verification passed. Mark shipped only after commit, push, and deployment.
-
+checks priced at 1; local verification passed. Released in `a35079ff`, pushed to `main`, and
+deployed; the platform synced the manifest, panels, icon, and four catalog tools with warning
+status (`18/21` checks).
 ## Group Q — Mail Deliverability
 
 71. `send_test_email` — trigger `wp_mail()` with a known test payload to a given address (Bridge or
     WP-CLI `wp eval` is explicitly excluded per this doc's own scope rule, so this MUST go through
     a dedicated Bridge endpoint calling `wp_mail()` directly, never raw eval) — verifies SMTP/mail
     plugin configuration actually delivers
-72. `get_mail_configuration` — which mail-sending mechanism is active (native `wp_mail` vs. an SMTP
-    plugin like WP Mail SMTP) if discoverable via a known option/constant — must degrade honestly
-    when no such plugin is present rather than guess
+72. `get_mail_configuration` — identifies the active WP Mail SMTP plugin when present, otherwise
+    reports native/undetermined `wp_mail()` handling. It never returns SMTP credentials, SMTP host,
+    or secret plugin settings.
+
+**Release candidate (v1.21.0):** `send_test_email` uses a dedicated Imperal Bridge route calling
+WordPress core's `wp_mail()` directly — never raw `wp eval`. A successful result means WordPress
+accepted the fixed test message for sending, **not** that it arrived in an inbox. Both tools require
+Bridge 2.15.0+; the complete 209-key pricing map was saved (`send_test_email=2`,
+`get_mail_configuration=1`). Mark shipped only after commit, push, and deployment.
 
 ## Group R — WordPress Site Health (the plugin's own built-in diagnostics)
 

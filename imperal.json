@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.20.0",
+  "version": "1.21.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -36075,6 +36075,270 @@
           "title"
         ],
         "title": "ChecksumVerificationResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "send_test_email",
+      "description": "Ask WordPress to send one fixed test message to an email address through its own wp_mail() path. Requires Imperal Bridge 2.15.0+ and an administrator Application Password. A success means WordPress accepted the message for sending — check the inbox/spam folder to confirm actual delivery.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.mail_test"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "to": {
+            "description": "Recipient email address for this one test message",
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "to"
+        ],
+        "title": "SendTestEmailParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Acknowledgement that WordPress accepted a fixed test message for delivery.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "site_id": {
+            "default": "",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "recipient": {
+            "default": "",
+            "title": "Recipient",
+            "type": "string"
+          },
+          "accepted": {
+            "default": false,
+            "title": "Accepted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "TestEmailResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.send_test_email",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "get_mail_configuration",
+      "description": "Identify the WordPress mail mechanism without exposing credentials: reports active WP Mail SMTP when its plugin is detected, otherwise reports native/undetermined wp_mail() handling. Requires Imperal Bridge 2.15.0+ and an administrator Application Password.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Mail mechanism that WordPress/known active mail plugins expose without secrets.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "site_id": {
+            "default": "",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "mechanism": {
+            "default": "",
+            "title": "Mechanism",
+            "type": "string"
+          },
+          "provider": {
+            "default": "",
+            "title": "Provider",
+            "type": "string"
+          },
+          "detected_plugin": {
+            "default": "",
+            "title": "Detected Plugin",
+            "type": "string"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "MailConfiguration",
         "type": "object",
         "x-sdl": "entity"
       },

@@ -2409,3 +2409,26 @@ class ChecksumVerificationResult(sdl.Entity):
     target: str = ""
     verified: bool = False
     output: str = ""
+
+
+# ─────────── Mail deliverability (Bridge) ───────────
+
+class SendTestEmailParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    to: str = Field(min_length=3, max_length=320, description="Recipient email address for this one test message")
+
+
+class TestEmailResult(sdl.Entity):
+    """Acknowledgement that WordPress accepted a fixed test message for delivery."""
+    site_id: str = ""
+    recipient: str = ""
+    accepted: bool = False
+
+
+class MailConfiguration(sdl.Entity):
+    """Mail mechanism that WordPress/known active mail plugins expose without secrets."""
+    site_id: str = ""
+    mechanism: str = ""
+    provider: str = ""
+    detected_plugin: str = ""
+    notes: str = ""

@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.14.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.15.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy', 'database', 'logs', 'cache_cron', 'maintenance', 'action_scheduler' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy', 'database', 'logs', 'cache_cron', 'maintenance', 'action_scheduler', 'mail' ),
 		)
 	);
 }
@@ -2659,6 +2659,89 @@ function imperal_redirects_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_redirects_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 19 — MAIL DELIVERABILITY
+ *
+ * WordPress's documented wp_mail() result means the message was accepted for
+ * sending, not that it arrived in the recipient inbox. The test endpoint says
+ * exactly that and never exposes SMTP credentials. Configuration discovery is
+ * intentionally limited to WordPress's native path or a known active WP Mail
+ * SMTP plugin; unknown mail plugins are reported as native/undetermined rather
+ * than guessed.
+ * ============================================================================= */
+
+define( 'IMPERAL_MAIL_BRIDGE_NAMESPACE', 'imperal/v1' );
+define( 'IMPERAL_MAIL_BRIDGE_VERSION', '1.0.0' );
+
+/** POST /imperal/v1/mail/test — ask WordPress to send one fixed test email. */
+function imperal_mail_bridge_send_test( $request ) {
+	$to = sanitize_email( (string) $request->get_param( 'to' ) );
+	if ( ! is_email( $to ) ) {
+		return new WP_Error(
+			'imperal_mail_invalid_recipient',
+			__( 'Provide a valid recipient email address.', 'imperal-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+	$subject = sprintf( __( '[%s] Imperal mail delivery test', 'imperal-bridge' ), wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ) );
+	$message = __( 'This is a test message requested through Imperal Bridge. WordPress accepted it for delivery.', 'imperal-bridge' );
+	$accepted = wp_mail( $to, $subject, $message );
+	if ( ! $accepted ) {
+		return new WP_Error(
+			'imperal_mail_not_accepted',
+			__( 'WordPress did not accept the test message for sending.', 'imperal-bridge' ),
+			array( 'status' => 502 )
+		);
+	}
+	return rest_ensure_response( array( 'recipient' => $to, 'accepted' => true ) );
+}
+
+/** GET /imperal/v1/mail/configuration — no credentials or host settings. */
+function imperal_mail_bridge_configuration() {
+	if ( ! function_exists( 'is_plugin_active' ) && defined( 'ABSPATH' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	}
+	$plugin_file = 'wp-mail-smtp/wp_mail_smtp.php';
+	if ( function_exists( 'is_plugin_active' ) && is_plugin_active( $plugin_file ) ) {
+		$option = get_option( 'wp_mail_smtp', array() );
+		$mailer = is_array( $option ) && isset( $option['mail']['mailer'] ) ? sanitize_key( $option['mail']['mailer'] ) : '';
+		return rest_ensure_response( array(
+			'mechanism'       => 'plugin_managed',
+			'provider'        => $mailer,
+			'detected_plugin' => 'WP Mail SMTP',
+			'notes'           => __( 'WP Mail SMTP is active. Credentials and server settings are intentionally not exposed.', 'imperal-bridge' ),
+		) );
+	}
+	return rest_ensure_response( array(
+		'mechanism'       => 'native_or_undetermined',
+		'provider'        => '',
+		'detected_plugin' => '',
+		'notes'           => __( 'No supported mail plugin was detected. WordPress will use its configured native wp_mail() path, which may be changed by another plugin or host configuration.', 'imperal-bridge' ),
+	) );
+}
+
+function imperal_mail_bridge_register_routes() {
+	register_rest_route(
+		IMPERAL_MAIL_BRIDGE_NAMESPACE,
+		'/mail/test',
+		array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => 'imperal_mail_bridge_send_test',
+			'permission_callback' => function () { return current_user_can( 'manage_options' ); },
+		)
+	);
+	register_rest_route(
+		IMPERAL_MAIL_BRIDGE_NAMESPACE,
+		'/mail/configuration',
+		array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => 'imperal_mail_bridge_configuration',
+			'permission_callback' => function () { return current_user_can( 'manage_options' ); },
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_mail_bridge_register_routes' );
 
 /* =============================================================================
  * SECTION 6 — USERS (password reset)
