@@ -5,6 +5,53 @@
 
 ---
 
+## 2026-08-11 (evening, cont'd 4) — Bridge SECTION 14 (cache/cron): fixed SSH-required gap on the 8 existing transient/object-cache/cron functions
+
+**Status:** SHIPPED, tested (698/698, +10 from the Group L count), `imperal validate` clean (193
+functions — unchanged, this rewires existing functions, doesn't add new ones), bridge zip rebuilt
+and README updated. No pricing change needed (same 8 function names, same tiers).
+
+**Fix:** `handlers_cache_cron.py`'s 8 functions (`list_transients`, `delete_transient`,
+`flush_all_transients`, `get_object_cache_status`, `flush_object_cache`, `list_cron_events`,
+`run_cron_event`, `delete_cron_event`, `list_cron_schedules`) were SSH/WP-CLI-only since they were
+first shipped — every one of them now needed SSH configured even on sites that already have the
+Imperal Bridge plugin installed, matching the exact bug pattern the user found and asked to be
+fixed (details screen "No server data yet", refresh doesn't help). Added Bridge SECTION 14
+(`imperal-bridge.php` 2.9.0 → 2.10.0, `/imperal/v1/cache/*` routes) using WordPress's own core
+functions on the Bridge path — `delete_transient()`/`delete_site_transient()` (not a raw
+options-table write, so cache add-ons hooking those actions still see it),
+`wp_using_ext_object_cache()`/`wp_cache_flush()`, `_get_cron_array()`/`wp_unschedule_hook()`/
+`wp_get_schedules()` (WP core's own cron internals, matching what `wp cron event *` calls
+internally). Rewired all 8 Python handlers to Bridge-first/SSH-fallback, same shape as
+`handlers_logs.py`/`handlers_database.py`. Rewrote `tests/test_cache_cron.py` for the new
+three-way contract (Bridge-only / SSH-fallback / neither) — 13 → 24 tests. Added
+`bridge/imperal-bridge/tests/cache_cron_logic_test.php` (37 passing PHP unit tests for the new
+PHP logic, mirroring `database_logic_test.php`'s standalone-harness pattern). Rebuilt
+`bridge/imperal-bridge.zip` and added a README table row for the new section.
+
+---
+
+## 2026-08-11 (evening, cont'd 3) — Group L (WooCommerce webhooks, 5 functions); 188 → 193 functions
+
+**Status:** SHIPPED, tested (688/688), `imperal validate` clean (193 functions, 0 errors/0
+warnings/1 info), 193-key pricing map applied via `update_pricing` after `suspend_app`, resubmitted
+(all 4 checks passed). No Bridge/SSH changes this round — native WooCommerce REST. Commit + push +
+deploy is the final step of this entry.
+
+**Group L — WooCommerce webhooks (5 functions, `handlers_webhooks.py`, new, no Bridge/SSH needed):**
+`list_registered_webhooks`, `get_webhook`, `create_webhook`, `update_webhook`, `delete_webhook` —
+all against WooCommerce's own native `wc/v3/webhooks` route (developer.woocommerce.com/docs/apis/
+rest-api/v3/webhooks/), the same Application-Password auth every other WooCommerce function in
+this app already uses. Lets a backend developer wire a site into an external system (order sync,
+inventory feed, a Slack/Zapier-style relay) without touching wp-admin. `secret` is write-only per
+WooCommerce's own schema (never returned by a GET) and is never echoed back by any function here.
+`delivery_url` is validated https:// before any network call on both create and update.
+`update_webhook` uses POST (WooCommerce's own webhooks endpoint takes POST for partial updates, not
+PUT); `delete_webhook` uses `force=true` (webhooks have no trash state, same as customers). 12 new
+tests (`tests/test_webhooks.py`).
+
+---
+
 ## 2026-08-11 (evening, cont'd 2) — Group K (Blocks/Patterns introspection, 2 functions); 186 → 188 functions
 
 **Status:** SHIPPED, tested (676/676), `imperal validate` clean (188 functions, 0 errors/0

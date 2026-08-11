@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.9.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.10.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy', 'database', 'logs' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy', 'database', 'logs', 'cache_cron' ),
 		)
 	);
 }
@@ -4361,4 +4361,318 @@ function imperal_logs_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_logs_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 14 — CACHE & CRON (transients, persistent object cache, WP-Cron)
+ *
+ * Every one of these used to require SSH + WP-CLI (`wp transient list/delete`,
+ * `wp cache type/flush`, `wp cron event list/run/delete`, `wp cron schedule
+ * list`) purely because that was the only way to reach these WordPress
+ * internals from OUTSIDE the process. From inside it, every one is a plain
+ * WordPress core call:
+ * - Transients: WP core has no single "list all transients" function (WP-CLI
+ *   itself queries wp_options directly for this), so we do the same --
+ *   `$wpdb->get_results()` against `_transient_%` / `_site_transient_%`
+ *   option names, decoding each `_transient_timeout_%` sibling row for
+ *   expiration, exactly matching wp-cli/cache-command's own approach.
+ *   Deleting/flushing uses the real `delete_transient()` /
+ *   `delete_site_transient()` API so cache add-ons that hook those actions
+ *   still see the deletion (a raw DELETE query would silently bypass them).
+ * - Object cache: `wp_using_ext_object_cache()` is WP core's own canonical
+ *   answer to "is a persistent object cache active" (true only when a real
+ *   object-cache.php drop-in is loaded); `wp_cache_flush()` is the same
+ *   function `wp cache flush` calls internally.
+ * - Cron: `_get_cron_array()` is WP core's own accessor for the full cron
+ *   table stored in the `cron` option (the exact same array wp-cli's cron
+ *   commands walk); `wp_unschedule_hook()` removes every occurrence of a
+ *   hook (matching `wp cron event delete`); firing a hook right now uses
+ *   `do_action_ref_array()` with the event's own stored args, matching what
+ *   `wp cron event run` does; `wp_get_schedules()` is WP core's own registry
+ *   of recurrence intervals (hourly/twicedaily/daily plus anything a plugin
+ *   added via the `cron_schedules` filter).
+ * ============================================================================= */
+
+define( 'IMPERAL_CACHE_CRON_BRIDGE_NAMESPACE', 'imperal/v1' );
+
+/**
+ * GET /imperal/v1/cache/transients — every _transient_%/_site_transient_%
+ * row in wp_options, paired with its _timeout_ sibling for expiration.
+ */
+function imperal_cache_cron_bridge_list_transients( WP_REST_Request $request ) {
+	global $wpdb;
+	$rows = array();
+	foreach ( array( '_transient_', '_site_transient_' ) as $prefix ) {
+		$like    = $wpdb->esc_like( $prefix ) . '%';
+		$results = $wpdb->get_results(
+			$wpdb->prepare( "SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s", $like ) // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		);
+		foreach ( $results as $row ) {
+			if ( str_contains( $row->option_name, $prefix . 'timeout_' ) ) {
+				continue; // the expiry sibling row, not a transient itself.
+			}
+			$name       = substr( $row->option_name, strlen( $prefix ) );
+			$timeout_row = $wpdb->get_var(
+				$wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $prefix . 'timeout_' . $name ) // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			);
+			$rows[] = array(
+				'name'       => $name,
+				'value'      => is_string( $row->option_value ) ? $row->option_value : '',
+				'expiration' => $timeout_row ? gmdate( 'Y-m-d H:i:s', (int) $timeout_row ) . ' GMT' : '',
+			);
+		}
+	}
+	return rest_ensure_response( array( 'transients' => $rows ) );
+}
+
+/**
+ * POST /imperal/v1/cache/transients/delete { name } — delete_transient()
+ * (tries both the site and network transient API, since the caller-supplied
+ * name doesn't say which table it came from).
+ */
+function imperal_cache_cron_bridge_delete_transient( WP_REST_Request $request ) {
+	$name = (string) $request->get_param( 'name' );
+	if ( '' === $name ) {
+		return new WP_Error( 'imperal_cache_cron_missing_name', __( 'A transient name is required.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+	$deleted = delete_transient( $name );
+	$deleted = delete_site_transient( $name ) || $deleted;
+	return rest_ensure_response( array( 'name' => $name, 'deleted' => (bool) $deleted ) );
+}
+
+/**
+ * POST /imperal/v1/cache/transients/flush-all — delete every transient row,
+ * via the real delete_transient()/delete_site_transient() API so hooked
+ * cache add-ons still observe each deletion.
+ */
+function imperal_cache_cron_bridge_flush_all_transients( WP_REST_Request $request ) {
+	global $wpdb;
+	$count = 0;
+	foreach ( array(
+		'_transient_'      => 'delete_transient',
+		'_site_transient_' => 'delete_site_transient',
+	) as $prefix => $deleter ) {
+		$like  = $wpdb->esc_like( $prefix ) . '%';
+		$names = $wpdb->get_col(
+			$wpdb->prepare( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s", $like ) // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		);
+		foreach ( $names as $option_name ) {
+			if ( str_contains( $option_name, $prefix . 'timeout_' ) ) {
+				continue;
+			}
+			$name = substr( $option_name, strlen( $prefix ) );
+			if ( call_user_func( $deleter, $name ) ) {
+				$count++;
+			}
+		}
+	}
+	return rest_ensure_response( array( 'deleted_count' => $count ) );
+}
+
+/**
+ * GET /imperal/v1/cache/object-cache-status — wp_using_ext_object_cache()
+ * is WP core's own canonical answer.
+ */
+function imperal_cache_cron_bridge_object_cache_status( WP_REST_Request $request ) {
+	$using_persistent = function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache();
+	return rest_ensure_response( array( 'cache_type' => $using_persistent ? 'External object cache' : 'Default' ) );
+}
+
+/**
+ * POST /imperal/v1/cache/object-cache/flush — wp_cache_flush(), the same
+ * function `wp cache flush` calls.
+ */
+function imperal_cache_cron_bridge_flush_object_cache( WP_REST_Request $request ) {
+	$ok = wp_cache_flush();
+	return rest_ensure_response( array( 'flushed' => (bool) $ok ) );
+}
+
+/**
+ * GET /imperal/v1/cache/cron/events — walk _get_cron_array(), WP core's own
+ * accessor for the full cron table (the `cron` option).
+ */
+function imperal_cache_cron_bridge_list_cron_events( WP_REST_Request $request ) {
+	$crons  = _get_cron_array();
+	$events = array();
+	if ( is_array( $crons ) ) {
+		foreach ( $crons as $timestamp => $hooks ) {
+			foreach ( (array) $hooks as $hook => $instances ) {
+				foreach ( (array) $instances as $instance ) {
+					$events[] = array(
+						'hook'              => (string) $hook,
+						'next_run_gmt'      => gmdate( 'Y-m-d H:i:s', (int) $timestamp ) . ' GMT',
+						'next_run_relative' => human_time_diff( (int) $timestamp, time() ),
+						'recurrence'        => isset( $instance['schedule'] ) && $instance['schedule'] ? (string) $instance['schedule'] : 'Non-repeating',
+					);
+				}
+			}
+		}
+	}
+	return rest_ensure_response( array( 'events' => $events ) );
+}
+
+/**
+ * POST /imperal/v1/cache/cron/events/run { hook } — fire every scheduled
+ * instance of this hook right now, with its own stored args, matching
+ * `wp cron event run`.
+ */
+function imperal_cache_cron_bridge_run_cron_event( WP_REST_Request $request ) {
+	$hook = (string) $request->get_param( 'hook' );
+	if ( '' === $hook ) {
+		return new WP_Error( 'imperal_cache_cron_missing_hook', __( 'A cron hook name is required.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+	$crons = _get_cron_array();
+	$ran   = 0;
+	if ( is_array( $crons ) ) {
+		foreach ( $crons as $hooks ) {
+			if ( ! isset( $hooks[ $hook ] ) ) {
+				continue;
+			}
+			foreach ( (array) $hooks[ $hook ] as $instance ) {
+				do_action_ref_array( $hook, isset( $instance['args'] ) ? (array) $instance['args'] : array() );
+				$ran++;
+			}
+		}
+	}
+	if ( 0 === $ran ) {
+		return new WP_Error( 'imperal_cache_cron_not_found', __( 'No scheduled instance of that hook was found.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+	return rest_ensure_response( array( 'hook' => $hook, 'ran' => $ran ) );
+}
+
+/**
+ * POST /imperal/v1/cache/cron/events/delete { hook } — wp_unschedule_hook(),
+ * removes every scheduled occurrence, matching `wp cron event delete`.
+ */
+function imperal_cache_cron_bridge_delete_cron_event( WP_REST_Request $request ) {
+	$hook = (string) $request->get_param( 'hook' );
+	if ( '' === $hook ) {
+		return new WP_Error( 'imperal_cache_cron_missing_hook', __( 'A cron hook name is required.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+	$result = wp_unschedule_hook( $hook );
+	return rest_ensure_response( array( 'hook' => $hook, 'deleted' => false !== $result ) );
+}
+
+/**
+ * GET /imperal/v1/cache/cron/schedules — wp_get_schedules(), WP core's own
+ * registry of recurrence intervals.
+ */
+function imperal_cache_cron_bridge_list_cron_schedules( WP_REST_Request $request ) {
+	$schedules = wp_get_schedules();
+	$items     = array();
+	foreach ( (array) $schedules as $name => $schedule ) {
+		$items[] = array(
+			'name'     => (string) $name,
+			'display'  => isset( $schedule['display'] ) ? (string) $schedule['display'] : (string) $name,
+			'interval' => isset( $schedule['interval'] ) ? (int) $schedule['interval'] : 0,
+		);
+	}
+	return rest_ensure_response( array( 'schedules' => $items ) );
+}
+
+function imperal_cache_cron_bridge_register_routes() {
+	$manage_options_perm = function () {
+		return current_user_can( 'manage_options' );
+	};
+
+	register_rest_route(
+		IMPERAL_CACHE_CRON_BRIDGE_NAMESPACE,
+		'/cache/transients',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_cache_cron_bridge_list_transients',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_CACHE_CRON_BRIDGE_NAMESPACE,
+		'/cache/transients/delete',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_cache_cron_bridge_delete_transient',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_CACHE_CRON_BRIDGE_NAMESPACE,
+		'/cache/transients/flush-all',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_cache_cron_bridge_flush_all_transients',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_CACHE_CRON_BRIDGE_NAMESPACE,
+		'/cache/object-cache-status',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_cache_cron_bridge_object_cache_status',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_CACHE_CRON_BRIDGE_NAMESPACE,
+		'/cache/object-cache/flush',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_cache_cron_bridge_flush_object_cache',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_CACHE_CRON_BRIDGE_NAMESPACE,
+		'/cache/cron/events',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_cache_cron_bridge_list_cron_events',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_CACHE_CRON_BRIDGE_NAMESPACE,
+		'/cache/cron/events/run',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_cache_cron_bridge_run_cron_event',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_CACHE_CRON_BRIDGE_NAMESPACE,
+		'/cache/cron/events/delete',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_cache_cron_bridge_delete_cron_event',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_CACHE_CRON_BRIDGE_NAMESPACE,
+		'/cache/cron/schedules',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_cache_cron_bridge_list_cron_schedules',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_cache_cron_bridge_register_routes' );
 

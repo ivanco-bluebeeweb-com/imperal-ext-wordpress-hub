@@ -227,15 +227,26 @@ checks passed. Deployed at `a0152c0d`.
 - **Deliberately excluded:** full Site Editor template editing — matches existing Widgets/FSE
   exclusion decision in the main roadmap (1.6), same reasoning.
 
-## Group L — Webhooks / Integrations
+## Group L — Webhooks / Integrations — ✅ SHIPPED 2026-08-11
 
-50. `list_registered_webhooks` — if WooCommerce is active, `wc/v3/webhooks` is a REAL native route
-    already exposed by WooCommerce core — list configured webhooks (URL, topic, status)
-51. `get_webhook` — read one webhook's full config + delivery log summary (native route)
-52. `create_webhook` — same native WooCommerce route, write side — lets a backend dev wire this
-    site into an external system without touching wp-admin
-53. `update_webhook` — change URL/topic/status/secret on an existing webhook
-54. `delete_webhook` — remove a webhook
+50. `list_registered_webhooks` — ✅ WooCommerce's own native `wc/v3/webhooks` route (documented at
+    developer.woocommerce.com/docs/apis/rest-api/v3/webhooks/) — list configured webhooks (URL,
+    topic, status), optionally filtered by status.
+51. `get_webhook` — ✅ read one webhook's full config (native route). `secret` is write-only per
+    WooCommerce's own schema — never returned by any GET, and never echoed back by any function
+    here either.
+52. `create_webhook` — ✅ same native WooCommerce route, write side — lets a backend dev wire this
+    site into an external system (order sync, inventory feed, a Slack/Zapier-style relay) without
+    touching wp-admin. `delivery_url` is validated https:// before ever making a network call.
+53. `update_webhook` — ✅ change topic/URL/status/secret on an existing webhook without touching
+    omitted fields — WooCommerce's webhooks endpoint takes POST for partial updates, not PUT.
+54. `delete_webhook` — ✅ permanently remove a webhook (`DELETE .../webhooks/{id}?force=true` —
+    webhooks have no trash state, same as WooCommerce customers).
+
+5 functions in `handlers_webhooks.py` (new). 12 new tests (`tests/test_webhooks.py`). Full suite
+676→688, all green. `imperal validate`: 0 errors/0 warnings, 193 functions. Repriced the complete
+193-key map (1 credit for reads, 2 for writes — matches the existing coupon/redirect tier),
+resubmitted — `pending_review`, all 4 checks passed.
 
 ## Group M — Action Scheduler / Background Job Queue
 

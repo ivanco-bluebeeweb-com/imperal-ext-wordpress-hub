@@ -2169,6 +2169,64 @@ class ReusableBlock(sdl.Entity):
     sync_status: str = ""
 
 
+class Webhook(sdl.Entity):
+    """One WooCommerce webhook (native `wc/v3/webhooks`)."""
+    status: str = ""  # active, paused, disabled
+    topic: str = ""  # e.g. order.created
+    resource: str = ""  # read-only, derived from topic
+    event: str = ""  # read-only, derived from topic
+    delivery_url: str = ""
+    date_created: str = ""
+    date_modified: str = ""
+
+
+class ListWebhooksParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    status: str = Field(default="", description="Optional filter: 'active', 'paused', or 'disabled'. Empty returns every status.")
+    limit: int = Field(default=20, ge=1, le=100, description="Max webhooks to return, 1-100")
+
+
+class WebhookIdParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    webhook_id: int = Field(gt=0, description="Numeric webhook id from list_registered_webhooks")
+
+
+class CreateWebhookParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    topic: str = Field(min_length=1, description=(
+        "Webhook topic: a core topic like 'order.created'/'order.updated'/'order.deleted', "
+        "'product.created'/'product.updated'/'product.deleted', 'customer.created'/"
+        "'customer.updated'/'customer.deleted', 'coupon.created'/'coupon.updated'/"
+        "'coupon.deleted' -- or a custom topic 'action.<hook_name>' bound to any WooCommerce "
+        "action hook"))
+    delivery_url: str = Field(default="", description="HTTPS URL where the webhook payload will be POSTed")
+    name: str = Field(default="", description="Friendly name; WooCommerce defaults to 'Webhook created on <date>' if left empty")
+    secret: str = Field(default="", description=(
+        "Secret used to HMAC-SHA256-sign the delivered payload so the receiver can verify "
+        "authenticity. WooCommerce defaults to an MD5 hash of the current user's ID/username "
+        "if left empty -- pass an explicit secret for anything security-sensitive."))
+    status: str = Field(default="active", description="'active' (delivers), 'paused' (does not deliver), or 'disabled'")
+
+
+class UpdateWebhookParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    webhook_id: int = Field(gt=0, description="Numeric webhook id from list_registered_webhooks")
+    topic: str | None = Field(default=None, description="New topic, if changing it")
+    delivery_url: str | None = Field(default=None, description="New delivery URL, if changing it")
+    name: str | None = Field(default=None, description="New friendly name, if changing it")
+    secret: str | None = Field(default=None, description="New secret, if rotating it")
+    status: str | None = Field(default=None, description="New status: 'active', 'paused', or 'disabled'")
+
+
+class DeleteWebhookParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    webhook_id: int = Field(gt=0, description="Numeric webhook id from list_registered_webhooks")
+
+
+class WebhookDeleteResult(sdl.Entity):
+    deleted: bool = False
+
+
 class BlockPattern(sdl.Entity):
     """One registered block pattern (theme/plugin supplied), read via
     native `GET /wp/v2/block-patterns/patterns`. Read-only: patterns are

@@ -27905,7 +27905,7 @@
     },
     {
       "name": "list_transients",
-      "description": "List WordPress transients (temporary cached values plugins/themes store in wp_options) via WP-CLI (`wp transient list`). Requires SSH access configured with add_ssh. Shows name, value, and expiration — useful for diagnosing stale cached data or a bloated options table.",
+      "description": "List WordPress transients (temporary cached values plugins/themes store in wp_options). Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp transient list`) if SSH is configured with add_ssh. Shows name, value, and expiration — useful for diagnosing stale cached data or a bloated options table.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -28075,7 +28075,7 @@
     },
     {
       "name": "delete_transient",
-      "description": "Delete one named transient via WP-CLI (`wp transient delete <name>`). Requires SSH access configured with add_ssh. Pass a name from list_transients — never a guessed name.",
+      "description": "Delete one named transient. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp transient delete <name>`) if SSH is configured with add_ssh. Pass a name from list_transients — never a guessed name.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -28200,7 +28200,7 @@
     },
     {
       "name": "flush_all_transients",
-      "description": "Delete every transient on the site via WP-CLI (`wp transient delete --all`). Requires SSH access configured with add_ssh. More thorough than one plugin's own cache-clear button — clears every plugin's/theme's transient at once.",
+      "description": "Delete every transient on the site. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp transient delete --all`) if SSH is configured with add_ssh. More thorough than one plugin's own cache-clear button — clears every plugin's/theme's transient at once.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -28318,7 +28318,7 @@
     },
     {
       "name": "get_object_cache_status",
-      "description": "Check whether a persistent object cache (Redis, Memcached, etc.) is active on the site via WP-CLI (`wp cache type`). Requires SSH access configured with add_ssh. Returns 'Default' when no persistent object cache drop-in is installed (WordPress's built-in non-persistent cache only).",
+      "description": "Check whether a persistent object cache (Redis, Memcached, etc.) is active on the site. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cache type`) if SSH is configured with add_ssh. Returns 'Default' when no persistent object cache drop-in is installed (WordPress's built-in non-persistent cache only).",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -28435,7 +28435,7 @@
     },
     {
       "name": "flush_object_cache",
-      "description": "Flush the persistent object cache (Redis/Memcached/etc., if active) via WP-CLI (`wp cache flush`). Requires SSH access configured with add_ssh. This is different from purge_cache (which purges a PAGE cache plugin) — this clears the object cache layer instead.",
+      "description": "Flush the persistent object cache (Redis/Memcached/etc., if active). Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cache flush`) if SSH is configured with add_ssh. This is different from purge_cache (which purges a PAGE cache plugin) — this clears the object cache layer instead.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -28553,7 +28553,7 @@
     },
     {
       "name": "list_cron_events",
-      "description": "List every scheduled WordPress cron event via WP-CLI (`wp cron event list`). Requires SSH access configured with add_ssh. Shows each event's hook name, next run time, and recurrence — use before run_cron_event or delete_cron_event to see real hook names, never invent one.",
+      "description": "List every scheduled WordPress cron event. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cron event list`) if SSH is configured with add_ssh. Shows each event's hook name, next run time, and recurrence — use before run_cron_event or delete_cron_event to see real hook names, never invent one.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -28728,7 +28728,7 @@
     },
     {
       "name": "run_cron_event",
-      "description": "Force one specific cron event to run right now via WP-CLI (`wp cron event run <hook>`), regardless of whether it's due. Requires SSH access configured with add_ssh. Pass a hook name from list_cron_events — never invent one. Use run_wp_cron instead when you just want every DUE event to fire.",
+      "description": "Force one specific cron event to run right now, regardless of whether it's due. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cron event run <hook>`) if SSH is configured with add_ssh. Pass a hook name from list_cron_events — never invent one. Use run_wp_cron instead when you just want every DUE event to fire.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -28858,7 +28858,7 @@
     },
     {
       "name": "delete_cron_event",
-      "description": "Unschedule one cron event via WP-CLI (`wp cron event delete <hook>`) — removes every scheduled occurrence of that hook. Requires SSH access configured with add_ssh. Use to fix a stuck or duplicated cron event. Pass a hook name from list_cron_events — never invent one.",
+      "description": "Unschedule one cron event — removes every scheduled occurrence of that hook. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cron event delete <hook>`) if SSH is configured with add_ssh. Use to fix a stuck or duplicated cron event. Pass a hook name from list_cron_events — never invent one.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -28988,7 +28988,7 @@
     },
     {
       "name": "list_cron_schedules",
-      "description": "List every registered cron recurrence interval (hourly, twicedaily, daily, and any custom intervals plugins have added) via WP-CLI (`wp cron schedule list`). Requires SSH access configured with add_ssh. Useful for diagnosing 'why does this only run every N hours' when a plugin's own schedule choice is opaque.",
+      "description": "List every registered cron recurrence interval (hourly, twicedaily, daily, and any custom intervals plugins have added). Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cron schedule list`) if SSH is configured with add_ssh. Useful for diagnosing 'why does this only run every N hours' when a plugin's own schedule choice is opaque.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -33242,6 +33242,822 @@
         "x-sdl": "entity-list"
       },
       "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_registered_webhooks",
+      "description": "List WooCommerce webhooks configured on a site -- URL, topic (e.g. order.created), and status (active/paused/disabled). Native `wc/v3/webhooks` -- requires WooCommerce.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "status": {
+            "default": "",
+            "description": "Optional filter: 'active', 'paused', or 'disabled'. Empty returns every status.",
+            "title": "Status",
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "description": "Max webhooks to return, 1-100",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "ListWebhooksParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "Webhook": {
+            "description": "One WooCommerce webhook (native `wc/v3/webhooks`).",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "default": "",
+                "title": "Status",
+                "type": "string"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "topic": {
+                "default": "",
+                "title": "Topic",
+                "type": "string"
+              },
+              "resource": {
+                "default": "",
+                "title": "Resource",
+                "type": "string"
+              },
+              "event": {
+                "default": "",
+                "title": "Event",
+                "type": "string"
+              },
+              "delivery_url": {
+                "default": "",
+                "title": "Delivery Url",
+                "type": "string"
+              },
+              "date_created": {
+                "default": "",
+                "title": "Date Created",
+                "type": "string"
+              },
+              "date_modified": {
+                "default": "",
+                "title": "Date Modified",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "Webhook",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/Webhook"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[Webhook]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "get_webhook",
+      "description": "Read one WooCommerce webhook's full configuration (topic, delivery URL, status, dates). Secret is never returned by WooCommerce.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "webhook_id": {
+            "description": "Numeric webhook id from list_registered_webhooks",
+            "exclusiveMinimum": 0,
+            "title": "Webhook Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "webhook_id"
+        ],
+        "title": "WebhookIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One WooCommerce webhook (native `wc/v3/webhooks`).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "default": "",
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "topic": {
+            "default": "",
+            "title": "Topic",
+            "type": "string"
+          },
+          "resource": {
+            "default": "",
+            "title": "Resource",
+            "type": "string"
+          },
+          "event": {
+            "default": "",
+            "title": "Event",
+            "type": "string"
+          },
+          "delivery_url": {
+            "default": "",
+            "title": "Delivery Url",
+            "type": "string"
+          },
+          "date_created": {
+            "default": "",
+            "title": "Date Created",
+            "type": "string"
+          },
+          "date_modified": {
+            "default": "",
+            "title": "Date Modified",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Webhook",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "create_webhook",
+      "description": "Create a WooCommerce webhook: which topic to fire on (order.created, product.updated, etc.) and the HTTPS URL to deliver the payload to. Lets a backend developer wire this site into an external system without touching wp-admin.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wc.webhook_create"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "topic": {
+            "description": "Webhook topic: a core topic like 'order.created'/'order.updated'/'order.deleted', 'product.created'/'product.updated'/'product.deleted', 'customer.created'/'customer.updated'/'customer.deleted', 'coupon.created'/'coupon.updated'/'coupon.deleted' -- or a custom topic 'action.<hook_name>' bound to any WooCommerce action hook",
+            "minLength": 1,
+            "title": "Topic",
+            "type": "string"
+          },
+          "delivery_url": {
+            "default": "",
+            "description": "HTTPS URL where the webhook payload will be POSTed",
+            "title": "Delivery Url",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "description": "Friendly name; WooCommerce defaults to 'Webhook created on <date>' if left empty",
+            "title": "Name",
+            "type": "string"
+          },
+          "secret": {
+            "default": "",
+            "description": "Secret used to HMAC-SHA256-sign the delivered payload so the receiver can verify authenticity. WooCommerce defaults to an MD5 hash of the current user's ID/username if left empty -- pass an explicit secret for anything security-sensitive.",
+            "title": "Secret",
+            "type": "string"
+          },
+          "status": {
+            "default": "active",
+            "description": "'active' (delivers), 'paused' (does not deliver), or 'disabled'",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "topic"
+        ],
+        "title": "CreateWebhookParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One WooCommerce webhook (native `wc/v3/webhooks`).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "default": "",
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "topic": {
+            "default": "",
+            "title": "Topic",
+            "type": "string"
+          },
+          "resource": {
+            "default": "",
+            "title": "Resource",
+            "type": "string"
+          },
+          "event": {
+            "default": "",
+            "title": "Event",
+            "type": "string"
+          },
+          "delivery_url": {
+            "default": "",
+            "title": "Delivery Url",
+            "type": "string"
+          },
+          "date_created": {
+            "default": "",
+            "title": "Date Created",
+            "type": "string"
+          },
+          "date_modified": {
+            "default": "",
+            "title": "Date Modified",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Webhook",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.create_webhook",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "update_webhook",
+      "description": "Change URL/topic/status/secret on an existing WooCommerce webhook without touching omitted fields.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wc.webhook_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "webhook_id": {
+            "description": "Numeric webhook id from list_registered_webhooks",
+            "exclusiveMinimum": 0,
+            "title": "Webhook Id",
+            "type": "integer"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New topic, if changing it",
+            "title": "Topic"
+          },
+          "delivery_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New delivery URL, if changing it",
+            "title": "Delivery Url"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New friendly name, if changing it",
+            "title": "Name"
+          },
+          "secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New secret, if rotating it",
+            "title": "Secret"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New status: 'active', 'paused', or 'disabled'",
+            "title": "Status"
+          }
+        },
+        "required": [
+          "site_id",
+          "webhook_id"
+        ],
+        "title": "UpdateWebhookParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One WooCommerce webhook (native `wc/v3/webhooks`).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "default": "",
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "topic": {
+            "default": "",
+            "title": "Topic",
+            "type": "string"
+          },
+          "resource": {
+            "default": "",
+            "title": "Resource",
+            "type": "string"
+          },
+          "event": {
+            "default": "",
+            "title": "Event",
+            "type": "string"
+          },
+          "delivery_url": {
+            "default": "",
+            "title": "Delivery Url",
+            "type": "string"
+          },
+          "date_created": {
+            "default": "",
+            "title": "Date Created",
+            "type": "string"
+          },
+          "date_modified": {
+            "default": "",
+            "title": "Date Modified",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Webhook",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.update_webhook",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "delete_webhook",
+      "description": "Permanently remove a WooCommerce webhook. Use list_registered_webhooks first to find the webhook_id.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wc.webhook_delete"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "webhook_id": {
+            "description": "Numeric webhook id from list_registered_webhooks",
+            "exclusiveMinimum": 0,
+            "title": "Webhook Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "webhook_id"
+        ],
+        "title": "DeleteWebhookParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "deleted": {
+            "default": false,
+            "title": "Deleted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "WebhookDeleteResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.delete_webhook",
       "background": false,
       "long_running": false,
       "scopes": [],
