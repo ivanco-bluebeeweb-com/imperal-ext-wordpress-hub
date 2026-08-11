@@ -5,6 +5,54 @@
 
 ---
 
+## 2026-08-11 (afternoon, cont'd) — Shipped Group B (Database Tools, 8 functions); repriced full 169-key map; resubmitted
+
+**Status:** SHIPPED, tested, deployed, priced, resubmitted for review. Continuing through the
+remaining groups (E, F...) of `docs/2026-08-11-developer-backend-functions-plan.md` in this same
+session.
+
+**Group B — Database Tools (8 functions, `handlers_database.py`, new):**
+`list_database_tables` (`wp db size --tables --format=json`), `run_db_search_replace` /
+`apply_db_search_replace` (`wp search-replace`, always dry-run first; apply re-verifies with a
+fresh dry-run immediately before writing and refuses if the replacement count drifted from what
+was confirmed — same anti-stale-preview guard as `apply_order_line_changes`; search/replace text
+rejected if it contains quotes/backticks/newlines; table names restricted to
+alnum/`-_.*`), `optimize_database_tables` (`wp db optimize`), `check_database_repair` (`wp db
+check` always + `wp db repair` when `repair=true`), `export_database_dump` (`wp db export`,
+inline text, hard-capped ~2MB — no file/attachment mechanism exists in this app so a signed-URL
+approach wasn't available; over-cap tells the caller to scope down with `tables=`),
+`count_post_type_rows` (`wp post list --format=count`, post_type validated as a safe identifier),
+`count_orphaned_postmeta` (`wp db query` with a prefix-safe `LEFT JOIN ... IS NULL`, using the
+site's own real `$wpdb->prefix` discovered via `wp eval` — never hardcoded `wp_`). Every WP-CLI
+command shape verified against developer.wordpress.org/cli/commands/db/* and
+github.com/wp-cli/db-command source before writing code.
+
+**Tests:** 15 new (`tests/test_database.py`) — 12 handler-level MockContext tests covering every
+function including the SSH_NOT_CONFIGURED guard and the stale-preview rejection path, plus 3
+direct `wp_cli`-level shell-injection-guard tests (quotes/backticks in search-replace text, unsafe
+table names, unsafe post_type). Full suite: 594 → 609, all green. `imperal validate`: 0
+errors/0 warnings, 169 functions (up from 168 — also picked up `get_builder_element` from the
+prior span, which hadn't been priced yet).
+
+**Pricing:** rebuilt the complete 169-key `tool_prices` map from the live manifest (`imperal.json`
+→ `tools[]`, filtered `skeleton_*`), asserting the key-set exactly matches the manifest's function
+names before sending (no missing, no extra). Tiers unchanged from established convention: 0 =
+front-door/local-only, 1 = single read, 2 = single write/delete, 4 = multi-call
+bulk/preview/multi-step, 6 = CSV-apply. New Group B prices: `list_database_tables`=1,
+`run_db_search_replace`=1 (single dry-run call), `apply_db_search_replace`=4 (re-verify + write =
+2 real SSH calls, same tier as `restore_revision`/`duplicate_post`), `optimize_database_tables`=2,
+`check_database_repair`=2, `export_database_dump`=1, `count_post_type_rows`=1,
+`count_orphaned_postmeta`=4 (2 real SSH calls: prefix discovery + the join query, matches the
+cost-of-real-work rule). Applied via `developer.suspend_app` → `developer.update_pricing` (COMPLETE
+map, never `save_pricing`, never partial) → `developer.submit_for_review`. Deployed
+(`fe09f3d`), `pending_review`, all 4 checks passed.
+
+**Open:** continue through Groups E (REST API introspection), F (security diagnostics) onward —
+none of those are built yet this session. Group G (multisite) still gated on confirming real
+multisite demand.
+
+---
+
 ## 2026-08-11 (afternoon) — Shipped Groups A, C, D from the developer/backend-developer roadmap (21 functions); extended purge_cache with W3 Total Cache support; repriced and resubmitted
 
 **Status:** SHIPPED, tested, deployed, priced, resubmitted for review. Continuing to work through

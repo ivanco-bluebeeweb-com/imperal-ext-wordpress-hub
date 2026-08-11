@@ -59,22 +59,35 @@ post") and today we have zero generic answer for it beyond SEO-specific meta.
    a post type (Bridge, ACF's own `get_field_objects()`) — verify ACF presence before ever
    attempting this, must degrade cleanly when ACF isn't installed
 
-## Group B — Database Tools
+## Group B — Database Tools — ✅ SHIPPED 2026-08-11
 
 8. `get_database_size` — already covered by `get_server_info`, no new function needed (noted in
    main roadmap 5.2)
-9. `list_database_tables` — table names + row counts + size on disk (WP-CLI `wp db size --tables`
-   or Bridge querying `information_schema`)
-10. `run_db_search_replace` — the single most common WP migration task (domain change, staging→prod
-    URL swap) — WP-CLI `wp search-replace`, MUST be dry-run-first (preview count of replacements)
-    before a real run, same preview→apply pattern as CSV import
-11. `optimize_database_tables` — WP-CLI `wp db optimize` (defragment/repair tables)
-12. `check_database_repair` — WP-CLI `wp db check` / `wp db repair`
-13. `export_database_dump` — WP-CLI `wp db export`, returns a downloadable/streamed dump (needs
-    size-limit handling — a full dump can be huge; likely needs to write to a known path and return
-    a signed URL rather than inline content)
-14. `count_post_type_rows` / `count_orphaned_postmeta` — common "is my DB clean" backend-dev
-    diagnostic, WP-CLI `wp post list --format=count` / raw meta orphan query
+9. `list_database_tables` — ✅ table names + size on disk, WP-CLI `wp db size --tables --format=json`
+10. `run_db_search_replace` / `apply_db_search_replace` — ✅ the single most common WP migration task
+    (domain change, staging→prod URL swap) — WP-CLI `wp search-replace`, ALWAYS dry-run-first
+    (`run_db_search_replace` reports the replacement count), `apply_db_search_replace` re-verifies
+    with a fresh dry-run immediately before writing and refuses if the count drifted from what the
+    caller confirmed (anti-stale-preview guard, same pattern as `apply_order_line_changes`).
+    Search/replace strings are rejected if they contain quotes/backticks/newlines; table names are
+    restricted to alnum/`-_.*` only — no shell injection surface.
+11. `optimize_database_tables` — ✅ WP-CLI `wp db optimize` (defragment tables)
+12. `check_database_repair` — ✅ WP-CLI `wp db check` (always) + `wp db repair` (when `repair=true`)
+13. `export_database_dump` — ✅ WP-CLI `wp db export`, returned inline as text, hard-capped at ~2MB;
+    over the cap the caller is told to scope down with `tables=` from `list_database_tables`
+    (no file-write/attachment mechanism exists in this app, so streaming to a signed URL was not
+    attempted — inline-with-a-cap is the honest, verified option)
+14. `count_post_type_rows` — ✅ WP-CLI `wp post list --format=count`, post_type validated as a safe
+    identifier before hitting the command line
+    `count_orphaned_postmeta` — ✅ WP-CLI `wp db query` running a prefix-safe `LEFT JOIN ... IS NULL`
+    against the site's own real `$wpdb->prefix` (discovered via `wp eval`, never hardcoded `wp_`)
+
+All 8 functions in `handlers_database.py` (new), models in `models.py`, WP-CLI command builders in
+`wp_cli.py`. 15 new tests in `tests/test_database.py` (12 handler-level MockContext tests + 3
+`wp_cli`-level shell-injection-guard tests). Full suite 594→609, all green.
+`imperal validate`: 0 errors/0 warnings, 169 functions. Repriced the complete 169-key map (adding
+these 8 + the previously-unpriced `get_builder_element`) via `update_pricing`, resubmitted —
+`pending_review`, all 4 checks passed.
 
 ## Group C — Transients & Object Cache — ✅ SHIPPED 2026-08-11
 
