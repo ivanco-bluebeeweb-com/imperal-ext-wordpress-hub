@@ -94,7 +94,68 @@ async def test_get_reports_one_row_per_bricks_zone():
     assert set(zones) == {"content", "header", "footer"}
     assert zones["content"].element_count == 1
     assert zones["content"].state_token == "tok-content"
-    assert zones["header"].element_count == 0
+
+
+# ── zone filter: return exactly one row, so display clients never compact it ─
+#
+# Bricks pages always have 3 zones (header/content/footer), so a caller who
+# wants to actually SEE `heading_outline`/`elements` (rather than a compacted
+# id/title/kind card) needs a way to get exactly one row back. `zone` does
+# that — this is what makes the heading_skip/h1.missing investigation on
+# g4s.md/climtec.md actually actionable in a live session.
+
+async def test_zone_filter_returns_exactly_one_row():
+    ctx = await _ctx()
+    payload = {
+        "id": 7, "slug": "landing", "type": "page", "link": "https://x.com/landing",
+        "active_builders": ["bricks"],
+        "builders": {
+            "bricks": {
+                "zones": {
+                    "content": {
+                        "elements": [{"id": "e1", "parent_id": None, "el_type": "heading",
+                                      "widget_type": "", "settings": {"tag": "h3", "text": "Oops"},
+                                      "zone": "content"}],
+                        "state_token": "tok-content",
+                    },
+                    "header": {"elements": [], "state_token": "tok-header"},
+                    "footer": {"elements": [], "state_token": "tok-footer"},
+                }
+            }
+        },
+    }
+    ctx.http.mock_get(TREE, payload, 200)
+    r = await hb.get_builder_content(
+        ctx, GetBuilderContentParams(site_id="x-com", post_id=7, zone="content"))
+    assert r.status == "success"
+    assert len(r.data.items) == 1
+    assert r.data.items[0].zone == "content"
+    assert r.data.items[0].heading_outline == "h3: Oops (id=e1)"
+
+
+async def test_zone_filter_is_case_insensitive():
+    ctx = await _ctx()
+    payload = {
+        "id": 7, "slug": "landing", "type": "page", "link": "https://x.com/landing",
+        "active_builders": ["bricks"],
+        "builders": {"bricks": {"zones": {
+            "header": {"elements": [], "state_token": "tok-header"},
+        }}},
+    }
+    ctx.http.mock_get(TREE, payload, 200)
+    r = await hb.get_builder_content(
+        ctx, GetBuilderContentParams(site_id="x-com", post_id=7, zone="HEADER"))
+    assert r.status == "success"
+    assert len(r.data.items) == 1
+
+
+async def test_zone_filter_reports_a_clear_error_when_zone_absent():
+    ctx = await _ctx()
+    ctx.http.mock_get(TREE, _tree_payload(), 200)  # elementor-only payload, no bricks zones
+    r = await hb.get_builder_content(
+        ctx, GetBuilderContentParams(site_id="x-com", post_id=42, zone="content"))
+    assert r.status == "error"
+    assert r.error_code == "BUILDER_ZONE_NOT_FOUND"
 
 
 async def test_get_resolves_by_slug():

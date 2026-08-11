@@ -267,6 +267,16 @@ async def get_builder_content(ctx, params: GetBuilderContentParams) -> ActionRes
             "This item was not built with Elementor or Bricks — no builder content to read.",
             retryable=False, code="BUILDER_NONE_ACTIVE")
 
+    if params.zone:
+        wanted = params.zone.strip().lower()
+        zoned = [row for row in rows if row.zone.lower() == wanted]
+        if not zoned:
+            return ActionResult.error(
+                f"No '{params.zone}' zone found on this item — it may not use Bricks, or that "
+                "zone has no content. Call without `zone` to see all available rows.",
+                retryable=False, code="BUILDER_ZONE_NOT_FOUND")
+        rows = zoned
+
     return ActionResult.success(sdl.EntityList[BuilderContent](items=rows), summary=_summarise_content(rows))
 
 

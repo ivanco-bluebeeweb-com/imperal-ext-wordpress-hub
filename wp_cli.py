@@ -446,6 +446,234 @@ async def list_cron_schedules(cred: dict) -> tuple[list | None, str | None]:
     return rows, None
 
 
+async def _wp_prefix(host, port, user, key_path, wp_path) -> tuple[str | None, str | None]:
+    """Discover the site's real $wpdb->prefix — never hardcode 'wp_'."""
+    command = f"wp eval 'global $wpdb; echo $wpdb->prefix;' --path={wp_path} --allow-root"
+    output, error = await _run(host, port, user, key_path, command)
+    if output is None:
+        return None, error or "SSH connection failed"
+    prefix = output.strip()
+    if not prefix or not all(ch.isalnum() or ch == "_" for ch in prefix):
+        return None, "Could not determine a safe table prefix from this site."
+    return prefix, None
+
+
+async def list_database_tables(cred: dict) -> tuple[list | None, str | None]:
+    """List every table for this site via `wp db size --tables --format=json`."""
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = (
+        f"wp db size --tables --format=json --path={wp_path} --allow-root"
+    )
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command, timeout=60)
+    if output is None:
+        return None, error or "SSH connection failed"
+    try:
+        rows = json.loads(output) if output else []
+    except json.JSONDecodeError:
+        return None, "WP-CLI returned an invalid table list"
+    if not isinstance(rows, list):
+        return None, "WP-CLI returned an unexpected table list"
+    return rows, None
+
+
+def _safe_replace_string(value: str) -> bool:
+    """Reject characters that could break out of the single-quoted shell arg.
+
+    Single quotes inside a POSIX single-quoted string cannot be escaped except
+    via the '\\''  trick; simplest and safest is to reject bare single quotes,
+    backticks, and $() entirely — these are URLs/domains/text snippets, not
+    shell scripts.
+    """
+    return bool(value) and not any(ch in value for ch in ("'", "`", "\n", "\r"))
+
+
+async def run_db_search_replace(
+    cred: dict, old: str, new: str, *, dry_run: bool, tables: list[str] | None = None,
+) -> tuple[dict | None, str | None]:
+    """Run `wp search-replace <old> <new> [tables...] [--dry-run] --format=count`.
+
+    Always scoped to --format=count (a single integer) — never --report's full
+    per-row table, which could leak column values from other plugins' data in
+    the response. `tables` restricts to explicit table names (validated against
+    the site's own discovered prefix by the caller) or wildcards the caller
+    built from that prefix; never accepts free-form shell text here.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    if not _safe_replace_string(old) or not _safe_replace_string(new):
+        return None, "Search/replace text cannot contain quotes, backticks, or newlines."
+    if tables:
+        for t in tables:
+            if not t or not all(ch.isalnum() or ch in "-_.*" for ch in t):
+                return None, "Invalid table name — use names/wildcards from list_database_tables."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    table_args = " " + " ".join(f"'{t}'" for t in tables) if tables else ""
+    dry_flag = " --dry-run" if dry_run else ""
+    command = (
+        f"wp search-replace '{old}' '{new}'{table_args}{dry_flag} "
+        f"--format=count --skip-columns=guid --path={wp_path} --allow-root"
+    )
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command, timeout=90)
+    if output is None:
+        return None, error or "SSH connection failed"
+    text = (output or "").strip()
+    count = int(text) if text.isdigit() else None
+    if count is None:
+        return None, "WP-CLI returned an unexpected search-replace result."
+    return {"replacements": count, "dry_run": dry_run}, None
+
+
+async def optimize_database_tables(cred: dict) -> tuple[str | None, str | None]:
+    """Defragment/optimize every table via `wp db optimize`."""
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp db optimize --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command, timeout=90)
+
+
+async def check_database(cred: dict) -> tuple[str | None, str | None]:
+    """Run a read-only integrity check via `wp db check` (mysqlcheck --check)."""
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp db check --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command, timeout=90)
+
+
+async def repair_database(cred: dict) -> tuple[str | None, str | None]:
+    """Repair corrupted tables via `wp db repair` (mysqlcheck --repair)."""
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp db repair --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command, timeout=90)
+
+
+_DUMP_SIZE_CAP = 2_000_000  # ~2MB of SQL text — beyond this, advise scoping to specific tables
+
+
+async def export_database_dump(
+    cred: dict, tables: list[str] | None = None,
+) -> tuple[dict | None, str | None]:
+    """Export a SQL dump to STDOUT via `wp db export -`, capped at ~2MB of text.
+
+    There is no file-hosting/signed-URL infrastructure in this app, so a dump
+    is returned inline — safe for a handful of tables, not a whole large site.
+    Exceeding the cap is reported as a clear error asking the caller to scope
+    `tables` down, not silently truncated (a truncated SQL dump is corrupt and
+    must never be presented as a usable dump).
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    if tables:
+        for t in tables:
+            if not t or not all(ch.isalnum() or ch in "-_.*" for ch in t):
+                return None, "Invalid table name — use names/wildcards from list_database_tables."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    tables_flag = f" --tables={','.join(tables)}" if tables else ""
+    command = f"wp db export -{tables_flag} --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command, timeout=120)
+    if output is None:
+        return None, error or "SSH connection failed"
+    if len(output) > _DUMP_SIZE_CAP:
+        return None, (
+            f"Dump is larger than {_DUMP_SIZE_CAP // 1_000_000}MB of SQL text — "
+            "pass specific `tables` to scope the export down."
+        )
+    return {"sql": output, "size_bytes": len(output.encode())}, None
+
+
+async def count_post_type_rows(cred: dict, post_type: str) -> tuple[int | None, str | None]:
+    """Count rows of one post type via `wp post list --post_type=<t> --format=count`."""
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    if not post_type or not all(ch.isalnum() or ch in "-_" for ch in post_type):
+        return None, "Invalid post_type — use a slug from the site's own /wp/v2/types."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = (
+        f"wp post list --post_type={post_type} --post_status=any --format=count "
+        f"--path={wp_path} --allow-root"
+    )
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command)
+    if output is None:
+        return None, error or "SSH connection failed"
+    text = (output or "").strip()
+    if not text.isdigit():
+        return None, "WP-CLI returned an unexpected post count."
+    return int(text), None
+
+
+async def count_orphaned_postmeta(cred: dict) -> tuple[int | None, str | None]:
+    """Count wp_postmeta rows whose post_id no longer has a matching wp_posts row.
+
+    Discovers the site's real table prefix first via `wp eval` — never
+    hardcodes 'wp_' (some sites use a custom prefix).
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    async with _key_file(cred["key"]) as key_path:
+        prefix, error = await _wp_prefix(host, port, user, key_path, wp_path)
+        if prefix is None:
+            return None, error
+        query = (
+            f"SELECT COUNT(*) FROM {prefix}postmeta pm "
+            f"LEFT JOIN {prefix}posts p ON pm.post_id = p.ID WHERE p.ID IS NULL"
+        )
+        command = (
+            f"wp db query \"{query}\" --skip-column-names --path={wp_path} --allow-root"
+        )
+        output, error = await _run(host, port, user, key_path, command, timeout=60)
+    if output is None:
+        return None, error or "SSH connection failed"
+    text = (output or "").strip()
+    if not text.isdigit():
+        return None, "WP-CLI returned an unexpected orphan count."
+    return int(text), None
+
+
 async def get_server_info(cred: dict) -> dict:
     """Run WP-CLI diagnostic commands and return results."""
     if not cred.get("key"):

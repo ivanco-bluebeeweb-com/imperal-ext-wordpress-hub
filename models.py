@@ -1039,6 +1039,16 @@ class GetBuilderContentParams(BaseModel):
     slug: str | None = Field(default=None, description="Slug of the post or page, e.g. 'home'. Used when post_id is not given.")
     post_type: str | None = Field(default=None, description="Optional post type ('post', 'page', or a custom type) to disambiguate a slug used by several items.")
     builder: str | None = Field(default=None, description="Optional: 'elementor' or 'bricks', to read only that builder when both are active on the item.")
+    zone: str | None = Field(
+        default=None,
+        description=(
+            "Optional: 'header', 'content', or 'footer', to read only that one Bricks zone "
+            "(ignored for Elementor, which has no zones). Bricks pages always have 3 zones, so "
+            "without this the result has 3 rows and display clients may compact each one down "
+            "to id/title/kind, hiding fields like `heading_outline`/`elements`. Narrowing to one "
+            "zone returns exactly one row, which is never compacted."
+        ),
+    )
 
 
 class UpdateBuilderFieldParams(BaseModel):
@@ -1921,3 +1931,72 @@ class CronScheduleItem(sdl.Entity):
     name: str = ""
     display: str = ""
     interval: int = 0
+
+
+# ─────────── Database Tools (SSH/WP-CLI) ───────────
+
+class DatabaseTableItem(sdl.Entity):
+    """One table on the site's own database, from `wp db size --tables`."""
+    name: str = ""
+    size: str = ""
+
+
+class SearchReplaceParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    old: str = Field(min_length=1, description="Text to search for (e.g. an old domain)")
+    new: str = Field(min_length=1, description="Replacement text (e.g. the new domain)")
+    tables: list[str] | None = Field(
+        default=None,
+        description="Explicit table names/wildcards from list_database_tables to restrict to; omit for every registered table")
+
+
+class ApplySearchReplaceParams(SearchReplaceParams):
+    expected_replacements: int = Field(
+        ge=0, description="Exact replacement count returned by the dry-run preview; execution is refused if it does not match a fresh dry-run")
+
+
+class SearchReplaceResult(sdl.Entity):
+    site_id: str = ""
+    dry_run: bool = True
+    replacements: int = 0
+
+
+class DatabaseMaintenanceResult(sdl.Entity):
+    """Result of optimize_database_tables / check_database_repair."""
+    site_id: str = ""
+    output: str = ""
+
+
+class CheckDatabaseParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    repair: bool = Field(default=False, description="If true, repair any damaged tables found (wp db repair); if false (default), only check for corruption (wp db check)")
+
+
+class ExportDatabaseDumpParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    tables: list[str] | None = Field(
+        default=None,
+        description="Explicit table names/wildcards from list_database_tables; omit to export every registered table (capped at ~2MB of SQL text — scope down if the export is refused as too large)")
+
+
+class DatabaseDumpResult(sdl.Entity):
+    site_id: str = ""
+    sql: str = ""
+    size_bytes: int = 0
+
+
+class CountPostTypeRowsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_type: str = Field(min_length=1, description="Post type slug from list_custom_posts / the site's own /wp/v2/types, e.g. post, page, product")
+
+
+class PostTypeCountResult(sdl.Entity):
+    site_id: str = ""
+    post_type: str = ""
+    count: int = 0
+
+
+class OrphanedPostmetaResult(sdl.Entity):
+    """Count of wp_postmeta rows whose post no longer exists — a common DB-hygiene diagnostic."""
+    site_id: str = ""
+    orphaned_rows: int = 0

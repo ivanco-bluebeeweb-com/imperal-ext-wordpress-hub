@@ -5,6 +5,78 @@
 
 ---
 
+## 2026-08-11 (afternoon) — Shipped Groups A, C, D from the developer/backend-developer roadmap (21 functions); extended purge_cache with W3 Total Cache support; repriced and resubmitted
+
+**Status:** SHIPPED, tested, deployed, priced, resubmitted for review. Continuing to work through
+the remaining groups (B, E, F...) of `docs/2026-08-11-developer-backend-functions-plan.md` in this
+same session — see that doc for live group-by-group status.
+
+**Group A — Custom Fields / Post Meta (12 functions, `handlers_meta.py`, new):**
+`get_post_meta`, `update_post_meta`, `delete_post_meta`, `get_user_meta`, `update_user_meta`,
+`delete_user_meta`, `get_term_meta`, `update_term_meta`, `delete_term_meta`, `get_option`,
+`update_option` (hard ALLOWLIST only — never siteurl/home/active_plugins/template/stylesheet, never
+serialized-PHP values, object-injection risk), `list_acf_fields` (ACF field-group discovery, works
+only if ACF is active on the site). Required a new Bridge section — WordPress core has no generic
+meta REST route. Added Bridge SECTION 9 (GENERIC META) to `imperal-bridge.php`, namespace
+`imperal/v1`, routes `/postmeta`, `/usermeta`, `/termmeta`, `/option`, `/acf-fields`.
+
+**Group C — Transients & Object Cache (5 functions, `handlers_cache_cron.py`, new):**
+`list_transients`, `delete_transient`, `flush_all_transients` (all via wp-cli/cache-command,
+verified against developer.wordpress.org/cli/commands/transient/*), `get_object_cache_status` (`wp
+cache type`), `flush_object_cache` (`wp cache flush`). All SSH/WP-CLI, same safety bar as
+`handlers_maintenance.py` — fixed-shape commands, transient names restricted to safe identifier
+characters.
+
+**Group D — Cron beyond the existing single `run_wp_cron` (4 functions, same new file):**
+`list_cron_events` (`wp cron event list --format=json`), `run_cron_event` (`wp cron event run
+<hook>`), `delete_cron_event` (`wp cron event delete <hook>`), `list_cron_schedules` (`wp cron
+schedule list`) — all verified against wp-cli's own cron-command reference before writing. Hook
+names restricted to safe identifier characters, same bar as transient names.
+
+**`purge_cache` extended (not new, `handlers_read.py`):** now also detects and purges W3 Total
+Cache (`wp w3-total-cache flush all`) alongside the existing LiteSpeed Cache support — verified
+that this command ships BUNDLED with the W3TC plugin itself (github.com/BoldGrid/w3-total-cache
+wiki), same safety class as LiteSpeed's own `litespeed-purge`. WP Rocket and WP Super Cache
+deliberately NOT added: both ship their WP-CLI support as a SEPARATE package
+(wp-media/wp-rocket-cli, wp-cli/wp-super-cache-cli) that is not guaranteed installed on an
+arbitrary server — calling it speculatively could misreport a real absence as a false negative
+("no cache plugin found") instead of a clean, honest failure.
+
+**Tests:** 18 new tests for Group A (`tests/test_meta.py`), 13 new for Groups C+D
+(`tests/test_cache_cron.py`), 4 new for the purge_cache W3TC branch (`tests/test_purge_cache.py`).
+Full suite: 556 -> 594, all green. `imperal validate`: 0 errors/0 warnings, 160 functions (up from
+139).
+
+**Pricing:** built the complete 160-key `tool_prices` map from scratch (no readback tool exists for
+the previously-saved config — documented platform limitation, see prior sessions) by reading every
+function's real `action_type` out of the built `imperal.json` and applying this app's own
+established tiers: 0 = front-door/local-only (`connect_site`, `forget_site`, `add_ssh`,
+`remove_ssh`, `list_sites`), 1 = single-read, 2 = single-write/delete, 4 = multi-call
+bulk/preview/aggregation, 6 = CSV-apply (loops rows). Cross-checked against every documented
+per-function price from past sessions (`get_post_revisions`=1, `restore_revision`=4,
+`set_post_password`=2, `list_indexnow_log`=1, `clear_indexnow_key`=2, `get_store_summary`=4,
+`create_order`=4, `install_plugin`/`run_wp_cron`=4) — all matched except `submit_urls_to_indexnow`,
+priced 2 here (single write call) vs an earlier note that implied 1; kept 2 since it IS a real
+POST/write, consistent with the tier rule (cost of real work, not the earlier note). New
+Group-A/C/D functions priced 1 for every read (`get_*_meta`, `list_transients`,
+`list_cron_events`, `list_cron_schedules`, `get_object_cache_status`, `list_acf_fields`) and 2 for
+every write/delete (`update_*_meta`, `delete_*_meta`, `update_option`, `delete_transient`,
+`flush_all_transients`, `flush_object_cache`, `run_cron_event`, `delete_cron_event`). Applied via
+`developer.suspend_app` -> `developer.update_pricing` with the COMPLETE 160-key map (never
+`save_pricing`, never partial) -> `developer.submit_for_review`, per the standing rule. The
+`update_pricing` call returned a success payload with the app_id echoed back; there is still no
+independent readback tool to re-confirm persistence (same open risk as every prior pricing pass in
+this app — noted honestly, not swept under the rug).
+
+**Deploy:** committed (`fc9c1d6`) and pushed to `origin/main`. App status after
+suspend->reprice->resubmit: `pending_review` (all 4 submission checks passed: git_url_https,
+display_name_set, description_set, last_deploy_succeeded).
+
+**Open:** continue through Groups B (database tools), E (REST introspection), F onward per the
+roadmap doc — none of those are built yet this session.
+
+---
+
 ## 2026-08-11 (morning) — New companion roadmap: developer/backend-developer function candidates (Group A-U, ~80 numbered items / ~117 distinct function names)
 
 **Status:** PLANNING DOC ONLY — nothing implemented yet. This is deliberately a candidate list, not
