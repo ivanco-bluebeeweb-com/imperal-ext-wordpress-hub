@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.11.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.12.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy', 'database', 'logs', 'cache_cron', 'maintenance' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy', 'database', 'logs', 'cache_cron', 'maintenance', 'action_scheduler' ),
 		)
 	);
 }
@@ -4807,6 +4807,73 @@ function imperal_maintenance_bridge_run_due_cron( WP_REST_Request $request ) {
 	return rest_ensure_response( array( 'ran' => $ran, 'ran_count' => count( $ran ) ) );
 }
 
+/**
+ * POST /imperal/v1/maintenance/purge-cache { scope } — purge the site's
+ * page cache by firing the ACTIVE cache plugin's own real purge hook, never
+ * a raw options-table write. Detected from the site's own is_plugin_active()
+ * rather than assumed, so a purge request for a plugin that isn't even
+ * active reports that plainly instead of silently doing nothing.
+ *
+ * - LiteSpeed Cache: `do_action( 'litespeed_purge_all' )` for scope=all --
+ *   the documented API hook (docs.litespeedtech.com/lscache/lscwp/api/)
+ *   that "purge[s] a full site cache", the exact same call LSCWP's own
+ *   WP-CLI command uses. For scope=front, `do_action( 'litespeed_purge_url',
+ *   home_url( '/' ) )` -- the same documented "Purge posts by URL" hook,
+ *   scoped to just the home URL, since LSCWP's own hook list has no
+ *   separate "trigger a front-page-only purge" action (only a
+ *   `litespeed_purged_frontpage` NOTIFICATION hook that fires afterwards).
+ * - W3 Total Cache: `w3tc_flush_all()` for scope=all -- W3TC's own
+ *   documented programmatic-flush entry point (confirmed against its own
+ *   Generic_AdminActions_Flush.php and Cli.php, which both call this same
+ *   function for a full flush). For scope=front, `w3tc_flush_url( home_url(
+ *   '/' ) )` -- W3TC's own documented single-URL flush function
+ *   (w3-total-cache-api.php), scoped to just the home URL.
+ *
+ * WP Rocket and WP Super Cache are deliberately not covered, matching the
+ * existing SSH-fallback path's own documented scope limit (their WP-CLI
+ * support ships as a separate package, not bundled).
+ */
+function imperal_maintenance_bridge_purge_cache( WP_REST_Request $request ) {
+	if ( ! function_exists( 'is_plugin_active' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	}
+
+	$scope = (string) $request->get_param( 'scope' );
+	if ( '' === $scope ) {
+		$scope = 'all';
+	}
+	if ( ! in_array( $scope, array( 'all', 'front' ), true ) ) {
+		return new WP_Error( 'imperal_maintenance_invalid_scope', __( "Invalid scope — use 'all' or 'front'.", 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+
+	if ( is_plugin_active( 'litespeed-cache/litespeed-cache.php' ) ) {
+		if ( 'front' === $scope ) {
+			do_action( 'litespeed_purge_url', home_url( '/' ) );
+		} else {
+			do_action( 'litespeed_purge_all' );
+		}
+		return rest_ensure_response( array( 'purged' => true, 'cache_plugin' => 'litespeed-cache', 'scope' => $scope ) );
+	}
+
+	if ( is_plugin_active( 'w3-total-cache/w3-total-cache.php' ) ) {
+		if ( 'front' === $scope && function_exists( 'w3tc_flush_url' ) ) {
+			w3tc_flush_url( home_url( '/' ) );
+			return rest_ensure_response( array( 'purged' => true, 'cache_plugin' => 'w3-total-cache', 'scope' => $scope ) );
+		}
+		if ( 'all' === $scope && function_exists( 'w3tc_flush_all' ) ) {
+			w3tc_flush_all();
+			return rest_ensure_response( array( 'purged' => true, 'cache_plugin' => 'w3-total-cache', 'scope' => $scope ) );
+		}
+		return new WP_Error( 'imperal_maintenance_purge_failed', __( 'W3 Total Cache is active but its flush function is not available.', 'imperal-bridge' ), array( 'status' => 500 ) );
+	}
+
+	return new WP_Error(
+		'imperal_maintenance_no_cache_plugin',
+		__( 'No supported cache plugin (LiteSpeed Cache or W3 Total Cache) is active on this site.', 'imperal-bridge' ),
+		array( 'status' => 404 )
+	);
+}
+
 function imperal_maintenance_bridge_register_routes() {
 	$manage_options_perm = function () {
 		return current_user_can( 'manage_options' );
@@ -4845,6 +4912,359 @@ function imperal_maintenance_bridge_register_routes() {
 			),
 		)
 	);
+	register_rest_route(
+		IMPERAL_MAINTENANCE_BRIDGE_NAMESPACE,
+		'/maintenance/purge-cache',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_maintenance_bridge_purge_cache',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
 }
 add_action( 'rest_api_init', 'imperal_maintenance_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 16 — ACTION SCHEDULER (WooCommerce's background job queue)
+ *
+ * Action Scheduler ships bundled inside WooCommerce (and several other
+ * plugins load their own copy) -- it is NOT WordPress core and NOT
+ * guaranteed present, unlike WP-Cron (SECTION 14). Every route here first
+ * checks `function_exists( 'as_get_scheduled_actions' )` / class_exists on
+ * ActionScheduler and returns a clear "not available" response otherwise,
+ * exactly the same defensive gate SECTION 5 (Redirects) uses for Rank Math's
+ * own table.
+ *
+ * Every operation is the exact same public API Action Scheduler's own
+ * admin screen (Tools -> Scheduled Actions, ActionScheduler_ListTable) and
+ * WP-CLI package use:
+ * - `ActionScheduler::store()` -- query_actions()/fetch_action()/
+ *   action_counts()/cancel_action()/delete_action() (ActionScheduler_Store,
+ *   the same store class the whole plugin runs on top of).
+ * - `ActionScheduler::runner()->process_action( $action_id, 'Imperal' )` --
+ *   the exact same "Run" row action the admin list table calls
+ *   (ActionScheduler_Abstract_QueueRunner::process_action), which fires the
+ *   hook synchronously in the current request and returns/throws whatever
+ *   the hook callback does.
+ * - `ActionScheduler::logger()->get_logs( $action_id )` -- the action's own
+ *   execution log entries (started/completed/failed timestamps + messages),
+ *   the same log the admin screen's expandable row shows.
+ * - Action Scheduler has NO native "retry" concept for a failed action --
+ *   verified against its own source (functions.php/ActionScheduler_Store):
+ *   a failed action stays failed forever. The one real, honest way to
+ *   re-attempt it is `as_enqueue_async_action()` with the SAME hook/args/
+ *   group, which schedules a brand-new async action -- exactly what a
+ *   developer would do by hand from wp-admin's "Add scheduled action" UI
+ *   or programmatically. This is surfaced as retry-by-re-enqueue, not a
+ *   fabricated "resurrect the old row" operation that doesn't exist.
+ */
+
+define( 'IMPERAL_AS_BRIDGE_NAMESPACE', 'imperal/v1' );
+
+function imperal_as_bridge_available() {
+	return function_exists( 'as_get_scheduled_actions' ) && class_exists( 'ActionScheduler' );
+}
+
+function imperal_as_bridge_not_available_error() {
+	return new WP_Error(
+		'imperal_action_scheduler_unavailable',
+		__( 'Action Scheduler is not active on this site (it ships inside WooCommerce and some other plugins).', 'imperal-bridge' ),
+		array( 'status' => 404 )
+	);
+}
+
+/**
+ * Turn one ActionScheduler_Action + its stored ID into the plain array
+ * shape every route below returns -- id, hook, status, group, schedule
+ * (as a unix timestamp), and args.
+ */
+function imperal_as_bridge_action_to_array( $action_id ) {
+	$store  = ActionScheduler::store();
+	$status = $store->get_status( $action_id );
+	$action = $store->fetch_action( $action_id );
+
+	$schedule_date = null;
+	if ( $action && $action->get_schedule() && $action->get_schedule()->get_date() ) {
+		$schedule_date = (int) $action->get_schedule()->get_date()->format( 'U' );
+	}
+
+	return array(
+		'id'        => (int) $action_id,
+		'hook'      => $action ? $action->get_hook() : '',
+		'status'    => (string) $status,
+		'group'     => $action ? $action->get_group() : '',
+		'scheduled' => $schedule_date,
+		'args'      => $action ? $action->get_args() : array(),
+	);
+}
+
+/**
+ * GET /imperal/v1/action-scheduler/actions?status=&hook=&group=&per_page=&offset=
+ * Lists scheduled actions, filterable by status/hook/group, matching the
+ * admin list table's own filters. Defaults to 20 per page, capped at 100.
+ */
+function imperal_as_bridge_list_actions( WP_REST_Request $request ) {
+	if ( ! imperal_as_bridge_available() ) {
+		return imperal_as_bridge_not_available_error();
+	}
+
+	$args = array(
+		'per_page' => min( 100, max( 1, (int) $request->get_param( 'per_page' ) ?: 20 ) ),
+		'offset'   => max( 0, (int) $request->get_param( 'offset' ) ),
+		'orderby'  => 'date',
+		'order'    => 'DESC',
+	);
+	$status = (string) $request->get_param( 'status' );
+	if ( '' !== $status ) {
+		$args['status'] = $status;
+	}
+	$hook = (string) $request->get_param( 'hook' );
+	if ( '' !== $hook ) {
+		$args['hook'] = $hook;
+	}
+	$group = (string) $request->get_param( 'group' );
+	if ( '' !== $group ) {
+		$args['group'] = $group;
+	}
+
+	$ids     = as_get_scheduled_actions( $args, 'ids' );
+	$actions = array();
+	foreach ( $ids as $action_id ) {
+		$actions[] = imperal_as_bridge_action_to_array( $action_id );
+	}
+
+	return rest_ensure_response( array( 'actions' => $actions, 'count' => count( $actions ) ) );
+}
+
+/**
+ * GET /imperal/v1/action-scheduler/actions/{id} -- full detail for one
+ * action, including its execution log entries.
+ */
+function imperal_as_bridge_get_action( WP_REST_Request $request ) {
+	if ( ! imperal_as_bridge_available() ) {
+		return imperal_as_bridge_not_available_error();
+	}
+
+	$action_id = (int) $request->get_param( 'id' );
+	$store     = ActionScheduler::store();
+	$action    = $store->fetch_action( $action_id );
+
+	if ( ! $action || ! $action->get_hook() ) {
+		return new WP_Error( 'imperal_action_not_found', __( 'No scheduled action with that id.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+
+	$data = imperal_as_bridge_action_to_array( $action_id );
+
+	$logs = array();
+	foreach ( ActionScheduler::logger()->get_logs( $action_id ) as $log_entry ) {
+		$logs[] = array(
+			'message' => $log_entry->get_message(),
+			'date'    => $log_entry->get_date() ? $log_entry->get_date()->format( 'c' ) : '',
+		);
+	}
+	$data['logs'] = $logs;
+
+	return rest_ensure_response( $data );
+}
+
+/**
+ * POST /imperal/v1/action-scheduler/actions/{id}/run -- force-run one
+ * action right now, regardless of its scheduled time, via the exact same
+ * `ActionScheduler_Abstract_QueueRunner::process_action()` the admin list
+ * table's "Run" row action calls. Runs synchronously in this request and
+ * surfaces whatever exception (if any) the hook callback throws.
+ */
+function imperal_as_bridge_run_action( WP_REST_Request $request ) {
+	if ( ! imperal_as_bridge_available() ) {
+		return imperal_as_bridge_not_available_error();
+	}
+
+	$action_id = (int) $request->get_param( 'id' );
+	$store     = ActionScheduler::store();
+	$action    = $store->fetch_action( $action_id );
+
+	if ( ! $action || ! $action->get_hook() ) {
+		return new WP_Error( 'imperal_action_not_found', __( 'No scheduled action with that id.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+
+	try {
+		ActionScheduler::runner()->process_action( $action_id, 'Imperal' );
+	} catch ( Exception $e ) {
+		return rest_ensure_response(
+			array(
+				'ran'    => true,
+				'failed' => true,
+				'error'  => $e->getMessage(),
+				'action' => imperal_as_bridge_action_to_array( $action_id ),
+			)
+		);
+	}
+
+	return rest_ensure_response(
+		array( 'ran' => true, 'failed' => false, 'action' => imperal_as_bridge_action_to_array( $action_id ) )
+	);
+}
+
+/**
+ * POST /imperal/v1/action-scheduler/actions/{id}/cancel -- cancel one
+ * pending action (`ActionScheduler_Store::cancel_action()`, the same call
+ * `as_unschedule_action()` and the admin list table's "Cancel" row action
+ * use under the hood).
+ */
+function imperal_as_bridge_cancel_action( WP_REST_Request $request ) {
+	if ( ! imperal_as_bridge_available() ) {
+		return imperal_as_bridge_not_available_error();
+	}
+
+	$action_id = (int) $request->get_param( 'id' );
+	$store     = ActionScheduler::store();
+	$action    = $store->fetch_action( $action_id );
+
+	if ( ! $action || ! $action->get_hook() ) {
+		return new WP_Error( 'imperal_action_not_found', __( 'No scheduled action with that id.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+
+	$store->cancel_action( $action_id );
+
+	return rest_ensure_response( array( 'cancelled' => true, 'action' => imperal_as_bridge_action_to_array( $action_id ) ) );
+}
+
+/**
+ * POST /imperal/v1/action-scheduler/actions/{id}/retry -- Action Scheduler
+ * has no native retry for a failed action (verified against its own
+ * source); the real, honest re-attempt is scheduling a brand-new async
+ * action with the SAME hook/args/group via `as_enqueue_async_action()`,
+ * exactly what wp-admin's own "Add scheduled action" screen or a developer
+ * calling the API by hand would do. Only actions in the 'failed' status
+ * are eligible, so this can never be used to duplicate a still-pending or
+ * already-running job.
+ */
+function imperal_as_bridge_retry_action( WP_REST_Request $request ) {
+	if ( ! imperal_as_bridge_available() ) {
+		return imperal_as_bridge_not_available_error();
+	}
+
+	$action_id = (int) $request->get_param( 'id' );
+	$store     = ActionScheduler::store();
+	$action    = $store->fetch_action( $action_id );
+
+	if ( ! $action || ! $action->get_hook() ) {
+		return new WP_Error( 'imperal_action_not_found', __( 'No scheduled action with that id.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+
+	$status = $store->get_status( $action_id );
+	if ( ActionScheduler_Store::STATUS_FAILED !== $status ) {
+		return new WP_Error(
+			'imperal_action_not_failed',
+			__( 'Only a failed action can be retried; this action is not in the failed state.', 'imperal-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$new_id = as_enqueue_async_action( $action->get_hook(), $action->get_args(), $action->get_group() );
+
+	if ( ! $new_id ) {
+		return new WP_Error( 'imperal_retry_failed', __( 'Could not schedule a new attempt for this action.', 'imperal-bridge' ), array( 'status' => 500 ) );
+	}
+
+	return rest_ensure_response(
+		array(
+			'retried'          => true,
+			'original_id'      => $action_id,
+			'new_action'       => imperal_as_bridge_action_to_array( $new_id ),
+		)
+	);
+}
+
+/**
+ * GET /imperal/v1/action-scheduler/counts -- one-glance health snapshot,
+ * grouped by status, matching `ActionScheduler_Store::action_counts()` --
+ * the exact same counts the admin list table's status filter links show.
+ */
+function imperal_as_bridge_counts( WP_REST_Request $request ) {
+	if ( ! imperal_as_bridge_available() ) {
+		return imperal_as_bridge_not_available_error();
+	}
+
+	$store  = ActionScheduler::store();
+	$counts = $store->action_counts();
+
+	return rest_ensure_response( array( 'counts' => $counts ) );
+}
+
+function imperal_as_bridge_register_routes() {
+	$manage_options_perm = function () {
+		return current_user_can( 'manage_options' );
+	};
+
+	register_rest_route(
+		IMPERAL_AS_BRIDGE_NAMESPACE,
+		'/action-scheduler/actions',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_as_bridge_list_actions',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_AS_BRIDGE_NAMESPACE,
+		'/action-scheduler/actions/(?P<id>\d+)',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_as_bridge_get_action',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_AS_BRIDGE_NAMESPACE,
+		'/action-scheduler/actions/(?P<id>\d+)/run',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_as_bridge_run_action',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_AS_BRIDGE_NAMESPACE,
+		'/action-scheduler/actions/(?P<id>\d+)/cancel',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_as_bridge_cancel_action',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_AS_BRIDGE_NAMESPACE,
+		'/action-scheduler/actions/(?P<id>\d+)/retry',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_as_bridge_retry_action',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_AS_BRIDGE_NAMESPACE,
+		'/action-scheduler/counts',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_as_bridge_counts',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_as_bridge_register_routes' );
 

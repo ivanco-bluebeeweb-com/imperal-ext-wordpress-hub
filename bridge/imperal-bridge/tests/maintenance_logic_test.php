@@ -83,6 +83,33 @@ function get_bloginfo( $show = '' ) {
 	return '6.4.0';
 }
 
+// ─────────────────────── fake active-plugins / cache-plugin registry ───────────────────────
+
+$GLOBALS['_active_plugins'] = array();
+$GLOBALS['_fired_do_actions'] = array();
+$GLOBALS['_w3tc_flush_all_calls'] = array();
+$GLOBALS['_w3tc_flush_url_calls'] = array();
+
+function is_plugin_active( $plugin ) {
+	return in_array( $plugin, $GLOBALS['_active_plugins'], true );
+}
+
+function home_url( $path = '' ) {
+	return 'https://example.com' . $path;
+}
+
+function do_action( $hook, ...$args ) {
+	$GLOBALS['_fired_do_actions'][] = array( 'hook' => $hook, 'args' => $args );
+}
+
+function w3tc_flush_all() {
+	$GLOBALS['_w3tc_flush_all_calls'][] = true;
+}
+
+function w3tc_flush_url( $url ) {
+	$GLOBALS['_w3tc_flush_url_calls'][] = $url;
+}
+
 // ─────────────────────── fake plugin registry ───────────────────────
 
 $GLOBALS['_plugins'] = array(
@@ -278,11 +305,73 @@ $result = imperal_maintenance_bridge_run_due_cron( $req );
 assert_true( array() === $result['ran'], 'run_due_cron reports an empty ran list when nothing is due' );
 assert_true( 0 === $result['ran_count'], 'run_due_cron reports ran_count=0 when nothing is due' );
 
+// ─────────── purge_cache ───────────
+
+function reset_purge_cache_fixtures() {
+	$GLOBALS['_active_plugins']       = array();
+	$GLOBALS['_fired_do_actions']     = array();
+	$GLOBALS['_w3tc_flush_all_calls'] = array();
+	$GLOBALS['_w3tc_flush_url_calls'] = array();
+}
+
+reset_purge_cache_fixtures();
+$req    = new WP_REST_Request( array( 'scope' => 'sideways' ) );
+$result = imperal_maintenance_bridge_purge_cache( $req );
+assert_true( is_wp_error( $result ), 'purge_cache rejects an invalid scope' );
+assert_true( 'imperal_maintenance_invalid_scope' === $result->get_error_code(), 'purge_cache invalid-scope error code' );
+assert_true( 400 === $result->get_status(), 'purge_cache invalid-scope status is 400' );
+
+reset_purge_cache_fixtures();
+$req    = new WP_REST_Request( array() );
+$result = imperal_maintenance_bridge_purge_cache( $req );
+assert_true( is_wp_error( $result ), 'purge_cache reports no cache plugin when none is active' );
+assert_true( 'imperal_maintenance_no_cache_plugin' === $result->get_error_code(), 'purge_cache no-cache-plugin error code' );
+assert_true( 404 === $result->get_status(), 'purge_cache no-cache-plugin status is 404' );
+
+reset_purge_cache_fixtures();
+$GLOBALS['_active_plugins'] = array( 'litespeed-cache/litespeed-cache.php' );
+$req                        = new WP_REST_Request( array() ); // default scope
+$result                     = imperal_maintenance_bridge_purge_cache( $req );
+assert_true( ! is_wp_error( $result ), 'purge_cache succeeds for LiteSpeed with default scope' );
+assert_true( true === $result['purged'], 'purge_cache LiteSpeed response marks purged=true' );
+assert_true( 'litespeed-cache' === $result['cache_plugin'], 'purge_cache LiteSpeed response names the plugin' );
+assert_true( 'all' === $result['scope'], 'purge_cache LiteSpeed default scope is all' );
+assert_true( 1 === count( $GLOBALS['_fired_do_actions'] ), 'purge_cache LiteSpeed fired exactly one action' );
+assert_true( 'litespeed_purge_all' === $GLOBALS['_fired_do_actions'][0]['hook'], 'purge_cache LiteSpeed scope=all fires litespeed_purge_all' );
+
+reset_purge_cache_fixtures();
+$GLOBALS['_active_plugins'] = array( 'litespeed-cache/litespeed-cache.php' );
+$req                        = new WP_REST_Request( array( 'scope' => 'front' ) );
+$result                     = imperal_maintenance_bridge_purge_cache( $req );
+assert_true( ! is_wp_error( $result ), 'purge_cache succeeds for LiteSpeed with scope=front' );
+assert_true( 'front' === $result['scope'], 'purge_cache LiteSpeed echoes scope=front' );
+assert_true( 'litespeed_purge_url' === $GLOBALS['_fired_do_actions'][0]['hook'], 'purge_cache LiteSpeed scope=front fires litespeed_purge_url' );
+assert_true( array( 'https://example.com/' ) === $GLOBALS['_fired_do_actions'][0]['args'], 'purge_cache LiteSpeed scope=front passes the home URL' );
+
+reset_purge_cache_fixtures();
+$GLOBALS['_active_plugins'] = array( 'w3-total-cache/w3-total-cache.php' );
+$req                        = new WP_REST_Request( array( 'scope' => 'all' ) );
+$result                     = imperal_maintenance_bridge_purge_cache( $req );
+assert_true( ! is_wp_error( $result ), 'purge_cache succeeds for W3TC with scope=all' );
+assert_true( 'w3-total-cache' === $result['cache_plugin'], 'purge_cache W3TC response names the plugin' );
+assert_true( 1 === count( $GLOBALS['_w3tc_flush_all_calls'] ), 'purge_cache W3TC scope=all calls w3tc_flush_all' );
+assert_true( 0 === count( $GLOBALS['_w3tc_flush_url_calls'] ), 'purge_cache W3TC scope=all does not call w3tc_flush_url' );
+
+reset_purge_cache_fixtures();
+$GLOBALS['_active_plugins'] = array( 'w3-total-cache/w3-total-cache.php' );
+$req                        = new WP_REST_Request( array( 'scope' => 'front' ) );
+$result                     = imperal_maintenance_bridge_purge_cache( $req );
+assert_true( ! is_wp_error( $result ), 'purge_cache succeeds for W3TC with scope=front' );
+assert_true( 1 === count( $GLOBALS['_w3tc_flush_url_calls'] ), 'purge_cache W3TC scope=front calls w3tc_flush_url' );
+assert_true( 'https://example.com/' === $GLOBALS['_w3tc_flush_url_calls'][0], 'purge_cache W3TC scope=front flushes the home URL' );
+assert_true( 0 === count( $GLOBALS['_w3tc_flush_all_calls'] ), 'purge_cache W3TC scope=front does not call w3tc_flush_all' );
+
 // ─────────── route registration ───────────
 
 assert_true( isset( $GLOBALS['_routes']['imperal/v1/maintenance/update-plugin'] ), 'update-plugin route registered' );
 assert_true( isset( $GLOBALS['_routes']['imperal/v1/maintenance/update-core'] ), 'update-core route registered' );
 assert_true( isset( $GLOBALS['_routes']['imperal/v1/maintenance/run-due-cron'] ), 'run-due-cron route registered' );
+assert_true( isset( $GLOBALS['_routes']['imperal/v1/maintenance/purge-cache'] ), 'purge-cache route registered' );
 assert_true(
 	WP_REST_Server::CREATABLE === $GLOBALS['_routes']['imperal/v1/maintenance/update-plugin']['methods'],
 	'update-plugin route is POST-only'

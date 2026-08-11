@@ -34062,6 +34062,844 @@
       "long_running": false,
       "scopes": [],
       "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_scheduled_actions",
+      "description": "List Action Scheduler jobs (WooCommerce's own background job queue) -- pending, in-progress, complete, failed, or canceled, filterable by status/hook/group. Reads through the Imperal Bridge plugin (needs 2.12.0+); Action Scheduler itself must be active on the site (ships inside WooCommerce).",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [
+        "wp.list_scheduled_actions"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "status": {
+            "default": "",
+            "description": "Filter by status: pending, in-progress, complete, failed, canceled. Empty = all.",
+            "title": "Status",
+            "type": "string"
+          },
+          "hook": {
+            "default": "",
+            "description": "Filter by exact hook name",
+            "title": "Hook",
+            "type": "string"
+          },
+          "group": {
+            "default": "",
+            "description": "Filter by group (usually the plugin that scheduled it, e.g. 'woocommerce')",
+            "title": "Group",
+            "type": "string"
+          },
+          "per_page": {
+            "default": 20,
+            "description": "Max actions to return, 1-100",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Per Page",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "Pagination offset",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "ListScheduledActionsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One Action Scheduler job — id, hook, status, group, scheduled time, args.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "default": "",
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "hook": {
+            "default": "",
+            "title": "Hook",
+            "type": "string"
+          },
+          "group": {
+            "default": "",
+            "title": "Group",
+            "type": "string"
+          },
+          "scheduled": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Scheduled"
+          },
+          "args": {
+            "additionalProperties": true,
+            "title": "Args",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ScheduledActionItem",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.list_scheduled_actions",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "get_scheduled_action",
+      "description": "Read one Action Scheduler job in full detail -- hook, status, group, scheduled time, args, and its own execution log entries (started/completed/failed messages). Reads through the Imperal Bridge plugin (needs 2.12.0+).",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [
+        "wp.get_scheduled_action"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "action_id": {
+            "description": "Action id from list_scheduled_actions",
+            "exclusiveMinimum": 0,
+            "title": "Action Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "action_id"
+        ],
+        "title": "GetScheduledActionParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "ScheduledActionLogEntry": {
+            "description": "A nested log line inside ScheduledActionDetail.logs — never returned as a\ntop-level ActionResult on its own, so it does not need sdl.Entity's id/title.",
+            "properties": {
+              "message": {
+                "default": "",
+                "title": "Message",
+                "type": "string"
+              },
+              "date": {
+                "default": "",
+                "title": "Date",
+                "type": "string"
+              }
+            },
+            "title": "ScheduledActionLogEntry",
+            "type": "object"
+          }
+        },
+        "description": "One Action Scheduler job in full, including its execution log.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "default": "",
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "hook": {
+            "default": "",
+            "title": "Hook",
+            "type": "string"
+          },
+          "group": {
+            "default": "",
+            "title": "Group",
+            "type": "string"
+          },
+          "scheduled": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Scheduled"
+          },
+          "args": {
+            "additionalProperties": true,
+            "title": "Args",
+            "type": "object"
+          },
+          "logs": {
+            "items": {
+              "$ref": "#/$defs/ScheduledActionLogEntry"
+            },
+            "title": "Logs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ScheduledActionDetail",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.get_scheduled_action",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "run_scheduled_action",
+      "description": "Force one Action Scheduler job to run right now, regardless of its scheduled time -- the exact same 'Run' row action the Scheduled Actions admin screen offers. Runs synchronously and surfaces whatever error the job itself raises. Reads through the Imperal Bridge plugin (needs 2.12.0+).",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.run_scheduled_action"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "action_id": {
+            "description": "Action id from list_scheduled_actions",
+            "exclusiveMinimum": 0,
+            "title": "Action Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "action_id"
+        ],
+        "title": "GetScheduledActionParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "ran": {
+            "default": false,
+            "title": "Ran",
+            "type": "boolean"
+          },
+          "failed": {
+            "default": false,
+            "title": "Failed",
+            "type": "boolean"
+          },
+          "error": {
+            "default": "",
+            "title": "Error",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ScheduledActionRunResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.run_scheduled_action",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "cancel_scheduled_action",
+      "description": "Cancel one pending Action Scheduler job so it never runs. Reads through the Imperal Bridge plugin (needs 2.12.0+).",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.cancel_scheduled_action"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "action_id": {
+            "description": "Action id from list_scheduled_actions",
+            "exclusiveMinimum": 0,
+            "title": "Action Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "action_id"
+        ],
+        "title": "GetScheduledActionParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "cancelled": {
+            "default": false,
+            "title": "Cancelled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ScheduledActionCancelResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.cancel_scheduled_action",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "retry_failed_action",
+      "description": "Re-queue one FAILED Action Scheduler job for another attempt. Action Scheduler has no native retry, so this schedules a brand-new action with the same hook/args/group -- the same thing a developer calling its own public API by hand would do. Only actions already in the 'failed' status are eligible. Reads through the Imperal Bridge plugin (needs 2.12.0+).",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.retry_failed_action"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "action_id": {
+            "description": "Action id from list_scheduled_actions",
+            "exclusiveMinimum": 0,
+            "title": "Action Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "action_id"
+        ],
+        "title": "GetScheduledActionParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "retried": {
+            "default": false,
+            "title": "Retried",
+            "type": "boolean"
+          },
+          "original_id": {
+            "default": 0,
+            "title": "Original Id",
+            "type": "integer"
+          },
+          "new_action_id": {
+            "default": 0,
+            "title": "New Action Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ScheduledActionRetryResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.retry_failed_action",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "count_actions_by_status",
+      "description": "One-glance health snapshot of the Action Scheduler queue -- how many jobs are pending, in-progress, complete, failed, or canceled. The single most useful backend-dev diagnostic for this whole area ('47 failed, 3 pending'). Reads through the Imperal Bridge plugin (needs 2.12.0+).",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [
+        "wp.count_actions_by_status"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One-glance health snapshot of the queue, grouped by status.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "pending": {
+            "default": 0,
+            "title": "Pending",
+            "type": "integer"
+          },
+          "in_progress": {
+            "default": 0,
+            "title": "In Progress",
+            "type": "integer"
+          },
+          "complete": {
+            "default": 0,
+            "title": "Complete",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "canceled": {
+            "default": 0,
+            "title": "Canceled",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ActionCountsResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.count_actions_by_status",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
     }
   ],
   "signals": [],

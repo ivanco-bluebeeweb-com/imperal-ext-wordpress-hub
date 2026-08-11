@@ -2237,3 +2237,70 @@ class BlockPattern(sdl.Entity):
     keywords: list[str] = Field(default_factory=list)
     block_types: list[str] = Field(default_factory=list)
     source: str = ""
+
+
+# ─────────── Action Scheduler (WooCommerce's background job queue, Bridge-only) ───────────
+
+class ListScheduledActionsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    status: str = Field(default="", description="Filter by status: pending, in-progress, complete, failed, canceled. Empty = all.")
+    hook: str = Field(default="", description="Filter by exact hook name")
+    group: str = Field(default="", description="Filter by group (usually the plugin that scheduled it, e.g. 'woocommerce')")
+    per_page: int = Field(default=20, ge=1, le=100, description="Max actions to return, 1-100")
+    offset: int = Field(default=0, ge=0, description="Pagination offset")
+
+
+class ScheduledActionItem(sdl.Entity):
+    """One Action Scheduler job — id, hook, status, group, scheduled time, args."""
+    hook: str = ""
+    status: str = ""
+    group: str = ""
+    scheduled: int | None = None
+    args: dict = Field(default_factory=dict)
+
+
+class GetScheduledActionParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    action_id: int = Field(gt=0, description="Action id from list_scheduled_actions")
+
+
+class ScheduledActionLogEntry(BaseModel):
+    """A nested log line inside ScheduledActionDetail.logs — never returned as a
+    top-level ActionResult on its own, so it does not need sdl.Entity's id/title."""
+    message: str = ""
+    date: str = ""
+
+
+class ScheduledActionDetail(sdl.Entity):
+    """One Action Scheduler job in full, including its execution log."""
+    hook: str = ""
+    status: str = ""
+    group: str = ""
+    scheduled: int | None = None
+    args: dict = Field(default_factory=dict)
+    logs: list[ScheduledActionLogEntry] = Field(default_factory=list)
+
+
+class ScheduledActionRunResult(sdl.Entity):
+    ran: bool = False
+    failed: bool = False
+    error: str = ""
+
+
+class ScheduledActionCancelResult(sdl.Entity):
+    cancelled: bool = False
+
+
+class ScheduledActionRetryResult(sdl.Entity):
+    retried: bool = False
+    original_id: int = 0
+    new_action_id: int = 0
+
+
+class ActionCountsResult(sdl.Entity):
+    """One-glance health snapshot of the queue, grouped by status."""
+    pending: int = 0
+    in_progress: int = 0
+    complete: int = 0
+    failed: int = 0
+    canceled: int = 0
