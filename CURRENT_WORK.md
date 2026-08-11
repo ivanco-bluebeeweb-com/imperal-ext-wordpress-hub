@@ -14,12 +14,14 @@ or extra keys — and (3) save the **entire** map through `developer.update_pric
 is suspended, before deployment. Never use a partial `save_pricing` update: it can leave previous
 functions unpriced.
 
-**Current token policy, confirmed from the active Media Studio tariff:** `0` for lightweight reads,
-local status/settings and connection setup; `8` for one standard WordPress action; `12` for a heavy
-aggregate, preview, or multi-step server action; `20` for CSV apply/import. Price is real work and
-server/provider load, never risk; confirmations govern risky actions separately. The complete
-213-function map is versioned in both `tool-prices.json` and `imperal.json.pricing`, and tests require
-them to remain identical.
+**Current token policy — 2026-08-12:** `0` is allowed only where charging would be unfair because
+there is no WordPress work: initial access setup/removal (`connect_site`, `forget_site`, `add_ssh`,
+`remove_ssh`) and `list_sites`, which reads the already-stored local connection inventory. Every
+site read costs at least `8`; standard single-site changes cost `16`; substantial single site/server
+operations cost `20`; heavy diagnostics, previews, and aggregations cost `40`; and applying CSV,
+bulk, or import changes costs `60`. Price measures actual work breadth and server load, while risk
+is governed separately by confirmations. The complete map is versioned in both `tool-prices.json`
+and `imperal.json.pricing`, and tests require them to remain identical.
 
 ## 2026-08-11 (late night) — Group N: Rewrite Rules & Permalinks (4 functions, new Bridge SECTION 17)
 
