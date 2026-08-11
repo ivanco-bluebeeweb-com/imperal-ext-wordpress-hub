@@ -2432,3 +2432,28 @@ class MailConfiguration(sdl.Entity):
     provider: str = ""
     detected_plugin: str = ""
     notes: str = ""
+
+
+# ─────────── WordPress core Site Health ───────────
+
+class SiteHealthTest(sdl.Entity):
+    """One result directly returned by WordPress core's Site Health REST API."""
+    test: str = ""
+    label: str = ""
+    status: str = ""
+    badge: str = ""
+    description: str = ""
+    actions: str = ""
+
+
+class CoreSiteHealthReport(sdl.Entity):
+    """Fixed, documented WordPress core Site Health test battery."""
+    site_id: str = ""
+    tests: list[SiteHealthTest] = []
+    unavailable_tests: list[str] = []
+
+
+class SiteHealthDirectorySizes(sdl.Entity):
+    """Directory-size facts reported by WordPress core Site Health."""
+    site_id: str = ""
+    sizes: dict = {}

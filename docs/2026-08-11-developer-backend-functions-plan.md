@@ -378,9 +378,17 @@ existing `get_site_health` (which is our own custom reachability/SSL/content-cou
     (background updates, HTTPS status, PHP version, scheduled events, loopback requests, etc.) and
     return WordPress's own pass/fail/critical verdicts — genuinely different data from our own
     `get_site_health`, not a duplicate
-74. `get_site_health_info` — the accompanying `/wp-site-health/v1/directory-sizes` and environment
-    info tab (server software, DB version/extension, active theme/plugins summary) — WordPress's
-    own copy-pasteable "Info" tab, useful for support-ticket-style diagnostics
+74. `get_core_site_health_directory_sizes` — WordPress core's accompanying
+    `/wp-site-health/v1/directory-sizes` report. The broader "Info" tab is not represented as one
+    stable core REST response, so it is deliberately not fabricated; existing `get_server_info`,
+    `get_php_info`, and plugin/theme list tools cover its grounded parts.
+
+**Release candidate (v1.22.0):** `run_core_site_health_tests` calls WordPress core's five
+fixed, documented Site Health routes (background updates, loopback requests, HTTPS status,
+WordPress.org communication, and authorization headers), reporting unavailable routes or missing
+admin permission honestly per test. `get_core_site_health_directory_sizes` returns WordPress's own
+size data. Complete 211-key pricing is prepared (`1` each); mark shipped only after commit, push,
+and deployment.
 
 ## Group S — Sessions & Auth Hygiene
 

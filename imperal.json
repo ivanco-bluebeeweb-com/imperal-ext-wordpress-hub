@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.21.0",
+  "version": "1.22.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -36339,6 +36339,340 @@
           "title"
         ],
         "title": "MailConfiguration",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "run_core_site_health_tests",
+      "description": "Run WordPress core's own fixed Site Health REST checks: background updates, loopback requests, HTTPS status, WordPress.org communication, and Authorization-header handling. This is read-only and distinct from get_site_health's connectivity/count check; requires an administrator Application Password.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "SiteHealthTest": {
+            "description": "One result directly returned by WordPress core's Site Health REST API.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "default": "",
+                "title": "Description",
+                "type": "string"
+              },
+              "status": {
+                "default": "",
+                "title": "Status",
+                "type": "string"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "test": {
+                "default": "",
+                "title": "Test",
+                "type": "string"
+              },
+              "label": {
+                "default": "",
+                "title": "Label",
+                "type": "string"
+              },
+              "badge": {
+                "default": "",
+                "title": "Badge",
+                "type": "string"
+              },
+              "actions": {
+                "default": "",
+                "title": "Actions",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "SiteHealthTest",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "description": "Fixed, documented WordPress core Site Health test battery.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "site_id": {
+            "default": "",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "tests": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/SiteHealthTest"
+            },
+            "title": "Tests",
+            "type": "array"
+          },
+          "unavailable_tests": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unavailable Tests",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "CoreSiteHealthReport",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "get_core_site_health_directory_sizes",
+      "description": "Read the directory and database size data calculated by WordPress core's Site Health API. Read-only; requires an administrator Application Password and WordPress 5.6+ for the documented directory-sizes REST endpoint.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Directory-size facts reported by WordPress core Site Health.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "site_id": {
+            "default": "",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "sizes": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Sizes",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SiteHealthDirectorySizes",
         "type": "object",
         "x-sdl": "entity"
       },
