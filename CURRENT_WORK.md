@@ -5,6 +5,61 @@
 
 ---
 
+## 2026-08-11 (night) — Closed the last two SSH-only gaps: `purge_cache` + `list_plugins` → Bridge-first/SSH-fallback
+
+**Status:** SHIPPED, tested (724/724 Python + 480 PHP across all 8 bridge harnesses — up from
+721/416), committed (`516579f`), pushed, deployed (`developer.deploy_app` → commit `516579fd`,
+status=warning 18/21 — same known cosmetic pattern noted in every prior deploy this app has had,
+not a regression). No pricing change: both are fixes to EXISTING functions' internals, not new
+functions, so no `suspend_app`/`update_pricing`/`submit_for_review` cycle was needed this time.
+
+**Context — the standing directive:** user has repeated, verbatim, across many turns: "нужно чтобы
+это делалось без ssh, всегда, у всех пользователей" (must work without SSH, always, for every
+user). This closes that out at the code level: **every** `get_ssh_cred` call site across the whole
+app (`handlers_read.py`, `handlers_database.py`, `handlers_cache_cron.py`, `handlers_logs.py`,
+`handlers_maintenance.py`) now has a Bridge attempt (`_bridge_get`/`_bridge_post`) preceding it —
+confirmed via a full grep sweep, not just spot-checked.
+
+**`purge_cache` (`handlers_read.py`):** Bridge SECTION 15's `/maintenance/purge-cache` route
+already existed server-side (added in an earlier session) but the Python side had never been
+wired to call it — it was still 100% SSH-only. Converted to the same Bridge-first/SSH-fallback
+shape as `install_plugin`/`update_plugin`: calls `handlers_maintenance._site_auth` +
+`handlers_maintenance._bridge_post(BRIDGE_MAINTENANCE_PURGE_CACHE_PATH)` first, only falls back to
+SSH + `wp_cli.list_plugins`/`purge_litespeed_cache`/`purge_w3tc_cache` if the Bridge is
+missing/outdated. Rewrote `tests/test_purge_cache.py` from scratch to the standard 3-way contract
+shape (Bridge-answers-no-SSH-stored / Bridge-404-SSH-fallback / neither-available) — 8 tests,
+mirroring `tests/test_install_plugin.py`.
+
+**`list_plugins` (`handlers_read.py` + NEW Bridge route):** this was the one true remaining gap —
+there was no existing Bridge route for it at all. Stock WordPress REST's `/wp/v2/plugins` (verified
+its real schema via developer.wordpress.org before relying on it) has NO update-availability field,
+so it can't fully replace the WP-CLI `wp plugin list --fields=name,status,version,update,
+update_version` shape this function has always returned. Added a new Bridge route,
+`GET /imperal/v1/maintenance/list-plugins` (`imperal_maintenance_bridge_list_plugins`), built from
+three plain WP core calls — `get_plugins()` (wp-admin/includes/plugin.php, every installed plugin's
+header data), `is_plugin_active()` per plugin, and `get_plugin_updates()`
+(wp-admin/includes/update.php, the same list wp-admin's own Plugins screen reads its update
+notices from) — no shell needed. Python side now tries this route first, SSH + `wp_cli.list_plugins`
+as fallback. Rewrote `tests/test_plugins.py` to the same 3-way contract shape (6 tests). Added PHP
+fixtures (`get_plugins()`/`get_plugin_updates()` stubs reusing the existing `$GLOBALS['_plugins']`
+fake registry and a new `$GLOBALS['_plugin_updates']`) plus route-registration + behavior tests to
+`maintenance_logic_test.php` (90 → 105 PHP tests).
+
+**Bridge:** `imperal-bridge.php` 2.12.0 → 2.13.0 (new route). README's Maintenance row extended to
+list `purge-cache` and `list-plugins` alongside the existing four routes. Zip rebuilt.
+
+**Correction to an earlier note this same session — the SECTION 17 "Rewrite Rules & Permalinks"
+module was NOT dead code.** It was already wired into `main.py`'s `_LOCAL` module list and imports
+(I'd mistakenly checked `app.py` instead), already had a complete PHP harness
+(`rewrite_logic_test.php`, 21/21 passing) and complete Python contract tests
+(`tests/test_rewrite.py`, 17/17 passing) — it just wasn't committed yet. Finished shipping it in
+this same session: ran `imperal build` (203 → new count with the 4 rewrite functions included),
+`imperal validate` clean, bumped `app.py` 1.17.0 → 1.18.0, full pricing map rebuilt/applied, then
+committed + pushed + deployed alongside the purge_cache/list_plugins fix. See below for the final
+combined numbers — this note is superseded by the fuller account further down/above once merged.
+
+---
+
 ## 2026-08-11 (evening, cont'd 6) — Group M (Action Scheduler, 6 functions); 193 → 199 functions; full pricing map rebuilt and reconciled
 
 **Status:** SHIPPED, tested (720/720 Python + 411 PHP across all bridge harnesses), `imperal

@@ -2304,3 +2304,37 @@ class ActionCountsResult(sdl.Entity):
     complete: int = 0
     failed: int = 0
     canceled: int = 0
+
+
+# ─────────── Rewrite rules & permalinks (Bridge SECTION 17: /imperal/v1/rewrite) ───────────
+
+class PermalinkStructureResult(sdl.Entity):
+    """The site's current permalink structure and related base slugs."""
+    permalink_structure: str = ""
+    category_base: str = ""
+    tag_base: str = ""
+
+
+class UpdatePermalinkStructureParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    permalink_structure: str = Field(
+        description="New permalink structure, e.g. '/%year%/%monthnum%/%postname%/' or '' for plain "
+                    "'?p=123' links. Use the exact WordPress permastruct tag syntax."
+    )
+    category_base: str | None = Field(default=None, description="New base for category permalinks, e.g. 'topics' (without slashes)")
+    tag_base: str | None = Field(default=None, description="New base for tag permalinks, e.g. 'labels' (without slashes)")
+
+
+class FlushRewriteRulesResult(sdl.Entity):
+    flushed: bool = False
+    rule_count: int = 0
+
+
+class RewriteRuleItem(sdl.Entity):
+    """One compiled rewrite rule, from the site's rewrite_rules option."""
+    match: str = ""
+    query: str = ""
+
+
+class ListRewriteRulesParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")

@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.17.0",
+  "version": "1.18.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -3487,7 +3487,7 @@
     },
     {
       "name": "list_plugins",
-      "description": "List plugins installed on a WordPress site: active/inactive status, installed version, and an available update version. Requires SSH access configured with add_ssh; this function is read-only.",
+      "description": "List plugins installed on a WordPress site: active/inactive status, installed version, and an available update version. Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all -- built from WordPress's own get_plugins()/is_plugin_active()/get_plugin_updates() calls, the same data wp-admin's own Plugins screen reads its update notices from), or falls back to SSH + WP-CLI (`wp plugin list`) if SSH is configured with add_ssh. Read-only.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -3652,7 +3652,7 @@
     },
     {
       "name": "purge_cache",
-      "description": "Purge the site's page cache. Auto-detects an active cache plugin (LiteSpeed Cache or W3 Total Cache) from the site's real, live plugin list — if none is found, reports that clearly instead of silently doing nothing. Requires SSH access configured with add_ssh.",
+      "description": "Purge the site's page cache. Auto-detects an active cache plugin (LiteSpeed Cache or W3 Total Cache) — if none is found, reports that clearly instead of silently doing nothing. Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all — fires the cache plugin's own real purge hook, litespeed_purge_all / w3tc_flush_all), or falls back to SSH + WP-CLI if SSH is configured with add_ssh instead.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -34896,6 +34896,567 @@
         "x-sdl": "entity"
       },
       "event": "wordpress-hub.count_actions_by_status",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "get_permalink_structure",
+      "description": "Read the site's current permalink structure plus its category/tag base slugs — the same three values wp-admin's Settings > Permalinks screen reads. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp option get`) if SSH is configured with add_ssh. Native /wp/v2/settings is not used because permalink_structure exposure there is unreliable across WordPress versions and never included category_base/tag_base at all.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "The site's current permalink structure and related base slugs.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "permalink_structure": {
+            "default": "",
+            "title": "Permalink Structure",
+            "type": "string"
+          },
+          "category_base": {
+            "default": "",
+            "title": "Category Base",
+            "type": "string"
+          },
+          "tag_base": {
+            "default": "",
+            "title": "Tag Base",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PermalinkStructureResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "update_permalink_structure",
+      "description": "Update the site's permalink structure and/or category/tag base slugs, then flush rewrite rules — the same two-step wp-admin's Settings > Permalinks 'Save Changes' button performs. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp rewrite structure`) if SSH is configured with add_ssh. Pass an empty permalink_structure for plain '?p=123' links.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.update_permalink_structure"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "permalink_structure": {
+            "description": "New permalink structure, e.g. '/%year%/%monthnum%/%postname%/' or '' for plain '?p=123' links. Use the exact WordPress permastruct tag syntax.",
+            "title": "Permalink Structure",
+            "type": "string"
+          },
+          "category_base": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New base for category permalinks, e.g. 'topics' (without slashes)",
+            "title": "Category Base"
+          },
+          "tag_base": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New base for tag permalinks, e.g. 'labels' (without slashes)",
+            "title": "Tag Base"
+          }
+        },
+        "required": [
+          "site_id",
+          "permalink_structure"
+        ],
+        "title": "UpdatePermalinkStructureParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "The site's current permalink structure and related base slugs.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "permalink_structure": {
+            "default": "",
+            "title": "Permalink Structure",
+            "type": "string"
+          },
+          "category_base": {
+            "default": "",
+            "title": "Category Base",
+            "type": "string"
+          },
+          "tag_base": {
+            "default": "",
+            "title": "Tag Base",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PermalinkStructureResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.update_permalink_structure",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "flush_rewrite_rules",
+      "description": "Flush the site's rewrite rules — regenerates the compiled rules WordPress uses to match incoming URLs, without changing the permalink structure itself. Useful after a plugin/theme registers new post types or CPT rewrite rules and 404s appear on its own URLs. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp rewrite flush`) if SSH is configured with add_ssh.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.flush_rewrite_rules"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "flushed": {
+            "default": false,
+            "title": "Flushed",
+            "type": "boolean"
+          },
+          "rule_count": {
+            "default": 0,
+            "title": "Rule Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "FlushRewriteRulesResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.flush_rewrite_rules",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_rewrite_rules",
+      "description": "List the site's compiled rewrite rules — each rule's regex match pattern and the query string it maps to, matching `wp rewrite list`. Useful for diagnosing why a custom post type or plugin URL 404s. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp rewrite list`) if SSH is configured with add_ssh.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "ListRewriteRulesParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "RewriteRuleItem": {
+            "description": "One compiled rewrite rule, from the site's rewrite_rules option.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "match": {
+                "default": "",
+                "title": "Match",
+                "type": "string"
+              },
+              "query": {
+                "default": "",
+                "title": "Query",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "RewriteRuleItem",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/RewriteRuleItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[RewriteRuleItem]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
       "background": false,
       "long_running": false,
       "scopes": [],

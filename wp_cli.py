@@ -446,6 +446,109 @@ async def list_cron_schedules(cred: dict) -> tuple[list | None, str | None]:
     return rows, None
 
 
+async def get_permalink_structure(cred: dict) -> tuple[dict | None, str | None]:
+    """Read the current permalink structure via `wp option get` on the three
+    options wp-admin's own options-permalink.php reads: permalink_structure,
+    category_base, and tag_base. There is no single `wp rewrite` subcommand
+    that reads the structure back (`wp rewrite structure` only *sets* it).
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    php = (
+        "echo json_encode(array("
+        "'permalink_structure' => get_option('permalink_structure', ''), "
+        "'category_base' => get_option('category_base', ''), "
+        "'tag_base' => get_option('tag_base', '')));"
+    )
+    command = f"wp eval \"{php}\" --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command)
+    if output is None:
+        return None, error or "SSH connection failed"
+    try:
+        data = json.loads(output) if output else {}
+    except json.JSONDecodeError:
+        return None, "WP-CLI returned an invalid permalink structure"
+    if not isinstance(data, dict):
+        return None, "WP-CLI returned an unexpected permalink structure"
+    return data, None
+
+
+async def update_permalink_structure(
+    cred: dict, permalink_structure: str, category_base: str | None, tag_base: str | None,
+) -> tuple[str | None, str | None]:
+    """Set the permalink structure (and optionally category/tag base) via
+    `wp rewrite structure`, which internally calls
+    `WP_Rewrite::set_permalink_structure()` followed by a flush — the same
+    two calls wp-admin's own "Save Changes" button on Settings > Permalinks
+    makes. `permalink_structure` is passed as a single quoted argument;
+    optional bases are passed via `--category-base`/`--tag-base` flags.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    for val in (permalink_structure, category_base or "", tag_base or ""):
+        if any(ch in val for ch in ("'", '"', ";", "|", "&", "$", "`", "\n")):
+            return None, "Invalid character in permalink structure or base — remove quotes/shell metacharacters."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    extra = ""
+    if category_base is not None:
+        extra += f" --category-base='{category_base}'"
+    if tag_base is not None:
+        extra += f" --tag-base='{tag_base}'"
+    command = f"wp rewrite structure '{permalink_structure}'{extra} --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command, timeout=60)
+
+
+async def flush_rewrite_rules(cred: dict) -> tuple[str | None, str | None]:
+    """Flush rewrite rules via `wp rewrite flush` — a soft flush (database
+    rules only); `--hard` also regenerates .htaccess, but that only applies
+    on single-site Apache installs, so this stays with the safe default.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp rewrite flush --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        return await _run(host, port, user, key_path, command, timeout=60)
+
+
+async def list_rewrite_rules(cred: dict) -> tuple[list | None, str | None]:
+    """List compiled rewrite rules via `wp rewrite list --format=json`."""
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp rewrite list --format=json --fields=match,query --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command)
+    if output is None:
+        return None, error or "SSH connection failed"
+    try:
+        rows = json.loads(output) if output else []
+    except json.JSONDecodeError:
+        return None, "WP-CLI returned an invalid rewrite rule list"
+    if not isinstance(rows, list):
+        return None, "WP-CLI returned an unexpected rewrite rule list"
+    return rows, None
+
+
 async def _wp_prefix(host, port, user, key_path, wp_path) -> tuple[str | None, str | None]:
     """Discover the site's real $wpdb->prefix — never hardcode 'wp_'."""
     command = f"wp eval 'global $wpdb; echo $wpdb->prefix;' --path={wp_path} --allow-root"
