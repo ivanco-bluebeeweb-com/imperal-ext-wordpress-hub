@@ -44,12 +44,13 @@ that runs *inside* WordPress, with real capability checks, is the only fix.
 | Maintenance | `POST /wp-json/imperal/v1/maintenance/update-plugin`, `.../maintenance/update-core`, `.../maintenance/run-due-cron`, `.../maintenance/install-plugin`, `.../maintenance/purge-cache`, `GET .../maintenance/list-plugins` | Update one plugin or WordPress core via the exact same `Plugin_Upgrader`/`Core_Upgrader` + `Automatic_Upgrader_Skin` classes wp-admin's own "Update Now" button and WordPress's background auto-updates use, force-run every past-due cron hook, install a new plugin from a WordPress.org slug (resolved via `plugins_api()`, same lookup the "Add New Plugin" screen uses) or a direct .zip URL, purge LiteSpeed Cache/W3 Total Cache by firing each plugin's own real purge hook (`litespeed_purge_all`/`w3tc_flush_all`), and list every installed plugin with real active-state and update-availability (`get_plugins()` + `is_plugin_active()` + `get_plugin_updates()`) — all plain core upgrade/cron/install/plugin-inventory APIs that used to require SSH + WP-CLI's `wp plugin update`/`wp core update`/`wp cron event run --due-now`/`wp plugin install`/`wp litespeed-purge`/`wp w3-total-cache flush all`/`wp plugin list` |
 | Action Scheduler | `GET /wp-json/imperal/v1/action-scheduler/actions`, `GET .../action-scheduler/actions/{id}`, `POST .../action-scheduler/actions/{id}/run`, `POST .../action-scheduler/actions/{id}/cancel`, `POST .../action-scheduler/actions/{id}/retry`, `GET .../action-scheduler/counts` | List/inspect/force-run/cancel/retry jobs in WooCommerce's own background job queue (bundled Action Scheduler library, NOT WordPress core) via `ActionScheduler::store()`/`runner()`/`logger()` — the same calls the plugin's own Tools → Scheduled Actions admin screen uses. Retrying re-enqueues a fresh attempt with `as_enqueue_async_action()` since Action Scheduler has no native retry. Returns a clear 404 if Action Scheduler isn't active on the site — no SSH fallback exists worth building (WP-CLI needs the exact same WooCommerce/library context loaded) |
 | Rewrite & Permalinks | `GET /wp-json/imperal/v1/rewrite/structure`, `POST .../rewrite/structure`, `POST .../rewrite/flush`, `GET .../rewrite/rules` | Read/set the site's permalink structure plus category/tag base slugs, and flush/list compiled rewrite rules, via `WP_Rewrite::set_permalink_structure()` + `flush_rewrite_rules()` — the exact two calls wp-admin's own Settings → Permalinks "Save Changes" button makes. Core's native `/wp/v2/settings` endpoint has never reliably exposed `permalink_structure` across versions and never exposed category/tag base at all, so this is a dedicated route rather than a field on an existing one |
+| WXR Import / Export | `GET /wp-json/imperal/v1/export/wxr` | Export WordPress's native WXR (WordPress eXtended RSS) file through the Bridge first, with SSH + `wp export` as the fallback. WXR import is intentionally SSH/WP-CLI-only through `wp import`: WordPress Importer is a separate plugin with a browser-wizard workflow, not a safe headless REST API. |
 
-Sections beyond these (Users password-reset, Rank Math site-wide SEO score/
+Sections beyond these 18 (Users password-reset, Rank Math site-wide SEO score/
 robots.txt/sitemap/404-log, llms.txt, and the generic post/user/term meta +
 wp_options bridge) exist too — see the section header comments inside
 `imperal-bridge.php` itself for the full, current list; this table covers
-the earliest five plus the newest one added.
+the earliest five plus the newest ones added.
 
 Plus one small addition from the merge itself: `GET /wp-json/imperal/v1/status`
 — reports the bridge is installed and which sections are active, without
@@ -95,4 +96,9 @@ php tests/builder_logic_test.php
 php tests/media_logic_test.php
 php tests/database_logic_test.php
 php tests/logs_logic_test.php
+php tests/cache_cron_logic_test.php
+php tests/maintenance_logic_test.php
+php tests/action_scheduler_logic_test.php
+php tests/rewrite_logic_test.php
+php tests/import_export_logic_test.php
 ```

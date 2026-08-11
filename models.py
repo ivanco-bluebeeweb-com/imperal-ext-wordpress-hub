@@ -2338,3 +2338,57 @@ class RewriteRuleItem(sdl.Entity):
 
 class ListRewriteRulesParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+
+
+# ─────────── Import / Export (WXR) ───────────
+
+_WXR_EXPORT_CAP = 2_000_000  # ~2MB of XML text — mirrors the DB dump cap; scope down if refused
+
+
+class ExportWxrParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    content: str = Field(
+        default="all",
+        description="Type of content to export: 'all', 'post', 'page', 'attachment', or a custom "
+                    "post type slug. 'all' exports every post type with can_export enabled.")
+    post_type: str | None = Field(
+        default=None,
+        description="Alias for content when you already know the exact post type slug (e.g. 'product')")
+    author: str | None = Field(default=None, description="Only export content by this author (WordPress user ID as a string)")
+    category: str | None = Field(default=None, description="Only export posts assigned to this category slug (content='post' only)")
+    start_date: str | None = Field(default=None, description="Only export content published on/after this date, format YYYY-MM-DD")
+    end_date: str | None = Field(default=None, description="Only export content published on/before this date, format YYYY-MM-DD")
+    status: str | None = Field(default=None, description="Only export posts/pages with this status, e.g. 'publish', 'draft', 'private'")
+
+
+class WxrExportResult(sdl.Entity):
+    """A generated WXR (WordPress eXtended RSS) export document."""
+    site_id: str = ""
+    xml: str = ""
+    size_bytes: int = 0
+    post_count: int = 0
+
+
+class ImportWxrParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    wxr_xml: str = Field(
+        min_length=1, max_length=_WXR_EXPORT_CAP,
+        description="The full WXR (.xml) file content to import — e.g. from export_wxr's own xml field, "
+                    "or a file the user pasted/uploaded elsewhere. Capped at ~2MB of text.")
+    authors: str = Field(
+        default="create",
+        description="How to handle author mapping: 'create' makes any missing users from the WXR file "
+                    "(matches wp-cli's own default), or 'skip' to skip author mapping and attribute "
+                    "everything to the connected user")
+    skip_attachments: bool = Field(
+        default=False,
+        description="Skip importing file attachments (images etc.) referenced in the WXR file — matches "
+                    "wp-cli's own `--skip=attachment`. By default attachments ARE imported.")
+
+
+class WxrImportResult(sdl.Entity):
+    """Outcome of importing a WXR file via WP-CLI's own Importer_Command (`wp import`)."""
+    site_id: str = ""
+    imported_count: int = 0
+    skipped_count: int = 0
+    output: str = ""

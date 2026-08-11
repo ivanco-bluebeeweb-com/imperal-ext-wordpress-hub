@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.13.0
+ * Version:           2.14.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.13.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.14.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -5566,4 +5566,96 @@ function imperal_rewrite_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_rewrite_bridge_register_routes' );
+
+/**
+ * SECTION 18 — IMPORT / EXPORT (WXR)
+ *
+ * `export_wp()` (wp-admin/includes/export.php) is WordPress core's own WXR
+ * generator -- the exact function Tools > Export's "Download Export File"
+ * button calls, requiring no plugin beyond WordPress itself (verified
+ * against WordPress/WordPress's own wp-admin/includes/export.php source).
+ * It is designed to `echo` its XML straight to the browser and call
+ * `header()` for a file-download Content-Disposition -- both side effects
+ * that make sense for a page load but not for a REST JSON response, so this
+ * wraps the call in output buffering and strips those two headers
+ * afterwards (Content-Type gets legitimately overwritten back to
+ * application/json when the REST response itself sends, since WordPress's
+ * header() calls with $replace=true only ever keep the LAST value; only
+ * Content-Disposition/Content-Description have no later call to replace
+ * them, so those two are removed explicitly).
+ *
+ * Import has NO Bridge route: `WP_Import` (the class that does the real
+ * import work) ships in the separate `wordpress-importer` plugin, not
+ * WordPress core, and its only public entry point (`dispatch()`) is a
+ * web-admin wizard built entirely around `$_GET`/`$_POST` step state --
+ * verified by reading the plugin's own source
+ * (github.com/WordPress/wordpress-importer/src/class-wp-import.php). There
+ * is no safe, faithful way to drive it from a REST callback; the connector's
+ * `import_wxr` is SSH-only via WP-CLI's own `wp import`, which exists
+ * specifically to provide a clean headless entry point to the same plugin.
+ */
+
+define( 'IMPERAL_IMPORTEXPORT_BRIDGE_NAMESPACE', 'imperal/v1' );
+
+/**
+ * GET /imperal/v1/export/wxr { content?, author?, category?, start_date?,
+ * end_date?, status? } -- runs core's own export_wp() and returns the WXR
+ * XML as a JSON string field instead of a file download.
+ */
+function imperal_importexport_bridge_export_wxr( WP_REST_Request $request ) {
+	if ( ! function_exists( 'export_wp' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/export.php';
+	}
+	$args = array(
+		'content'    => (string) ( $request->get_param( 'content' ) ?: 'all' ),
+		'author'     => $request->get_param( 'author' ) ?: false,
+		'category'   => $request->get_param( 'category' ) ?: false,
+		'start_date' => $request->get_param( 'start_date' ) ?: false,
+		'end_date'   => $request->get_param( 'end_date' ) ?: false,
+		'status'     => $request->get_param( 'status' ) ?: false,
+	);
+
+	ob_start();
+	export_wp( $args );
+	$xml = ob_get_clean();
+
+	// export_wp() sets a file-download Content-Disposition via header() --
+	// harmless on a page load, wrong on a REST JSON response. Remove it;
+	// Content-Type is left alone since the REST server's own later header()
+	// call already replaces it back to application/json.
+	if ( ! headers_sent() ) {
+		header_remove( 'Content-Disposition' );
+		header_remove( 'Content-Description' );
+	}
+
+	$cap = 2 * 1024 * 1024; // ~2MB, mirrors the connector's own docstring cap.
+	if ( strlen( $xml ) > $cap ) {
+		return new WP_Error(
+			'imperal_export_too_large',
+			__( 'Export is larger than 2MB of XML text — narrow it with content/start_date/end_date/category and try again.', 'imperal-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$post_count = substr_count( $xml, '<wp:post_id>' );
+	return rest_ensure_response( array( 'xml' => $xml, 'size_bytes' => strlen( $xml ), 'post_count' => $post_count ) );
+}
+
+function imperal_importexport_bridge_register_routes() {
+	$manage_options_perm = function () {
+		return current_user_can( 'manage_options' );
+	};
+	register_rest_route(
+		IMPERAL_IMPORTEXPORT_BRIDGE_NAMESPACE,
+		'/export/wxr',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_importexport_bridge_export_wxr',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_importexport_bridge_register_routes' );
 

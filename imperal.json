@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.18.0",
+  "version": "1.19.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -35457,6 +35457,366 @@
         "x-sdl": "entity-list"
       },
       "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "export_wxr",
+      "description": "Export the site's content as a WXR (WordPress eXtended RSS) document — the same format Tools > Export produces, importable into any WordPress site. Optionally scoped by content/post type, author, category, date range, or status. Reads through the Imperal Bridge plugin if it's installed (core's own export_wp(), no extra plugin needed), or falls back to SSH + WP-CLI (`wp export --stdout`) if SSH is configured with add_ssh. Capped at ~2MB of XML text — narrow the filters if the export is refused as too large. WXR does not include site options/settings or the attachment FILES themselves, only their metadata.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "content": {
+            "default": "all",
+            "description": "Type of content to export: 'all', 'post', 'page', 'attachment', or a custom post type slug. 'all' exports every post type with can_export enabled.",
+            "title": "Content",
+            "type": "string"
+          },
+          "post_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Alias for content when you already know the exact post type slug (e.g. 'product')",
+            "title": "Post Type"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Only export content by this author (WordPress user ID as a string)",
+            "title": "Author"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Only export posts assigned to this category slug (content='post' only)",
+            "title": "Category"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Only export content published on/after this date, format YYYY-MM-DD",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Only export content published on/before this date, format YYYY-MM-DD",
+            "title": "End Date"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Only export posts/pages with this status, e.g. 'publish', 'draft', 'private'",
+            "title": "Status"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "ExportWxrParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "A generated WXR (WordPress eXtended RSS) export document.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "site_id": {
+            "default": "",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "xml": {
+            "default": "",
+            "title": "Xml",
+            "type": "string"
+          },
+          "size_bytes": {
+            "default": 0,
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "post_count": {
+            "default": 0,
+            "title": "Post Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "WxrExportResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "import_wxr",
+      "description": "Import a WXR (WordPress eXtended RSS) document into the site — the same format Tools > Import's WordPress importer accepts. SSH-ONLY: this needs WP-CLI's own `wp import`, backed by the wordpress-importer plugin, which has no safe headless REST equivalent (its only entry point is a web-admin upload wizard). Requires SSH configured with add_ssh, AND the wordpress-importer plugin installed and active on the target site (install_plugin with slug_or_url='wordpress-importer' if it's missing) — reports a clear error rather than a silent no-op if either is missing.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.import_wxr"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "wxr_xml": {
+            "description": "The full WXR (.xml) file content to import — e.g. from export_wxr's own xml field, or a file the user pasted/uploaded elsewhere. Capped at ~2MB of text.",
+            "maxLength": 2000000,
+            "minLength": 1,
+            "title": "Wxr Xml",
+            "type": "string"
+          },
+          "authors": {
+            "default": "create",
+            "description": "How to handle author mapping: 'create' makes any missing users from the WXR file (matches wp-cli's own default), or 'skip' to skip author mapping and attribute everything to the connected user",
+            "title": "Authors",
+            "type": "string"
+          },
+          "skip_attachments": {
+            "default": false,
+            "description": "Skip importing file attachments (images etc.) referenced in the WXR file — matches wp-cli's own `--skip=attachment`. By default attachments ARE imported.",
+            "title": "Skip Attachments",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "site_id",
+          "wxr_xml"
+        ],
+        "title": "ImportWxrParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of importing a WXR file via WP-CLI's own Importer_Command (`wp import`).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "site_id": {
+            "default": "",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "imported_count": {
+            "default": 0,
+            "title": "Imported Count",
+            "type": "integer"
+          },
+          "skipped_count": {
+            "default": 0,
+            "title": "Skipped Count",
+            "type": "integer"
+          },
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "WxrImportResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.import_wxr",
       "background": false,
       "long_running": false,
       "scopes": [],

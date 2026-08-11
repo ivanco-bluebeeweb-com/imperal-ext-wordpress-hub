@@ -307,13 +307,22 @@ writes — matches the existing tier convention), resubmitted.
 
 ## Group O — Import / Export (WXR)
 
-65. `export_wxr` — trigger WordPress's own native WXR (WordPress eXtended RSS) export
-    (`wp export` WP-CLI, or the core `/wp-admin/export.php` mechanism via Bridge) — full site or
-    filtered by post type/date range/author; needs the same size-limit handling as
-    `export_database_dump` (Group B) — write to a path, return a link, not inline content
-66. `import_wxr` — import a WXR file into the site (`wp import` WP-CLI, requires the
-    `wordpress-importer` plugin to be present — must detect and report cleanly if it's missing
-    rather than fail silently)
+**Release gate:** mark this group ✅ SHIPPED only after the complete pricing map is successfully
+persisted, all tests pass, and the release commit has been pushed and deployed.
+
+65. `export_wxr` — implemented Bridge-first through SECTION 18's
+    `GET /wp-json/imperal/v1/export/wxr`, which runs WordPress core's `export_wp()`; SSH +
+    `wp export --stdout` is the fallback. Supports content/post type, author, category, date
+    range, and status filters. The returned XML is capped at 2MB with an explicit refusal rather
+    than silent truncation.
+66. `import_wxr` — implemented deliberately SSH/WP-CLI-only through `wp import -`, with the WXR
+    XML passed on stdin. The separate `wordpress-importer` plugin is required and its missing or
+    inactive state is reported clearly. Import has no Bridge REST route because WordPress
+    Importer's `WP_Import::dispatch()` is a browser wizard, not a safe headless REST API.
+
+**Implementation awaiting final release:** new `handlers_import_export.py`, WXR models and
+WP-CLI wrappers, Bridge SECTION 18 (2.14.0) export route, and contract/PHP logic tests. Pricing is
+the complete 205-key map (`export_wxr=1`, `import_wxr=2`).
 
 ## Group P — Core / Plugin / Theme Integrity (security-relevant)
 

@@ -49,11 +49,18 @@ def _ssh_cmd(host: str, port: int, user: str, key_path: str | None, remote_cmd: 
     return cmd
 
 
-async def _run(host, port, user, key_path, remote_cmd, timeout=_CMD_TIMEOUT) -> tuple[str | None, str | None]:
-    """Run one remote command. Returns (stdout, error_message)."""
+async def _run(host, port, user, key_path, remote_cmd, timeout=_CMD_TIMEOUT,
+                stdin_data: bytes | None = None) -> tuple[str | None, str | None]:
+    """Run one remote command. Returns (stdout, error_message).
+
+    `stdin_data`, when given, is piped to the remote command's stdin -- used
+    by import_wxr to feed WXR XML into `wp import -` exactly the way WP-CLI's
+    own docs describe piping into the '-' stdin argument.
+    """
     try:
         proc = await asyncio.create_subprocess_exec(
             *_ssh_cmd(host, port, user, key_path, remote_cmd),
+            stdin=asyncio.subprocess.PIPE if stdin_data is not None else None,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -62,7 +69,7 @@ async def _run(host, port, user, key_path, remote_cmd, timeout=_CMD_TIMEOUT) -> 
     except Exception as e:
         return None, f"subprocess error: {e}"
     try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(input=stdin_data), timeout=timeout)
     except asyncio.TimeoutError:
         proc.kill()
         return None, "Command timed out"
@@ -965,3 +972,100 @@ async def tail_php_error_log(cred: dict, lines: int = 100) -> tuple[dict | None,
         if output is None:
             return None, error or "Could not read the PHP error log — check file permissions."
         return {"path": log_path, "exists": True, "lines": output.splitlines()}, None
+
+
+_WXR_EXPORT_CAP = 2_000_000  # ~2MB of XML text — mirrors the DB dump cap
+
+
+async def export_wxr(
+    cred: dict, content: str = "all", author: str | None = None, category: str | None = None,
+    start_date: str | None = None, end_date: str | None = None, status: str | None = None,
+) -> tuple[dict | None, str | None]:
+    """Generate a WXR export to STDOUT via `wp export --stdout`, capped at ~2MB.
+
+    `wp export` wraps core's own `export_wp()` (wp-admin/includes/export.php)
+    -- the exact function Tools > Export's "Download Export File" button
+    calls -- so this needs no plugin beyond WordPress itself. All filter
+    values are validated before reaching the command line; none are freeform
+    shell text.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    for val in (content, author, category, start_date, end_date, status):
+        if val and not all(ch.isalnum() or ch in "-_./: " for ch in val):
+            return None, "Invalid character in an export filter — remove quotes/shell metacharacters."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+
+    flags = [f"--post_type={content}"] if content and content != "all" else []
+    if author:
+        flags.append(f"--author={author}")
+    if category:
+        flags.append(f"--category={category}")
+    if start_date:
+        flags.append(f"--start_date={start_date}")
+    if end_date:
+        flags.append(f"--end_date={end_date}")
+    if status:
+        flags.append(f"--post_status={status}")
+    flags_str = " " + " ".join(flags) if flags else ""
+    command = f"wp export --stdout{flags_str} --path={wp_path} --allow-root"
+
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command, timeout=120)
+    if output is None:
+        return None, error or "SSH connection failed"
+    if len(output) > _WXR_EXPORT_CAP:
+        return None, (
+            f"Export is larger than {_WXR_EXPORT_CAP // 1_000_000}MB of XML text — "
+            "narrow it with content/start_date/end_date/category and try again.")
+    post_count = output.count("<wp:post_id>")
+    return {"xml": output, "size_bytes": len(output.encode()), "post_count": post_count}, None
+
+
+async def import_wxr(
+    cred: dict, wxr_xml: str, authors: str = "create", skip_attachments: bool = False,
+) -> tuple[dict | None, str | None]:
+    """Import a WXR document via `wp import - --authors=<mode>`, piping the XML on stdin.
+
+    Deliberately SSH-only: `WP_Import` (the class that does the real work)
+    ships in the separate `wordpress-importer` plugin, not WordPress core,
+    and its own public entry point (`dispatch()`) is a web-admin wizard tied
+    to `$_GET`/`$_POST` state, not a clean function a REST callback could
+    call safely -- verified by reading the plugin's own source
+    (github.com/WordPress/wordpress-importer/src/class-wp-import.php).
+    WP-CLI's own `Import_Command` (wp-cli/import-command) exists FOR exactly
+    this reason: it is the verified, safe, headless way to drive the same
+    importer, and it enforces the plugin being active before running
+    ("WordPress Importer needs to be activated") -- the same guard this
+    fallback surfaces verbatim rather than guessing at a nicer message.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    if authors not in ("create", "skip"):
+        return None, "authors must be 'create' or 'skip' (mapping.csv is not supported headless)."
+
+    host = cred["host"]
+    port = int(cred.get("port", 22))
+    user = cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    skip_flag = " --skip=attachment" if skip_attachments else ""
+    command = f"wp import - --authors={authors}{skip_flag} --path={wp_path} --allow-root"
+
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(
+            host, port, user, key_path, command, timeout=180,
+            stdin_data=wxr_xml.encode(),
+        )
+    if "needs to be activated" in (output or "") or "needs to be activated" in (error or ""):
+        return None, ("The WordPress Importer plugin is not active on this site. "
+                       "Install and activate 'wordpress-importer' first (install_plugin with "
+                       "slug_or_url='wordpress-importer'), then retry.")
+    if output is None:
+        return None, error or "SSH connection failed"
+    imported = output.count("Imported post as post_id")
+    skipped = output.count("Post already imported")
+    return {"output": output, "imported": imported, "skipped": skipped}, None
