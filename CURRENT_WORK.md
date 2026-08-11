@@ -5,6 +5,69 @@
 
 ---
 
+## 2026-08-11 (morning) — New companion roadmap: developer/backend-developer function candidates (Group A-U, ~80 numbered items / ~117 distinct function names)
+
+**Status:** PLANNING DOC ONLY — nothing implemented yet. This is deliberately a candidate list, not
+a build commitment; every item still needs its own source-verification pass before any code is
+written, per the app's standing discipline.
+
+**Why:** explicit new-direction request — "дальше нужно покрыть все всевозможный функции которые
+нужны разработчику и бэк-енд разрабоатчику. давай составим список этих функций. это ок даже если их
+будет больше 100". The existing `2026-08-09-full-feature-roadmap.md` is now fully shipped (139
+functions) but covers a content-editor/site-manager/store-manager persona only — nothing there
+targets the developer/backend-developer persona (database, cache, cron internals, custom fields/
+meta, REST introspection, security hardening, logs, deploy hygiene, Action Scheduler, rewrite
+rules, WXR import/export, core integrity checks, mail deliverability, WP Site Health's own test
+battery, session hygiene).
+
+**Shipped this pass:** `docs/2026-08-11-developer-backend-functions-plan.md` — a new canonical
+companion roadmap, organized into 21 groups (A through U):
+- A: custom fields/meta (post/user/term meta, wp_options, ACF field discovery)
+- B: database tools (table listing, search-replace migration, optimize/repair, export dump, row
+  counts/orphan detection)
+- C: transients & object cache (list/delete/flush, cache-backend detection)
+- D: cron jobs beyond the existing single `run_wp_cron` (list/run-one/delete/list-schedules)
+- E: REST API introspection (route discovery, schema, Application Password listing/revocation)
+- F: security/hardening diagnostics (PHP info, file permissions, admin-user audit, debug-mode
+  check)
+- G: multisite (gated — nothing built until a connected site is confirmed multisite)
+- H: deploy/environment hygiene (wp-config safe-subset constants, mu-plugins, drop-ins,
+  environment type)
+- I: logs (tail/clear debug.log, tail server error log)
+- J: registered post types/taxonomies discovery (dynamic CPT/taxonomy enumeration)
+- K: reusable blocks/patterns (read-only diagnostics, block-theme era)
+- L: WooCommerce webhooks (native REST route already exists — low effort, could pull forward)
+- M: Action Scheduler / background job queue (distinct from WP-Cron — WooCommerce's own queue,
+  "why didn't my order emails/sync jobs run")
+- N: rewrite rules & permalinks (flush_rewrite_rules is the single most common "why is this 404ing"
+  fix after a CPT/permalink change)
+- O: WXR import/export (native WordPress export/import mechanism)
+- P: core/plugin/theme integrity checksums (tamper/malware detection via WP-CLI verify-checksums)
+- Q: mail deliverability (send_test_email via wp_mail(), never raw eval)
+- R: WordPress core's own Site Health test battery (`/wp-site-health/v1/tests/*` — distinct from
+  our existing custom `get_site_health`)
+- S: session/auth hygiene (list/destroy active login sessions — pairs with existing
+  `reset_user_password`)
+- T: third-party REST namespace discovery (which plugin added which API surface)
+- U: site icon (likely already free via existing `get_site_settings`/`update_site_settings`)
+
+**Explicitly excluded, documented so it isn't re-proposed:** arbitrary PHP eval/RCE surface (hard
+no under any framing), general raw SQL console (only the one purpose-built search-replace
+exception), wp-config secret/credential exposure (hard allowlist only), full multisite until real
+demand, SSL/domain health (that's `web-tools`'s job, not ours — no cross-app duplication).
+
+**Suggested build order documented in the plan doc itself:** Group A (custom fields — single most
+common backend-dev ask) first, then C+D (natural SSH/WP-CLI layer extension), then B (DB tools,
+careful preview-first design needed for search-replace), then F+E (audit-focused, low risk), then
+H/I/J/K/L opportunistically, G last/gated.
+
+**Next actions:** pick the first group (likely A) and run the SAME verification-first protocol as
+every prior slice — read the real WP-CLI command reference / core REST handbook / actual plugin
+source BEFORE writing code, write a scoped sub-plan, implement with tests, validate, price, deploy,
+submit for review, log the outcome here and in the canonical Notes doc.
+
+---
+
 ## 2026-08-10 (night, latest of all) — llms.txt module + full deploy/price/submit close-out for BOTH this session's gaps
 
 **Status:** DONE end-to-end. Implemented, tested, deployed, priced, resubmitted for review.
