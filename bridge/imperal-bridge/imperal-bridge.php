@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.8.0
+ * Version:           2.9.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.8.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.9.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy', 'database' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy', 'database', 'logs' ),
 		)
 	);
 }
@@ -4244,4 +4244,121 @@ function imperal_database_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_database_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 13 — LOGS (debug.log / PHP error_log, read + truncate)
+ *
+ * Same reasoning as SECTION 12: tailing/truncating these files only ever
+ * needed SSH because that was the only way to reach the filesystem from
+ * outside the WordPress process. From inside it, WP_CONTENT_DIR is a real
+ * WordPress core constant (never a guessed 'wp-content' path) and PHP's own
+ * ini_get( 'error_log' ) is the exact same source WP-CLI's `wp eval` was
+ * shelling out to read -- so both are answered here with zero shell calls.
+ * Truncation uses fopen( $path, 'w' ), matching `: > <path>`'s effect
+ * (empties the file, never deletes it, so WordPress keeps the same inode).
+ * ============================================================================= */
+
+define( 'IMPERAL_LOGS_BRIDGE_NAMESPACE', 'imperal/v1' );
+
+/**
+ * GET /imperal/v1/logs/debug-log?lines=100 — last N lines of debug.log.
+ */
+function imperal_logs_bridge_tail_debug_log( WP_REST_Request $request ) {
+	$lines = max( 1, min( (int) ( $request->get_param( 'lines' ) ?: 100 ), 1000 ) );
+	$path  = trailingslashit( WP_CONTENT_DIR ) . 'debug.log';
+	if ( ! file_exists( $path ) ) {
+		return rest_ensure_response( array( 'path' => $path, 'exists' => false, 'lines' => array() ) );
+	}
+	$contents = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+	if ( false === $contents ) {
+		return new WP_Error( 'imperal_logs_unreadable', __( 'debug.log exists but could not be read — check file permissions.', 'imperal-bridge' ), array( 'status' => 500 ) );
+	}
+	$all = '' === $contents ? array() : preg_split( '/\r\n|\r|\n/', rtrim( $contents, "\r\n" ) );
+	return rest_ensure_response( array( 'path' => $path, 'exists' => true, 'lines' => array_slice( $all, -$lines ) ) );
+}
+
+/**
+ * POST /imperal/v1/logs/debug-log/clear — truncate debug.log to empty
+ * without deleting it (matches `: > <path>`'s effect on the SSH path).
+ */
+function imperal_logs_bridge_clear_debug_log() {
+	$path = trailingslashit( WP_CONTENT_DIR ) . 'debug.log';
+	if ( ! file_exists( $path ) ) {
+		return rest_ensure_response( array( 'path' => $path, 'cleared' => false, 'note' => __( 'No debug.log file exists to clear.', 'imperal-bridge' ) ) );
+	}
+	$handle = @fopen( $path, 'w' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors, WordPress.WP.AlternativeFunctions.file_system_read_fopen
+	if ( ! $handle ) {
+		return new WP_Error( 'imperal_logs_unwritable', __( 'debug.log exists but could not be truncated — check file permissions.', 'imperal-bridge' ), array( 'status' => 500 ) );
+	}
+	fclose( $handle ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_fclose
+	return rest_ensure_response( array( 'path' => $path, 'cleared' => true ) );
+}
+
+/**
+ * GET /imperal/v1/logs/php-error-log?lines=100 — last N lines of PHP's own
+ * ini_get( 'error_log' ) path, never a guessed distro-specific path.
+ */
+function imperal_logs_bridge_tail_php_error_log( WP_REST_Request $request ) {
+	$lines    = max( 1, min( (int) ( $request->get_param( 'lines' ) ?: 100 ), 1000 ) );
+	$log_path = (string) ini_get( 'error_log' );
+	if ( '' === $log_path || '/' !== substr( $log_path, 0, 1 ) ) {
+		return rest_ensure_response(
+			array(
+				'path'   => '',
+				'exists' => false,
+				'lines'  => array(),
+				'note'   => __( 'PHP has no error_log path configured (likely logging to the web server\'s own error log, outside this reach).', 'imperal-bridge' ),
+			)
+		);
+	}
+	if ( ! file_exists( $log_path ) ) {
+		return rest_ensure_response( array( 'path' => $log_path, 'exists' => false, 'lines' => array() ) );
+	}
+	$contents = file_get_contents( $log_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+	if ( false === $contents ) {
+		return new WP_Error( 'imperal_logs_unreadable', __( 'PHP error log exists but could not be read — check file permissions.', 'imperal-bridge' ), array( 'status' => 500 ) );
+	}
+	$all = '' === $contents ? array() : preg_split( '/\r\n|\r|\n/', rtrim( $contents, "\r\n" ) );
+	return rest_ensure_response( array( 'path' => $log_path, 'exists' => true, 'lines' => array_slice( $all, -$lines ) ) );
+}
+
+function imperal_logs_bridge_register_routes() {
+	$manage_options_perm = function () {
+		return current_user_can( 'manage_options' );
+	};
+	register_rest_route(
+		IMPERAL_LOGS_BRIDGE_NAMESPACE,
+		'/logs/debug-log',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_logs_bridge_tail_debug_log',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_LOGS_BRIDGE_NAMESPACE,
+		'/logs/debug-log/clear',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_logs_bridge_clear_debug_log',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_LOGS_BRIDGE_NAMESPACE,
+		'/logs/php-error-log',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_logs_bridge_tail_php_error_log',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_logs_bridge_register_routes' );
 

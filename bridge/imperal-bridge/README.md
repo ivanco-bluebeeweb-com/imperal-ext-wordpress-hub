@@ -39,6 +39,7 @@ that runs *inside* WordPress, with real capability checks, is the only fix.
 | Security | `GET /wp-json/imperal/v1/security/php-info`, `.../security/debug-mode`, `.../security/file-permissions` | PHP runtime facts (version, loaded extensions, memory/upload/execution limits), whether WP_DEBUG/WP_DEBUG_LOG/WP_DEBUG_DISPLAY are on, and wp-config.php/wp-content permission bits — plain PHP built-ins, no shell needed |
 | Deploy | `GET /wp-json/imperal/v1/deploy/config-constants`, `.../deploy/mu-plugins`, `.../deploy/drop-ins`, `.../deploy/environment-type` | A hard-allowlisted safe subset of wp-config.php constants (never DB credentials or auth keys/salts), must-use plugins, drop-in files (object-cache.php/advanced-cache.php/db.php), and WordPress's own declared environment type |
 | Database | `POST /wp-json/imperal/v1/database/search-replace`, `GET .../database/tables`, `POST .../database/optimize`, `POST .../database/check`, `GET .../database/export`, `GET .../database/post-count`, `GET .../database/orphaned-postmeta` | Table listing/size, serialization-safe search-and-replace (dry-run always available), OPTIMIZE/CHECK/REPAIR TABLE, a capped SQL dump, and row-count/orphaned-postmeta diagnostics — all plain `$wpdb` calls that used to require SSH + WP-CLI's own `wp db *` commands |
+| Logs | `GET /wp-json/imperal/v1/logs/debug-log`, `POST .../logs/debug-log/clear`, `GET .../logs/php-error-log` | Tail/truncate `wp-content/debug.log` and read PHP's own `ini_get('error_log')` path — plain filesystem calls from inside the WordPress process that used to require SSH + WP-CLI's `wp eval` |
 
 Sections beyond these (Users password-reset, Rank Math site-wide SEO score/
 robots.txt/sitemap/404-log, llms.txt, and the generic post/user/term meta +
@@ -89,4 +90,5 @@ php tests/seo_logic_test.php
 php tests/builder_logic_test.php
 php tests/media_logic_test.php
 php tests/database_logic_test.php
+php tests/logs_logic_test.php
 ```

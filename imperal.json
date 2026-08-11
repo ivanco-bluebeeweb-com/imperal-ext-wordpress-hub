@@ -32124,7 +32124,7 @@
     },
     {
       "name": "tail_debug_log",
-      "description": "Read the last N lines of a connected WordPress site's wp-content/debug.log (the file WP_DEBUG_LOG writes to) via SSH/WP-CLI. Requires SSH access configured with add_ssh. If the site has WP_DEBUG_LOG off, or has never logged an error, there is honestly no file -- reported as exists=false, never fabricated content.",
+      "description": "Read the last N lines of a connected WordPress site's wp-content/debug.log (the file WP_DEBUG_LOG writes to). Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all); falls back to SSH + WP-CLI otherwise. If the site has WP_DEBUG_LOG off, or has never logged an error, there is honestly no file -- reported as exists=false, never fabricated content.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -32266,7 +32266,7 @@
     },
     {
       "name": "clear_debug_log",
-      "description": "Truncate a connected WordPress site's wp-content/debug.log to empty via SSH/WP-CLI (the file is truncated in place, never deleted, so WordPress can keep writing to it without recreating it). Requires SSH access configured with add_ssh.",
+      "description": "Truncate a connected WordPress site's wp-content/debug.log to empty (the file is truncated in place, never deleted, so WordPress can keep writing to it without recreating it). Reads/writes through the Imperal Bridge plugin if it's installed (no SSH needed at all); falls back to SSH + WP-CLI otherwise.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -32394,7 +32394,7 @@
     },
     {
       "name": "tail_php_error_log",
-      "description": "Read the last N lines of a connected WordPress site's PHP error log, at the path PHP itself reports via ini_get('error_log') -- never a guessed distro-specific path. Requires SSH access configured with add_ssh. If PHP has no error_log configured (likely logging to the web server's own error log instead), this is reported honestly rather than fabricating a path.",
+      "description": "Read the last N lines of a connected WordPress site's PHP error log, at the path PHP itself reports via ini_get('error_log') -- never a guessed distro-specific path. Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all); falls back to SSH + WP-CLI otherwise. If PHP has no error_log configured (likely logging to the web server's own error log instead), this is reported honestly rather than fabricating a path.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -32527,6 +32527,375 @@
         "title": "LogTail",
         "type": "object",
         "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_registered_post_types",
+      "description": "List every post type registered on a connected WordPress site -- not just the ones already known, but every CPT a plugin or theme registered -- with its REST base slug, hierarchical/viewable flags, and which taxonomies it's associated with. Reads the site's own native `GET /wp/v2/types` (context=edit where the connected user's role allows it, otherwise a plain read). Use this before list_custom_posts to discover a CPT slug dynamically instead of already having to know it.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "RegisteredPostType": {
+            "description": "One registered post type from the site's own /wp/v2/types index\n(fetched with context=edit, since `viewable` is an edit-context-only\nfield in WordPress core's own REST schema).",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "slug": {
+                "default": "",
+                "title": "Slug",
+                "type": "string"
+              },
+              "rest_base": {
+                "default": "",
+                "title": "Rest Base",
+                "type": "string"
+              },
+              "hierarchical": {
+                "default": false,
+                "title": "Hierarchical",
+                "type": "boolean"
+              },
+              "viewable": {
+                "default": false,
+                "title": "Viewable",
+                "type": "boolean"
+              },
+              "has_archive": {
+                "default": false,
+                "title": "Has Archive",
+                "type": "boolean"
+              },
+              "taxonomies": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Taxonomies",
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "RegisteredPostType",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/RegisteredPostType"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[RegisteredPostType]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_registered_taxonomies",
+      "description": "List every taxonomy registered on a connected WordPress site -- native categories/tags plus any custom taxonomy a plugin or theme registered -- with its REST base slug, hierarchical/public flags, and which post types it's attached to. Reads the site's own native `GET /wp/v2/taxonomies` (context=edit where the connected user's role allows it, otherwise a plain read). Useful for populating a taxonomy picker dynamically.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "RegisteredTaxonomy": {
+            "description": "One registered taxonomy from the site's own /wp/v2/taxonomies index\n(fetched with context=edit, since `public` lives inside the\nedit-context-only `visibility` object in WordPress core's own REST\nschema).",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "slug": {
+                "default": "",
+                "title": "Slug",
+                "type": "string"
+              },
+              "rest_base": {
+                "default": "",
+                "title": "Rest Base",
+                "type": "string"
+              },
+              "hierarchical": {
+                "default": false,
+                "title": "Hierarchical",
+                "type": "boolean"
+              },
+              "public": {
+                "default": false,
+                "title": "Public",
+                "type": "boolean"
+              },
+              "types": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Types",
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "RegisteredTaxonomy",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/RegisteredTaxonomy"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[RegisteredTaxonomy]",
+        "type": "object",
+        "x-sdl": "entity-list"
       },
       "event": "",
       "background": false,

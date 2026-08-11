@@ -2132,3 +2132,27 @@ class ClearLogResult(sdl.Entity):
     path: str = ""
     cleared: bool = False
     note: str = ""
+
+
+class RegisteredPostType(sdl.Entity):
+    """One registered post type from the site's own /wp/v2/types index
+    (fetched with context=edit, since `viewable` is an edit-context-only
+    field in WordPress core's own REST schema)."""
+    slug: str = ""
+    rest_base: str = ""
+    hierarchical: bool = False
+    viewable: bool = False
+    has_archive: bool = False
+    taxonomies: list[str] = Field(default_factory=list)
+
+
+class RegisteredTaxonomy(sdl.Entity):
+    """One registered taxonomy from the site's own /wp/v2/taxonomies index
+    (fetched with context=edit, since `public` lives inside the
+    edit-context-only `visibility` object in WordPress core's own REST
+    schema)."""
+    slug: str = ""
+    rest_base: str = ""
+    hierarchical: bool = False
+    public: bool = False
+    types: list[str] = Field(default_factory=list)
