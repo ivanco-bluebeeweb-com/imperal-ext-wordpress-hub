@@ -172,9 +172,26 @@ checks passed.
 35. `list_network_sites` — `wp site list` equivalent, only meaningful on a multisite install
 36. `create_network_site` — add a new site to a multisite network
 37. `list_network_plugins` — network-activated plugins
-38. **Gate:** none of Group G should be built until we've confirmed at least one connected site is
-    actually multisite — building against `is_multisite()===false` everywhere would be
-    building for a persona we don't have yet.
+38. **Gate — assessed 2026-08-12:** Group G remains deliberately unbuilt. The three connected
+    sites (`ksrenovationgroup.com`, `g4s.md`, `climtec.md`) all report no Imperal Bridge 2.7.0+
+    deploy-hygiene route, so Multisite cannot be verified without inventing an answer. Revisit only
+    after the current Bridge ZIP is installed on a known Multisite site.
+
+## Group H — Deploy / Environment Hygiene — ✅ ALREADY SHIPPED
+
+39–42 are already implemented as `get_wp_config_constants`, `list_must_use_plugins`,
+`list_drop_ins`, and `get_environment_type`. No duplicate work is required.
+
+### Tomorrow — genuine site-owner prerequisites
+
+1. Install or update `bridge/imperal-bridge.zip` on each connected production site; the currently
+   connected three sites do not expose even Bridge 2.7.0+ routes, so their existing features cannot
+   use the newly deployed mail, Site Health, session, or other Bridge capabilities.
+2. If Multisite support is desired, connect or identify one confirmed WordPress Multisite network
+   after its Bridge update. Only then can Group G be designed and tested against real network data.
+3. In Imperal, open the **Developer → WordPress Hub → Deploy** details to inspect the recurring
+   `18/21` deployment warning. The API returns the count but not the three underlying checks, so a
+   cause would be speculation until those details are visible.
 
 ## Group H — Deploy / Environment Hygiene
 
