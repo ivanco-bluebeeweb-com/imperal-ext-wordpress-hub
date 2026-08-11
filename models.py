@@ -2156,3 +2156,26 @@ class RegisteredTaxonomy(sdl.Entity):
     hierarchical: bool = False
     public: bool = False
     types: list[str] = Field(default_factory=list)
+
+
+class ReusableBlock(sdl.Entity):
+    """One Gutenberg reusable block / synced pattern -- a real post with the
+    `wp_block` post type, read via native `GET /wp/v2/blocks`. `sync_status`
+    is normalized from WP core's own `wp_pattern_sync_status` meta: an empty
+    string there means fully synced, so this field reports the explicit
+    'synced' instead of leaving callers to interpret emptiness."""
+    slug: str = ""
+    status: str = ""
+    sync_status: str = ""
+
+
+class BlockPattern(sdl.Entity):
+    """One registered block pattern (theme/plugin supplied), read via
+    native `GET /wp/v2/block-patterns/patterns`. Read-only: patterns are
+    PHP/JSON registrations, not database rows -- there is no REST route to
+    create/edit/delete one."""
+    name: str = ""
+    categories: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    block_types: list[str] = Field(default_factory=list)
+    source: str = ""

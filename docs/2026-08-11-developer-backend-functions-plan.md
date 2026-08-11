@@ -188,20 +188,35 @@ checks passed.
 42. `get_environment_type` — WordPress 5.5+'s own `wp_get_environment_type()` (production / staging
     / development / local) if the site declares it
 
-## Group I — Logs
+## Group I — Logs — ✅ SHIPPED 2026-08-11 (Bridge-first, SSH-fallback — no shell required)
 
-43. `tail_debug_log` — last N lines of `wp-content/debug.log` (SSH-based; huge value for "why did
-    that last save fail")
-44. `clear_debug_log` — truncate the debug log file (SSH)
-45. `tail_error_log` — server-level PHP error log if path is known/discoverable (SSH)
+43. `tail_debug_log` — ✅ last N lines of `wp-content/debug.log` ("why did that last save fail") —
+    Bridge SECTION 13 (`GET /imperal/v1/logs/debug-log`) reads it with plain `file_get_contents()`
+    from inside WordPress; SSH/WP-CLI `wp eval` is only the fallback for sites without the Bridge.
+44. `clear_debug_log` — ✅ truncate (never delete) the debug log file — Bridge
+    (`POST .../logs/debug-log/clear`, `fopen(..., 'w')`), SSH fallback otherwise.
+45. `tail_php_error_log` — ✅ PHP's own `ini_get('error_log')` path — Bridge
+    (`GET .../logs/php-error-log`), SSH fallback otherwise.
 
-## Group J — Custom Post Types & Taxonomies (introspection, not content)
+3 functions in `handlers_logs.py` (rewritten). 12 tests (`tests/test_logs.py`, 3-way: bridge-only/
+ssh-fallback/neither). Bridge zip 2.8.0 → 2.9.0.
 
-46. `list_registered_post_types` — every CPT the site has registered (not just the ones we already
-    know to query via `list_custom_posts`), with `rest_base`, `public`, `hierarchical` flags — lets
-    us discover CPTs dynamically instead of the user having to already know the slug
-47. `list_registered_taxonomies` — same, for taxonomies (already partially needed internally for the
-    llms.txt MultiSelect population — could become its own first-class function)
+## Group J — Custom Post Types & Taxonomies (introspection, not content) — ✅ SHIPPED 2026-08-11
+
+46. `list_registered_post_types` — ✅ every CPT the site has registered (not just the ones we
+    already know to query via `list_custom_posts`), with `rest_base`, `hierarchical`, `viewable`,
+    `has_archive`, `taxonomies` — native `GET /wp/v2/types`, no Bridge/SSH. `viewable` only exists
+    under `context=edit` per WP core's own schema (`class-wp-rest-post-types-controller.php`
+    marks it `'context' => array('edit')`) — requested edit-context first, falls back to view-only
+    on a 401/403 from a lower-privileged connected user rather than silently defaulting it false.
+47. `list_registered_taxonomies` — ✅ same, for taxonomies — native `GET /wp/v2/taxonomies`,
+    same edit-context-then-fallback pattern for `visibility.public` (verified against
+    `class-wp-rest-taxonomies-controller.php`).
+
+2 functions in `handlers_cpt_taxonomy.py` (new). 7 new tests (`tests/test_cpt_taxonomy.py`). Full
+suite 657→667, all green. `imperal validate`: 0 errors/0 warnings, 186 functions. Repriced the
+complete 186-key map (1 credit each — single core REST GET), resubmitted — `pending_review`, all 4
+checks passed. Deployed at `a0152c0d`.
 
 ## Group K — Blocks / Patterns / Templates (block-theme era, read-only diagnostics only)
 

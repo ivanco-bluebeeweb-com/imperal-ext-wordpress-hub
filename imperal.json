@@ -32902,6 +32902,350 @@
       "long_running": false,
       "scopes": [],
       "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_reusable_blocks",
+      "description": "List Gutenberg reusable blocks (WordPress now calls these 'synced patterns') on a connected site -- real posts stored under the `wp_block` post type, with each one's sync status (fully synced vs. an unsynced/partial pattern). Reads the site's own native `GET /wp/v2/blocks` (WordPress core since 5.0) -- no Bridge or SSH needed. Useful for a 'which reusable block should I edit / is this content actually synced everywhere it's used' question.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "ReusableBlock": {
+            "description": "One Gutenberg reusable block / synced pattern -- a real post with the\n`wp_block` post type, read via native `GET /wp/v2/blocks`. `sync_status`\nis normalized from WP core's own `wp_pattern_sync_status` meta: an empty\nstring there means fully synced, so this field reports the explicit\n'synced' instead of leaving callers to interpret emptiness.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "default": "",
+                "title": "Status",
+                "type": "string"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "slug": {
+                "default": "",
+                "title": "Slug",
+                "type": "string"
+              },
+              "sync_status": {
+                "default": "",
+                "title": "Sync Status",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "ReusableBlock",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/ReusableBlock"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[ReusableBlock]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_block_patterns",
+      "description": "List every block pattern registered on a connected site -- core, theme, and plugin-supplied patterns available in the block inserter, with categories, keywords, which block types/post types it's restricted to, and its source (core/theme/plugin). Reads the site's own native `GET /wp/v2/block-patterns/patterns` (WordPress core since 6.0) -- no Bridge or SSH needed. Read-only: patterns are PHP/JSON registrations, not database rows, so WordPress itself has no REST route to create/edit/delete one.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "BlockPattern": {
+            "description": "One registered block pattern (theme/plugin supplied), read via\nnative `GET /wp/v2/block-patterns/patterns`. Read-only: patterns are\nPHP/JSON registrations, not database rows -- there is no REST route to\ncreate/edit/delete one.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "name": {
+                "default": "",
+                "title": "Name",
+                "type": "string"
+              },
+              "categories": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Categories",
+                "type": "array"
+              },
+              "keywords": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Keywords",
+                "type": "array"
+              },
+              "block_types": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Block Types",
+                "type": "array"
+              },
+              "source": {
+                "default": "",
+                "title": "Source",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "BlockPattern",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/BlockPattern"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[BlockPattern]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
     }
   ],
   "signals": [],

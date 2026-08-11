@@ -5,6 +5,28 @@
 
 ---
 
+## 2026-08-11 (evening, cont'd 2) — Group K (Blocks/Patterns introspection, 2 functions); 186 → 188 functions
+
+**Status:** SHIPPED, tested (676/676), `imperal validate` clean (188 functions, 0 errors/0
+warnings/1 info), 188-key pricing map applied via `update_pricing` after `suspend_app`, resubmitted
+(all 4 checks passed). No Bridge/SSH changes this round — pure native-REST introspection. Commit +
+push + deploy is the final step of this entry.
+
+**Group K — Blocks/Patterns (2 functions, `handlers_blocks.py`, new, no Bridge/SSH needed):**
+`list_reusable_blocks` (native `GET /wp/v2/blocks`, WP core since 5.0 — the `wp_block` post type
+backing Gutenberg reusable blocks/"synced patterns") and `list_block_patterns` (native
+`GET /wp/v2/block-patterns/patterns`, WP core since 6.0 — theme/plugin-registered patterns).
+Verified against WP core's own `class-wp-rest-blocks-controller.php`: `title.rendered`/
+`content.rendered` are deliberately stripped from every context ("it doesn't make sense for a
+pattern to have rendered content on its own"), so we read `title.raw` instead; the top-level
+`wp_pattern_sync_status` meta is empty for a fully-synced block, normalized here to the explicit
+string `"synced"` so the field is self-explanatory. `list_block_patterns` confirmed read-only BY
+DESIGN on WordPress's own side — patterns are PHP/JSON registrations via `register_block_pattern()`,
+never database rows, so core itself exposes no create/update/delete route. 9 new tests
+(`tests/test_blocks.py`).
+
+---
+
 ## 2026-08-11 (evening, cont'd) — Group J (CPT/taxonomy introspection, 2 functions) + Bridge SECTION 13 (logs) closing the same "No server data yet" gap for tail_debug_log/clear_debug_log/tail_php_error_log; 184 → 186 functions
 
 **Status:** SHIPPED, tested (667/667), `imperal validate` clean (186 functions, 0 errors/0
