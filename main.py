@@ -14,7 +14,7 @@ _LOCAL = ("app", "handlers_connect", "handlers_read", "handlers_woocommerce",
           "handlers_woocommerce_catalog", "handlers_woocommerce_operations",
           "handlers_woocommerce_finance", "handlers_woocommerce_order_edit",
           "handlers_seo", "handlers_builders", "handlers_posts", "handlers_media",
-          "handlers_taxonomy", "handlers_links", "handlers_users", "handlers_menus", "handlers_post_lifecycle", "handlers_reviews", "handlers_site_settings", "handlers_redirects", "handlers_meta", "handlers_cache_cron", "handlers_database", "handlers_rest_api", "handlers_security", "handlers_deploy", "handlers_logs", "handlers_cpt_taxonomy", "handlers_blocks", "handlers_webhooks", "handlers_action_scheduler", "handlers_rewrite", "handlers_import_export", "handlers_integrity", "handlers_mail", "handlers_core_site_health", "skeleton", "panels", "models", "storage", "wp_client", "wp_cli", "gutenberg")
+          "handlers_taxonomy", "handlers_links", "handlers_users", "handlers_menus", "handlers_post_lifecycle", "handlers_reviews", "handlers_site_settings", "handlers_redirects", "handlers_meta", "handlers_cache_cron", "handlers_database", "handlers_rest_api", "handlers_security", "handlers_deploy", "handlers_logs", "handlers_cpt_taxonomy", "handlers_blocks", "handlers_webhooks", "handlers_action_scheduler", "handlers_rewrite", "handlers_import_export", "handlers_integrity", "handlers_mail", "handlers_core_site_health", "handlers_sessions", "skeleton", "panels", "models", "storage", "wp_client", "wp_cli", "gutenberg")
 for _mod in _LOCAL:
     sys.modules.pop(_mod, None)
 
@@ -58,5 +58,6 @@ import handlers_import_export  # noqa: E402,F401
 import handlers_integrity  # noqa: E402,F401
 import handlers_mail  # noqa: E402,F401
 import handlers_core_site_health  # noqa: E402,F401
+import handlers_sessions  # noqa: E402,F401
 import skeleton  # noqa: E402,F401
 import panels  # noqa: E402,F401

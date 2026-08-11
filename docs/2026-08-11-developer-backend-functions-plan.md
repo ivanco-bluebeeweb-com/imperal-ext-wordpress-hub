@@ -395,11 +395,18 @@ and deployment.
 75. `list_active_sessions` — a user's currently active login sessions (native
     `WP_Session_Tokens`, no direct REST route in core — would need a small Bridge read) — real
     security-audit value ("is this account logged in somewhere unexpected")
-76. `destroy_user_sessions` — force-logout one user everywhere (`wp_destroy_all_sessions()` via
-    Bridge) — useful after a suspected compromised account, pairs naturally with
-    `reset_user_password` (already shipped, 1.3)
+76. `destroy_user_sessions` — force-logout one user everywhere via the user's native
+    `WP_Session_Tokens::destroy_all()` Bridge call — useful after a suspected compromised account,
+    pairs naturally with `reset_user_password` (already shipped, 1.3).
 77. `list_nonce_lifetime` / security-header-adjacent settings — LOW priority, likely folds into
-    Group F instead of its own function; listed here only for completeness, not a strong candidate
+    Group F instead of its own function; listed here only for completeness, not a strong candidate.
+
+**Release candidate (v1.23.0):** `list_active_sessions` and `destroy_user_sessions` use narrow
+Bridge routes backed by WordPress core's `WP_Session_Tokens`; they reveal only login/expiry/IP/
+user-agent metadata and never session tokens. Destroying sessions logs the named user out everywhere
+without changing their password or account. Both require Bridge 2.16.0+ and WordPress's
+`edit_users` capability. Complete 213-key pricing is prepared (`1` for listing, `2` for session
+destruction); mark shipped only after commit, push, and deployment.
 
 ## Group T — Custom REST Endpoints & Plugin-Added Routes (discovery only)
 

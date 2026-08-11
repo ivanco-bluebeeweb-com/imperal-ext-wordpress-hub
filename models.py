@@ -2457,3 +2457,35 @@ class SiteHealthDirectorySizes(sdl.Entity):
     """Directory-size facts reported by WordPress core Site Health."""
     site_id: str = ""
     sizes: dict = {}
+
+
+# ─────────── User sessions (Bridge) ───────────
+
+class UserSession(sdl.Entity):
+    """Non-secret WordPress login-session metadata."""
+    login: int = 0
+    expiration: int = 0
+    ip: str = ""
+    ua: str = ""
+
+
+class UserSessions(sdl.Entity):
+    site_id: str = ""
+    user_id: int = 0
+    sessions: list[UserSession] = []
+
+
+class UserSessionsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    user_id: int = Field(gt=0, description="WordPress user id whose login sessions to inspect")
+
+
+class DestroySessionsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    user_id: int = Field(gt=0, description="WordPress user id whose login sessions will be ended")
+
+
+class DestroySessionsResult(sdl.Entity):
+    site_id: str = ""
+    user_id: int = 0
+    destroyed: bool = False

@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.15.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.16.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -2802,6 +2802,35 @@ function imperal_users_bridge_reset_password( $request ) {
  * capability WordPress itself requires to see the "Send password reset" row
  * action in wp-admin's Users list table.
  */
+/** GET /imperal/v1/users/{id}/sessions — list non-secret session metadata. */
+function imperal_users_bridge_list_sessions( $request ) {
+	$user_id = (int) $request->get_param( 'id' );
+	if ( ! get_userdata( $user_id ) ) {
+		return new WP_Error( 'imperal_users_not_found', __( 'That user does not exist.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+	$manager  = WP_Session_Tokens::get_instance( $user_id );
+	$sessions = array();
+	foreach ( $manager->get_all() as $session ) {
+		$sessions[] = array(
+			'login'      => isset( $session['login'] ) ? (int) $session['login'] : 0,
+			'expiration' => isset( $session['expiration'] ) ? (int) $session['expiration'] : 0,
+			'ip'         => isset( $session['ip'] ) ? (string) $session['ip'] : '',
+			'ua'         => isset( $session['ua'] ) ? (string) $session['ua'] : '',
+		);
+	}
+	return rest_ensure_response( array( 'id' => $user_id, 'sessions' => $sessions ) );
+}
+
+/** DELETE /imperal/v1/users/{id}/sessions — end every login session for one user. */
+function imperal_users_bridge_destroy_sessions( $request ) {
+	$user_id = (int) $request->get_param( 'id' );
+	if ( ! get_userdata( $user_id ) ) {
+		return new WP_Error( 'imperal_users_not_found', __( 'That user does not exist.', 'imperal-bridge' ), array( 'status' => 404 ) );
+	}
+	WP_Session_Tokens::get_instance( $user_id )->destroy_all();
+	return rest_ensure_response( array( 'id' => $user_id, 'destroyed' => true ) );
+}
+
 function imperal_users_bridge_register_routes() {
 	register_rest_route(
 		IMPERAL_USERS_BRIDGE_NAMESPACE,
@@ -2812,6 +2841,22 @@ function imperal_users_bridge_register_routes() {
 			'permission_callback' => function () {
 				return current_user_can( 'edit_users' );
 			},
+		)
+	);
+	register_rest_route(
+		IMPERAL_USERS_BRIDGE_NAMESPACE,
+		'/users/(?P<id>\d+)/sessions',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_users_bridge_list_sessions',
+				'permission_callback' => function () { return current_user_can( 'edit_users' ); },
+			),
+			array(
+				'methods'             => WP_REST_Server::DELETABLE,
+				'callback'            => 'imperal_users_bridge_destroy_sessions',
+				'permission_callback' => function () { return current_user_can( 'edit_users' ); },
+			),
 		)
 	);
 }
