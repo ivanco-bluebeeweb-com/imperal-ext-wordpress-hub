@@ -227,6 +227,55 @@ def _summarise_content(rows: list[BuilderContent]) -> str:
     return header + "\nHeadings in document order:\n" + "\n".join(all_headings)
 
 
+async def _fetch_content_rows(ctx, params) -> tuple[list[BuilderContent] | None, ActionResult | None]:
+    """Shared fetch+zone-filter logic for get_builder_content and get_builder_element.
+
+    Returns (rows, None) on success or (None, error_result) on failure — callers
+    just forward the error_result as-is, keeping both functions' error paths
+    byte-identical without duplicating the HTTP/parsing logic.
+    """
+    bad_target = _target_error(params.post_id, params.slug)
+    if bad_target:
+        return None, bad_target
+
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, err
+    base_url, username, pw = auth
+
+    query = _target_query(params.post_id, params.slug, params.post_type)
+    if params.builder:
+        query["builder"] = params.builder.strip().lower()
+
+    try:
+        r = await wp_get(ctx, base_url, BRIDGE_PATH, username=username, app_password=pw, params=query)
+    except Exception as e:
+        await ctx.log(f"get_builder_content request failed: {e}", level="error")
+        return None, ActionResult.error("Could not reach the site — try again.",
+                                        retryable=True, code="WP_UNREACHABLE")
+
+    if r.status_code != 200 or not isinstance(r.body, dict):
+        return None, _http_failure(r.status_code, r.body)
+
+    rows = _content_rows(r.body)
+    if not rows:
+        return None, ActionResult.error(
+            "This item was not built with Elementor or Bricks — no builder content to read.",
+            retryable=False, code="BUILDER_NONE_ACTIVE")
+
+    if params.zone:
+        wanted = params.zone.strip().lower()
+        zoned = [row for row in rows if row.zone.lower() == wanted]
+        if not zoned:
+            return None, ActionResult.error(
+                f"No '{params.zone}' zone found on this item — it may not use Bricks, or that "
+                "zone has no content. Call without `zone` to see all available rows.",
+                retryable=False, code="BUILDER_ZONE_NOT_FOUND")
+        rows = zoned
+
+    return rows, None
+
+
 @chat.function(
     "get_builder_content",
     description=("Read the Elementor and/or Bricks page-builder element tree of one post or "
@@ -238,46 +287,38 @@ def _summarise_content(rows: list[BuilderContent]) -> str:
 )
 async def get_builder_content(ctx, params: GetBuilderContentParams) -> ActionResult:
     """Return the flattened builder element tree(s) for a single post or page."""
-    bad_target = _target_error(params.post_id, params.slug)
-    if bad_target:
-        return bad_target
-
-    auth, err = await _authed(ctx, params.site_id)
-    if err:
-        return err
-    base_url, username, pw = auth
-
-    query = _target_query(params.post_id, params.slug, params.post_type)
-    if params.builder:
-        query["builder"] = params.builder.strip().lower()
-
-    try:
-        r = await wp_get(ctx, base_url, BRIDGE_PATH, username=username, app_password=pw, params=query)
-    except Exception as e:
-        await ctx.log(f"get_builder_content request failed: {e}", level="error")
-        return ActionResult.error("Could not reach the site — try again.",
-                                  retryable=True, code="WP_UNREACHABLE")
-
-    if r.status_code != 200 or not isinstance(r.body, dict):
-        return _http_failure(r.status_code, r.body)
-
-    rows = _content_rows(r.body)
-    if not rows:
-        return ActionResult.error(
-            "This item was not built with Elementor or Bricks — no builder content to read.",
-            retryable=False, code="BUILDER_NONE_ACTIVE")
-
-    if params.zone:
-        wanted = params.zone.strip().lower()
-        zoned = [row for row in rows if row.zone.lower() == wanted]
-        if not zoned:
-            return ActionResult.error(
-                f"No '{params.zone}' zone found on this item — it may not use Bricks, or that "
-                "zone has no content. Call without `zone` to see all available rows.",
-                retryable=False, code="BUILDER_ZONE_NOT_FOUND")
-        rows = zoned
-
+    rows, error = await _fetch_content_rows(ctx, params)
+    if error:
+        return error
     return ActionResult.success(sdl.EntityList[BuilderContent](items=rows), summary=_summarise_content(rows))
+
+
+@chat.function(
+    "get_builder_element",
+    description=("Read ONE builder/zone record in full — id, slug, builder, zone, state_token, "
+                 "element_count, the full `elements` tree, and the never-compacted `heading_outline` "
+                 "text. Unlike get_builder_content (which always returns a list, and a list gets "
+                 "compacted to id/title/kind by display clients even with one row), this returns a "
+                 "single record that is never compacted. For Bricks pages you MUST pass zone "
+                 "('header', 'content', or 'footer'); Elementor items ignore zone. Use this whenever "
+                 "you actually need to read heading_outline/elements, not just confirm a builder is "
+                 "active."),
+    action_type="read",
+    data_model=BuilderContent,
+)
+async def get_builder_element(ctx, params: GetBuilderContentParams) -> ActionResult:
+    """Return exactly one builder/zone record as a bare object, never list-compacted."""
+    rows, error = await _fetch_content_rows(ctx, params)
+    if error:
+        return error
+    if len(rows) > 1:
+        zones = ", ".join(sorted({row.zone for row in rows if row.zone}))
+        return ActionResult.error(
+            f"This item has more than one builder/zone record ({zones or 'multiple builders'}) — "
+            "pass `zone` (and/or `builder`) to pick exactly one.",
+            retryable=False, code="BUILDER_AMBIGUOUS_TARGET")
+    row = rows[0]
+    return ActionResult.success(row, summary=_summarise_content(rows))
 
 
 @chat.function(

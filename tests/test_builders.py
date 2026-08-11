@@ -158,6 +158,74 @@ async def test_zone_filter_reports_a_clear_error_when_zone_absent():
     assert r.error_code == "BUILDER_ZONE_NOT_FOUND"
 
 
+# ── get_builder_element: a bare object, never compacted by display clients ──
+#
+# get_builder_content's data_model is always EntityList[BuilderContent] — an
+# EntityList gets compacted to id/title/kind cards by display clients even
+# when it holds exactly one row (confirmed live: zone='content' on a real
+# Bricks page still rendered as a compact card, hiding heading_outline).
+# get_builder_element's data_model is the bare BuilderContent — never a list —
+# so its fields are always fully readable.
+
+def _bricks_payload_with_heading_skip():
+    return {
+        "id": 723, "slug": "lapmol", "type": "page", "link": "https://x.com/lapmol",
+        "active_builders": ["bricks"],
+        "builders": {
+            "bricks": {
+                "zones": {
+                    "content": {
+                        "elements": [
+                            {"id": "h1", "parent_id": None, "el_type": "heading",
+                             "widget_type": "", "settings": {"tag": "h1", "text": "Lapmol"},
+                             "zone": "content"},
+                            {"id": "h3", "parent_id": None, "el_type": "heading",
+                             "widget_type": "", "settings": {"tag": "h3", "text": "Skipped"},
+                             "zone": "content"},
+                        ],
+                        "state_token": "tok-content",
+                    },
+                    "header": {"elements": [], "state_token": "tok-header"},
+                    "footer": {"elements": [], "state_token": "tok-footer"},
+                }
+            }
+        },
+    }
+
+
+async def test_get_builder_element_returns_bare_object_with_full_heading_outline():
+    ctx = await _ctx()
+    ctx.http.mock_get(TREE, _bricks_payload_with_heading_skip(), 200)
+    r = await hb.get_builder_element(
+        ctx, GetBuilderContentParams(site_id="x-com", post_id=723, zone="content"))
+    assert r.status == "success"
+    # Bare object, not a list — no .items, the row's own fields are top-level.
+    assert not hasattr(r.data, "items")
+    assert r.data.zone == "content"
+    assert r.data.element_count == 2
+    assert "h1: Lapmol (id=h1)" in r.data.heading_outline
+    assert "h3: Skipped (id=h3)" in r.data.heading_outline
+
+
+async def test_get_builder_element_demands_zone_when_result_is_ambiguous():
+    ctx = await _ctx()
+    ctx.http.mock_get(TREE, _bricks_payload_with_heading_skip(), 200)
+    # No zone given — 3 Bricks zones come back, ambiguous for a bare-object result.
+    r = await hb.get_builder_element(
+        ctx, GetBuilderContentParams(site_id="x-com", post_id=723))
+    assert r.status == "error"
+    assert r.error_code == "BUILDER_AMBIGUOUS_TARGET"
+
+
+async def test_get_builder_element_zone_not_found_error_matches_get_builder_content():
+    ctx = await _ctx()
+    ctx.http.mock_get(TREE, _tree_payload(), 200)  # elementor-only, no bricks zones
+    r = await hb.get_builder_element(
+        ctx, GetBuilderContentParams(site_id="x-com", post_id=42, zone="content"))
+    assert r.status == "error"
+    assert r.error_code == "BUILDER_ZONE_NOT_FOUND"
+
+
 async def test_get_resolves_by_slug():
     ctx = await _ctx()
     ctx.http.mock_get(TREE, _tree_payload(), 200)
