@@ -114,20 +114,29 @@ these 8 + the previously-unpriced `get_builder_element`) via `update_pricing`, r
 24. `list_cron_schedules` — the registered recurrence intervals (hourly/daily/custom plugin
     intervals) — useful for diagnosing "why does this only run every 6 hours"
 
-## Group E — REST API Introspection
+## Group E — REST API Introspection — ✅ SHIPPED 2026-08-11
 
-25. `list_rest_routes` — enumerate every registered REST route + namespace on the site
-    (`/wp-json` root discovery document) — useful for "what can I actually call on this site,
-    including from other plugins"
-26. `get_rest_route_schema` — the args/schema for one specific route
-27. `list_application_passwords` — list the currently-registered Application Passwords for a user
-    (native `/wp/v2/users/<id>/application-passwords`, WP 5.6+) — NOT the secret itself, just
-    name/created/last-used, for auditing "what has access to this site"
-28. `revoke_application_password` — revoke one named Application Password by uuid (native route) —
-    genuinely useful security hygiene function, distinct from `forget_site` which only removes our
-    OWN stored credential
+25. `list_rest_routes` — ✅ enumerates every registered REST route + namespace on the site,
+    optional `namespace=` filter — reads the site's own `GET /wp-json/` root index (native
+    WordPress core, no Bridge/SSH needed), verified against
+    developer.wordpress.org/rest-api/extending-the-rest-api/routes-and-endpoints/
+26. `get_rest_route_schema` — ✅ methods + each endpoint's declared args for ONE route, from the
+    same root index (`WP_ROUTE_NOT_FOUND` if the exact route string doesn't exist)
+27. `list_application_passwords` — ✅ list the currently-registered Application Passwords for the
+    connected user (native `/wp/v2/users/me/application-passwords`, WP 5.6+) — NOT the secret
+    itself, just uuid/name/created/last_used/last_ip, for auditing "what has access to this site".
+    Verified against developer.wordpress.org/rest-api/reference/application-passwords/ and
+    make.wordpress.org's Application Passwords integration guide (WP 5.6, Nov 2020).
+28. `revoke_application_password` — ✅ revoke one named Application Password by uuid
+    (`DELETE /wp/v2/users/me/application-passwords/<uuid>`) — distinct from `forget_site`, which
+    only removes Imperal's own stored credential; this changes WordPress itself.
 
-## Group F — Security / Hardening Diagnostics
+4 functions in `handlers_rest_api.py` (new), models in `models.py`. 9 new tests
+(`tests/test_rest_api.py`). Full suite 615→624, all green. `imperal validate`: 0 errors/0
+warnings, 173 functions. Repriced the complete 173-key map, resubmitted — `pending_review`, all 4
+checks passed.
+
+## Group F — Security / Hardening Diagnostics — next up
 
 29. `get_php_info` — PHP version, loaded extensions, memory_limit/max_execution_time/upload
     limits (WP-CLI `wp cli info` / `phpversion()` via Bridge) — feeds "is this site tech-eligible

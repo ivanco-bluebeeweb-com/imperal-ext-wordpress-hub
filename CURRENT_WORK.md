@@ -5,6 +5,32 @@
 
 ---
 
+## 2026-08-11 (afternoon, cont'd 2) — Shipped Group E (REST API introspection + App Password auditing, 4 functions); repriced 173-key map; resubmitted
+
+**Status:** SHIPPED, tested, deployed, priced, resubmitted for review. Continuing through the
+remaining groups (F, H, I...) of `docs/2026-08-11-developer-backend-functions-plan.md` in this
+same session.
+
+**Group E — REST API Introspection (4 functions, `handlers_rest_api.py`, new):**
+`list_rest_routes` (reads the site's own `GET /wp-json/` root index -- native WordPress core, no
+Bridge/SSH needed -- optionally filtered by namespace), `get_rest_route_schema` (methods + each
+endpoint's declared args for ONE route from that same index), `list_application_passwords`
+(native `/wp/v2/users/me/application-passwords`, WP 5.6+ -- never the secret itself, only
+uuid/name/created/last_used/last_ip), `revoke_application_password` (`DELETE
+/wp/v2/users/me/application-passwords/<uuid>` -- distinct from `forget_site`, which only removes
+Imperal's own stored credential; this changes WordPress itself and affects every client using
+that password). Every route shape verified against developer.wordpress.org/rest-api/ docs and
+make.wordpress.org's Application Passwords integration guide before writing code.
+
+**Tests:** 9 new (`tests/test_rest_api.py`). Full suite 615→624, all green.
+`imperal validate`: 0 errors/0 warnings, 173 functions.
+
+**Pricing:** Repriced the complete 173-key map (adding these 4) via `update_pricing`
+(suspend→reprice→resubmit cycle), resubmitted — `pending_review`, all 4 checks passed. Deployed.
+
+**Committed:** `cb5f725` (Group E code+tests), plus doc backfill commits.
+
+
 ## 2026-08-11 (afternoon, cont'd) — Shipped Group B (Database Tools, 8 functions); repriced full 169-key map; resubmitted
 
 **Status:** SHIPPED, tested, deployed, priced, resubmitted for review. Continuing through the
