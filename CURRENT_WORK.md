@@ -1605,11 +1605,35 @@ document — `docx_parser.py`, `parse_article`, `confirm_mapping`, and the headi
 
 ---
 
-## 2026-08-11 (late night) — Group O handoff: WXR Import / Export IMPLEMENTED, VERIFIED, NOT YET SHIPPED
+## 2026-08-12 — Group O: WXR Import / Export ✅ SHIPPED
 
-**Truthful status:** implementation and all local verification are complete; Group O is **not yet
-shipped**. Do not mark it shipped until the remaining pricing, documentation, archive, git, and
-deployment steps below are completed and verified.
+**Truthful status:** Group O is shipped. Full pricing was saved, checks passed, and release commit
+`08826186` was pushed to `main` and deployed as WordPress Hub 1.19.0. The platform’s deployment
+response was **warning (18/21 checks)**; it confirmed that the manifest, panels, icon, and four
+catalog tools were synced.
+
+**Release evidence:**
+- Full 205-key `pricing_config.tool_prices` map saved through `developer.update_pricing` for
+  `wordpress-hub`; `export_wxr=1`, `import_wxr=2`. The platform response confirmed: “Pricing
+  updated for 'wordpress-hub'.”
+- `uv run pytest -q`: **752 passed** (4 pre-existing SDK deprecation warnings).
+- All Bridge PHP test harnesses: **539 assertions, 0 failed**.
+- `uv run imperal validate`: **205 functions, 0 errors, 0 warnings, 1 advisory**.
+- `uv run imperal build` and `git diff --check`: passed.
+- `bridge/imperal-bridge.zip`: exactly `imperal-bridge/README.md` and
+  `imperal-bridge/imperal-bridge.php`.
+- Commit `08826186` (`Add WXR import and export support`) pushed to `origin/main` and deployed.
+
+**Next up:** Group P is research-first only: verify the exact WordPress/WP-CLI checksum mechanisms
+before designing or implementing any function. Any eventual new function must receive a price in a
+complete pricing map and have that map saved and confirmed before shipment.
+
+---
+
+## 2026-08-11 (late night) — Group O implementation handoff (historical record)
+
+**Historical status:** this section records the pre-release implementation state; the release was
+completed on 2026-08-12 above.
 
 ### Completed implementation
 

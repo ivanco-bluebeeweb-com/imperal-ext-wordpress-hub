@@ -320,9 +320,12 @@ persisted, all tests pass, and the release commit has been pushed and deployed.
     inactive state is reported clearly. Import has no Bridge REST route because WordPress
     Importer's `WP_Import::dispatch()` is a browser wizard, not a safe headless REST API.
 
-**Implementation awaiting final release:** new `handlers_import_export.py`, WXR models and
-WP-CLI wrappers, Bridge SECTION 18 (2.14.0) export route, and contract/PHP logic tests. Pricing is
-the complete 205-key map (`export_wxr=1`, `import_wxr=2`).
+**✅ SHIPPED (2026-08-12):** complete 205-key pricing map persisted through
+`developer.update_pricing` (`export_wxr=1`, `import_wxr=2`); 752 Python tests and all Bridge PHP
+harnesses passed; `imperal validate` reported 205 functions, 0 errors, and 0 warnings; build and
+`git diff --check` passed. Released as version 1.19.0 in commit `08826186`, pushed to `main` and
+deployed. The platform reported deployment with warnings (`18/21` checks); manifest, panels, icon,
+and four catalog tools were synced.
 
 ## Group P — Core / Plugin / Theme Integrity (security-relevant)
 
