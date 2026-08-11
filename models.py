@@ -1491,6 +1491,7 @@ class SiteSettings(sdl.Entity):
     time_format: str = ""
     start_of_week: int = 0
     language: str = ""
+    site_icon: int = 0
 
 
 # ─────────── Rank Math redirects (Bridge SECTION 5: /imperal/v1/redirects) ───────────
@@ -1548,6 +1549,7 @@ class UpdateSiteSettingsParams(BaseModel):
     date_format: str | None = Field(default=None, description="New PHP date() format string, e.g. 'F j, Y'")
     time_format: str | None = Field(default=None, description="New PHP date() time format string, e.g. 'g:i a'")
     start_of_week: int | None = Field(default=None, ge=0, le=6, description="New first day of the week: 0=Sunday .. 6=Saturday")
+    site_icon: int | None = Field(default=None, ge=0, description="Media library attachment id for the native WordPress site icon; use 0 to remove it")
 
 
 # ─────────── media upload (sideload via Imperal Bridge) ───────────

@@ -624,8 +624,10 @@ companion roadmap, organized into 21 groups (A through U):
   our existing custom `get_site_health`)
 - S: session/auth hygiene (list/destroy active login sessions — pairs with existing
   `reset_user_password`)
-- T: third-party REST namespace discovery (which plugin added which API surface)
-- U: site icon (likely already free via existing `get_site_settings`/`update_site_settings`)
+- T: assessed — existing `list_rest_routes` + `get_rest_route_schema` already discover the REST
+  surface. Core gives no reliable plugin-to-route ownership mapping, so no guessing tool is added.
+- U: native site icon shipped as the `site_icon` field in existing `get_site_settings` /
+  `update_site_settings` (no duplicate tool).
 
 **Explicitly excluded, documented so it isn't re-proposed:** arbitrary PHP eval/RCE surface (hard
 no under any framing), general raw SQL console (only the one purpose-built search-replace

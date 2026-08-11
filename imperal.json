@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.23.0",
+  "version": "1.24.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -23619,7 +23619,7 @@
     },
     {
       "name": "get_site_settings",
-      "description": "Read native WordPress site settings: title, tagline, timezone, date/time format, start of week, and language.",
+      "description": "Read native WordPress site settings: title, tagline, timezone, date/time format, start of week, language, and the media-library site-icon attachment id.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -23719,6 +23719,11 @@
             "default": "",
             "title": "Language",
             "type": "string"
+          },
+          "site_icon": {
+            "default": 0,
+            "title": "Site Icon",
+            "type": "integer"
           }
         },
         "required": [
@@ -23737,7 +23742,7 @@
     },
     {
       "name": "update_site_settings",
-      "description": "Update native WordPress site settings: title, tagline, timezone, date/time format, or start of week. Only the fields you pass are changed.",
+      "description": "Update native WordPress site settings: title, tagline, timezone, date/time format, start of week, or native site icon. Only the fields you pass are changed.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -23830,6 +23835,20 @@
             "default": null,
             "description": "New first day of the week: 0=Sunday .. 6=Saturday",
             "title": "Start Of Week"
+          },
+          "site_icon": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Media library attachment id for the native WordPress site icon; use 0 to remove it",
+            "title": "Site Icon"
           }
         },
         "required": [
@@ -23919,6 +23938,11 @@
             "default": "",
             "title": "Language",
             "type": "string"
+          },
+          "site_icon": {
+            "default": 0,
+            "title": "Site Icon",
+            "type": "integer"
           }
         },
         "required": [

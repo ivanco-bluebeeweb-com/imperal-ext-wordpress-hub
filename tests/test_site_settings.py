@@ -80,19 +80,29 @@ async def test_get_site_settings_maps_fields():
     ctx.http.mock_get(f"{BASE}/settings", {
         "title": "My Blog", "description": "Just my thoughts", "url": "https://blog.test",
         "timezone_string": "Europe/Chisinau", "date_format": "F j, Y", "time_format": "g:i a",
-        "start_of_week": 1, "language": "en_US",
+        "start_of_week": 1, "language": "en_US", "site_icon": 34,
     })
     result = await hss.get_site_settings(ctx, SiteIdParams(site_id="blog-test"))
     assert result.status == "success"
     assert result.data.timezone_string == "Europe/Chisinau"
+    assert result.data.site_icon == 34
 
 
 async def test_update_site_settings_sends_only_given_fields():
     ctx = await _ctx()
     ctx.http.mock_post(f"{BASE}/settings", {"title": "New Title", "description": "", "url": "", "timezone_string": "",
-                                            "date_format": "", "time_format": "", "start_of_week": 0, "language": ""}, 200)
+                                            "date_format": "", "time_format": "", "start_of_week": 0, "language": "", "site_icon": 0}, 200)
     result = await hss.update_site_settings(ctx, UpdateSiteSettingsParams(site_id="blog-test", title="New Title"))
     assert result.status == "success"
+
+
+async def test_update_site_settings_accepts_native_site_icon_id():
+    ctx = await _ctx()
+    ctx.http.mock_post(f"{BASE}/settings", {"title": "", "description": "", "url": "", "timezone_string": "",
+                                            "date_format": "", "time_format": "", "start_of_week": 0, "language": "", "site_icon": 34}, 200)
+    result = await hss.update_site_settings(ctx, UpdateSiteSettingsParams(site_id="blog-test", site_icon=34))
+    assert result.status == "success"
+    assert result.data.site_icon == 34
 
 
 async def test_update_site_settings_rejects_empty_call():

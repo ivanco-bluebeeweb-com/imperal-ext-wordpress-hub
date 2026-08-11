@@ -410,15 +410,19 @@ destruction); mark shipped only after commit, push, and deployment.
 
 ## Group T — Custom REST Endpoints & Plugin-Added Routes (discovery only)
 
-78. `list_third_party_rest_namespaces` — beyond `list_rest_routes` (Group E), specifically surface
-    which INSTALLED PLUGINS registered which namespaces, cross-referenced against
-    `list_native_plugins` — answers "what API surface did installing this plugin actually add"
+78. **Assessed, no duplicate tool added.** Existing `list_rest_routes` already discovers every
+    namespace from the site's native REST index and filters by namespace; `get_rest_route_schema`
+    exposes each route's declared methods/args. WordPress does not keep a reliable core mapping from
+    a registered route or namespace to the plugin that registered it, so attributing it to an
+    installed plugin would be guesswork and is deliberately excluded.
 
 ## Group U — Site Icon / Branding Assets
 
-79. `get_site_icon` / `update_site_icon` — native `site_icon` field on `/wp/v2/settings` (already
-    partially covered by `get_site_settings`/`update_site_settings` from 1.7 — verify the exact
-    field is already returned before treating this as a new function; likely already free)
+79. **Shipped as an extension of existing native settings (v1.24.0):** WordPress core's
+    `/wp/v2/settings` `site_icon` attachment field is now returned by `get_site_settings` and can
+    be changed with `update_site_settings(site_icon=<media id>)`, or cleared with `site_icon=0`.
+    No duplicate icon-only function and no new price were needed; the existing 213-key pricing map
+    remains exact. Mark released only after commit, push, and deployment.
 
 ---
 

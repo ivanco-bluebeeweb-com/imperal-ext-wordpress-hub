@@ -90,6 +90,7 @@ def _settings_entity(body: dict) -> SiteSettings:
         date_format=body.get("date_format", ""), time_format=body.get("time_format", ""),
         start_of_week=int(body.get("start_of_week", 0) or 0),
         language=body.get("language", ""),
+        site_icon=int(body.get("site_icon", 0) or 0),
     )
 
 
@@ -190,7 +191,7 @@ async def list_themes(ctx, params: SiteIdParams) -> ActionResult:
 @chat.function(
     "get_site_settings",
     description="Read native WordPress site settings: title, tagline, timezone, date/time format, "
-                "start of week, and language.",
+                "start of week, language, and the media-library site-icon attachment id.",
     action_type="read", data_model=SiteSettings,
 )
 async def get_site_settings(ctx, params: SiteIdParams) -> ActionResult:
@@ -209,7 +210,7 @@ async def get_site_settings(ctx, params: SiteIdParams) -> ActionResult:
 @chat.function(
     "update_site_settings",
     description="Update native WordPress site settings: title, tagline, timezone, date/time format, "
-                "or start of week. Only the fields you pass are changed.",
+                "start of week, or native site icon. Only the fields you pass are changed.",
     action_type="write", data_model=SiteSettings,
     effects=["wp.settings_update"], event="wordpress-hub.update_site_settings",
 )
@@ -233,6 +234,8 @@ async def update_site_settings(ctx, params: UpdateSiteSettingsParams) -> ActionR
         fields["time_format"] = params.time_format
     if params.start_of_week is not None:
         fields["start_of_week"] = params.start_of_week
+    if params.site_icon is not None:
+        fields["site_icon"] = params.site_icon
 
     if not fields:
         return ActionResult.error(
