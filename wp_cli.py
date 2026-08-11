@@ -128,6 +128,49 @@ async def list_plugins(cred: dict) -> tuple[list | None, str | None]:
     return plugins, None
 
 
+async def verify_core_checksums(cred: dict) -> tuple[dict | None, str | None]:
+    """Verify core files with WP-CLI's documented checksum command.
+
+    A non-zero exit deliberately becomes a normal result: it means WP-CLI
+    completed the comparison and found a mismatch, rather than that the app
+    can declare a failed verification to be a transport error.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    host, port, user = cred["host"], int(cred.get("port", 22)), cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp core verify-checksums --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command)
+    if output is not None:
+        return {"verified": True, "output": output}, None
+    if error and ("checksum" in error.lower() or "doesn't verify" in error.lower()):
+        return {"verified": False, "output": error}, None
+    return None, error or "WP-CLI checksum verification failed"
+
+
+async def verify_plugin_checksums(cred: dict, plugin: str) -> tuple[dict | None, str | None]:
+    """Verify one WordPress.org plugin through WP-CLI.
+
+    WP-CLI accepts a plugin slug; constrain it to its documented identifier
+    shape and surface WordPress.org availability/mismatch output honestly.
+    """
+    if not cred.get("key"):
+        return None, "Only key-based SSH auth is supported."
+    if not plugin or not all(ch.isalnum() or ch in "-_" for ch in plugin):
+        return None, "Invalid plugin slug — use the plugin's name from list_plugins."
+    host, port, user = cred["host"], int(cred.get("port", 22)), cred["user"]
+    wp_path = cred.get("wp_path", "/var/www/html")
+    command = f"wp plugin verify-checksums {plugin} --path={wp_path} --allow-root"
+    async with _key_file(cred["key"]) as key_path:
+        output, error = await _run(host, port, user, key_path, command)
+    if output is not None:
+        return {"verified": True, "output": output}, None
+    if error and ("checksum" in error.lower() or "wordpress.org" in error.lower() or "doesn't verify" in error.lower()):
+        return {"verified": False, "output": error}, None
+    return None, error or "WP-CLI plugin checksum verification failed"
+
+
 async def purge_litespeed_cache(cred: dict, scope: str) -> tuple[str | None, str | None]:
     """Purge the LiteSpeed Cache page cache through its own WP-CLI namespace.
 

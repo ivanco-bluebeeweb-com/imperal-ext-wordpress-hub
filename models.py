@@ -2392,3 +2392,20 @@ class WxrImportResult(sdl.Entity):
     imported_count: int = 0
     skipped_count: int = 0
     output: str = ""
+
+
+# ─────────── Core / plugin integrity (SSH/WP-CLI) ───────────
+
+class PluginChecksumParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    plugin: str = Field(
+        min_length=1, max_length=200,
+        description="Exact WordPress.org plugin slug from list_plugins, e.g. 'akismet' or 'woocommerce'")
+
+
+class ChecksumVerificationResult(sdl.Entity):
+    """Result of a WP-CLI checksum verification against WordPress.org's manifest."""
+    site_id: str = ""
+    target: str = ""
+    verified: bool = False
+    output: str = ""

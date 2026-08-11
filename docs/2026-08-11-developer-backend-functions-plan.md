@@ -335,10 +335,21 @@ and four catalog tools were synced.
     wordpress.org (naturally skips premium/custom plugins not in that repo — must report that
     honestly, not as a false pass or fail)
 69. `check_core_update_available` / `list_plugin_updates_available` / `list_theme_updates_available`
-    — read-only "what's outdated" listing, distinct from the existing `update_plugin`/`update_core`
-    (5.2) which already perform the update itself — useful as a lighter-weight audit-only call
+    — **already covered, without duplicate tools**, by `get_server_info`: its Bridge-first and
+    SSH/WP-CLI fallback response contains the read-only core/plugin/theme update lists alongside
+    the installed WordPress version. The existing `update_plugin`/`update_core` remain separate
+    write operations.
 70. `get_wp_version_support_status` — is the connected site's WP version still receiving security
-    updates (cross-reference against WordPress.org's own supported-versions list)
+    updates (cross-reference against WordPress.org's own supported-versions list). **Research
+    pending:** WordPress.org exposes the live `core/stable-check` source, but the exact support
+    semantics and reliable per-version response need a dedicated contract before adding a tool.
+
+**Release candidate (v1.20.0):** `verify_core_checksums` and
+`verify_plugin_checksums` are SSH/WP-CLI-only, using the documented WordPress.org checksum
+commands. Theme verification is intentionally not added: the official WP-CLI command reference
+provides core and plugin checksum commands, not a corresponding `wp theme verify-checksums`
+command; inventing one would be misleading. Complete 207-key pricing was saved with both checksum
+checks priced at 1; local verification passed. Mark shipped only after commit, push, and deployment.
 
 ## Group Q — Mail Deliverability
 
