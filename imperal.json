@@ -699,6 +699,361 @@
       "owner_chat_tool": "wordpress-hub"
     },
     {
+      "name": "update_plugin",
+      "description": "Update ONE already-installed WordPress plugin to its latest version. Reads through the Imperal Bridge plugin if it's installed (the same WordPress upgrader wp-admin's own 'Update Now' link uses), or falls back to SSH + WP-CLI (`wp plugin update <slug>`) if SSH is configured with add_ssh. Pass a slug from list_plugins/list_native_plugins — never a guessed slug.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.update_plugin"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "slug": {
+            "description": "Plugin folder/file slug from list_plugins, e.g. 'akismet' or 'akismet/akismet.php'",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "slug"
+        ],
+        "title": "UpdatePluginParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Result of updating one plugin over WP-CLI.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "slug": {
+            "default": "",
+            "title": "Slug",
+            "type": "string"
+          },
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PluginUpdateResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.update_plugin",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "update_core",
+      "description": "Update WordPress core to the latest version. Reads through the Imperal Bridge plugin if it's installed (the same WordPress upgrader wp-admin's own 'Update Now' link uses), or falls back to SSH + WP-CLI (`wp core update`) if SSH is configured with add_ssh. Runs the update immediately with no version pinning — always the latest available core release.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.update_core"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "UpdateCoreParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Result of updating WordPress core over WP-CLI.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "CoreUpdateResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.update_core",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "run_wp_cron",
+      "description": "Force every due WordPress cron event to run now. Reads through the Imperal Bridge plugin if it's installed (the same _get_cron_array()/do_action_ref_array() WordPress core itself uses), or falls back to SSH + WP-CLI (`wp cron event run --due-now`) if SSH is configured with add_ssh. Only events already past their scheduled time are run — nothing is rescheduled early.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.run_cron"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "RunWpCronParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Result of forcing due cron events to run over WP-CLI.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "WpCronRunResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.run_wp_cron",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
       "name": "list_sites",
       "description": "List the WordPress sites the user has connected.",
       "action_type": "read",
@@ -3427,7 +3782,7 @@
     },
     {
       "name": "install_plugin",
-      "description": "Install a WordPress plugin via WP-CLI, from a WordPress.org slug or a direct https:// .zip URL, and optionally activate it immediately. Requires SSH access configured with add_ssh. Use this to install Imperal's own companion bridge plugin (Imperal Bridge — SEO + builder + media in one) or any third-party plugin the site needs.",
+      "description": "Install a WordPress plugin from a WordPress.org slug or a direct https:// .zip URL, and optionally activate it immediately. Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all — uses the same Plugin_Upgrader API wp-admin's own 'Add New Plugin' screen uses), or falls back to SSH + WP-CLI (`wp plugin install`) if SSH is configured instead. Use this to install Imperal's own companion bridge plugin (Imperal Bridge — SEO + builder + media in one) or any third-party plugin the site needs.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -24252,361 +24607,6 @@
         "x-sdl": "entity"
       },
       "event": "wordpress-hub.set_redirect_status",
-      "background": false,
-      "long_running": false,
-      "scopes": [],
-      "owner_chat_tool": "wordpress-hub"
-    },
-    {
-      "name": "update_plugin",
-      "description": "Update ONE already-installed WordPress plugin to its latest version. Reads through the Imperal Bridge plugin if it's installed (the same WordPress upgrader wp-admin's own 'Update Now' link uses), or falls back to SSH + WP-CLI (`wp plugin update <slug>`) if SSH is configured with add_ssh. Pass a slug from list_plugins/list_native_plugins — never a guessed slug.",
-      "action_type": "write",
-      "chain_callable": true,
-      "effects": [
-        "wp.update_plugin"
-      ],
-      "id_projection": "",
-      "params_schema": {
-        "properties": {
-          "site_id": {
-            "description": "Site id from a previous list_sites call — never invent it",
-            "title": "Site Id",
-            "type": "string"
-          },
-          "slug": {
-            "description": "Plugin folder/file slug from list_plugins, e.g. 'akismet' or 'akismet/akismet.php'",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Slug",
-            "type": "string"
-          }
-        },
-        "required": [
-          "site_id",
-          "slug"
-        ],
-        "title": "UpdatePluginParams",
-        "type": "object"
-      },
-      "return_schema": {
-        "description": "Result of updating one plugin over WP-CLI.",
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              }
-            ],
-            "title": "Id"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "kind": {
-            "default": "",
-            "title": "Kind",
-            "type": "string"
-          },
-          "subtitle": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Subtitle"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Description"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Status"
-          },
-          "url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Url"
-          },
-          "slug": {
-            "default": "",
-            "title": "Slug",
-            "type": "string"
-          },
-          "output": {
-            "default": "",
-            "title": "Output",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "title"
-        ],
-        "title": "PluginUpdateResult",
-        "type": "object",
-        "x-sdl": "entity"
-      },
-      "event": "wordpress-hub.update_plugin",
-      "background": false,
-      "long_running": false,
-      "scopes": [],
-      "owner_chat_tool": "wordpress-hub"
-    },
-    {
-      "name": "update_core",
-      "description": "Update WordPress core to the latest version. Reads through the Imperal Bridge plugin if it's installed (the same WordPress upgrader wp-admin's own 'Update Now' link uses), or falls back to SSH + WP-CLI (`wp core update`) if SSH is configured with add_ssh. Runs the update immediately with no version pinning — always the latest available core release.",
-      "action_type": "write",
-      "chain_callable": true,
-      "effects": [
-        "wp.update_core"
-      ],
-      "id_projection": "",
-      "params_schema": {
-        "properties": {
-          "site_id": {
-            "description": "Site id from a previous list_sites call — never invent it",
-            "title": "Site Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "site_id"
-        ],
-        "title": "UpdateCoreParams",
-        "type": "object"
-      },
-      "return_schema": {
-        "description": "Result of updating WordPress core over WP-CLI.",
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              }
-            ],
-            "title": "Id"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "kind": {
-            "default": "",
-            "title": "Kind",
-            "type": "string"
-          },
-          "subtitle": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Subtitle"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Description"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Status"
-          },
-          "url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Url"
-          },
-          "output": {
-            "default": "",
-            "title": "Output",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "title"
-        ],
-        "title": "CoreUpdateResult",
-        "type": "object",
-        "x-sdl": "entity"
-      },
-      "event": "wordpress-hub.update_core",
-      "background": false,
-      "long_running": false,
-      "scopes": [],
-      "owner_chat_tool": "wordpress-hub"
-    },
-    {
-      "name": "run_wp_cron",
-      "description": "Force every due WordPress cron event to run now. Reads through the Imperal Bridge plugin if it's installed (the same _get_cron_array()/do_action_ref_array() WordPress core itself uses), or falls back to SSH + WP-CLI (`wp cron event run --due-now`) if SSH is configured with add_ssh. Only events already past their scheduled time are run — nothing is rescheduled early.",
-      "action_type": "write",
-      "chain_callable": true,
-      "effects": [
-        "wp.run_cron"
-      ],
-      "id_projection": "",
-      "params_schema": {
-        "properties": {
-          "site_id": {
-            "description": "Site id from a previous list_sites call — never invent it",
-            "title": "Site Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "site_id"
-        ],
-        "title": "RunWpCronParams",
-        "type": "object"
-      },
-      "return_schema": {
-        "description": "Result of forcing due cron events to run over WP-CLI.",
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              }
-            ],
-            "title": "Id"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "kind": {
-            "default": "",
-            "title": "Kind",
-            "type": "string"
-          },
-          "subtitle": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Subtitle"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Description"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Status"
-          },
-          "url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Url"
-          },
-          "output": {
-            "default": "",
-            "title": "Output",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "title"
-        ],
-        "title": "WpCronRunResult",
-        "type": "object",
-        "x-sdl": "entity"
-      },
-      "event": "wordpress-hub.run_wp_cron",
       "background": false,
       "long_running": false,
       "scopes": [],

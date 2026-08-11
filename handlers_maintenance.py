@@ -40,6 +40,7 @@ from wp_client import wp_post
 BRIDGE_MAINTENANCE_UPDATE_PLUGIN_PATH = "/wp-json/imperal/v1/maintenance/update-plugin"
 BRIDGE_MAINTENANCE_UPDATE_CORE_PATH = "/wp-json/imperal/v1/maintenance/update-core"
 BRIDGE_MAINTENANCE_RUN_DUE_CRON_PATH = "/wp-json/imperal/v1/maintenance/run-due-cron"
+BRIDGE_MAINTENANCE_INSTALL_PLUGIN_PATH = "/wp-json/imperal/v1/maintenance/install-plugin"
 
 
 async def _site_auth(ctx, site_id):

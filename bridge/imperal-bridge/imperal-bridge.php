@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.11.0
+ * Version:           2.12.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -4783,6 +4783,77 @@ function imperal_maintenance_bridge_update_core( WP_REST_Request $request ) {
 }
 
 /**
+ * POST /imperal/v1/maintenance/install-plugin { source, activate } --
+ * installs a plugin from EITHER a WordPress.org directory slug (resolved
+ * via `plugins_api()`, the same lookup wp-admin's own "Add New Plugin"
+ * screen uses, then installed from its official download_link) OR a direct
+ * .zip URL (passed straight to `Plugin_Upgrader::install()`, whose own
+ * docblock documents the $package argument as "The zip file path or URL"
+ * -- confirmed against wp-admin/includes/class-plugin-upgrader.php).
+ * Optionally activates afterwards via `activate_plugin()`, matching
+ * `wp plugin install --activate`.
+ */
+function imperal_maintenance_bridge_install_plugin( WP_REST_Request $request ) {
+	$source   = (string) $request->get_param( 'source' );
+	$activate = (bool) $request->get_param( 'activate' );
+
+	if ( '' === trim( $source ) ) {
+		return new WP_Error( 'imperal_maintenance_missing_source', __( 'A plugin source (slug or .zip URL) is required.', 'imperal-bridge' ), array( 'status' => 400 ) );
+	}
+
+	if ( ! class_exists( 'Plugin_Upgrader' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/misc.php';
+		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+		require_once ABSPATH . 'wp-admin/includes/class-automatic-upgrader-skin.php';
+		require_once ABSPATH . 'wp-admin/includes/class-plugin-upgrader.php';
+		require_once ABSPATH . 'wp-admin/includes/update.php';
+	}
+	if ( ! function_exists( 'plugins_api' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/plugin-install.php';
+	}
+
+	$is_url  = ( 0 === strpos( $source, 'http://' ) || 0 === strpos( $source, 'https://' ) );
+	$package = $source;
+
+	if ( ! $is_url ) {
+		// Treat it as a WordPress.org slug -- resolve its real download link,
+		// same as the "Add New Plugin" screen does before installing.
+		$api = plugins_api( 'plugin_information', array( 'slug' => $source, 'fields' => array( 'sections' => false ) ) );
+		if ( is_wp_error( $api ) ) {
+			return new WP_Error( 'imperal_maintenance_plugin_lookup_failed', $api->get_error_message(), array( 'status' => 404 ) );
+		}
+		$package = $api->download_link;
+	}
+
+	$upgrader = new Plugin_Upgrader( new Automatic_Upgrader_Skin() );
+	$result   = $upgrader->install( $package );
+
+	if ( is_wp_error( $result ) ) {
+		return new WP_Error( 'imperal_maintenance_install_failed', $result->get_error_message(), array( 'status' => 500 ) );
+	}
+	if ( true !== $result ) {
+		return new WP_Error( 'imperal_maintenance_install_failed', __( 'The plugin install did not complete.', 'imperal-bridge' ), array( 'status' => 500 ) );
+	}
+
+	$plugin_file = $upgrader->plugin_info();
+	$activated   = false;
+	if ( $activate && $plugin_file ) {
+		$activate_result = activate_plugin( $plugin_file );
+		$activated        = ! is_wp_error( $activate_result );
+	}
+
+	return rest_ensure_response(
+		array(
+			'installed'   => true,
+			'plugin'      => $plugin_file ? $plugin_file : '',
+			'activated'   => $activated,
+		)
+	);
+}
+
+/**
  * POST /imperal/v1/maintenance/run-due-cron — force-run every cron hook
  * whose scheduled timestamp has already passed, matching
  * `wp cron event run --due-now`.
@@ -4908,6 +4979,17 @@ function imperal_maintenance_bridge_register_routes() {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => 'imperal_maintenance_bridge_run_due_cron',
+				'permission_callback' => $manage_options_perm,
+			),
+		)
+	);
+	register_rest_route(
+		IMPERAL_MAINTENANCE_BRIDGE_NAMESPACE,
+		'/maintenance/install-plugin',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_maintenance_bridge_install_plugin',
 				'permission_callback' => $manage_options_perm,
 			),
 		)

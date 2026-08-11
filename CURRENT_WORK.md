@@ -5,6 +5,70 @@
 
 ---
 
+## 2026-08-11 (evening, cont'd 6) — Group M (Action Scheduler, 6 functions); 193 → 199 functions; full pricing map rebuilt and reconciled
+
+**Status:** SHIPPED, tested (720/720 Python + 411 PHP across all bridge harnesses), `imperal
+validate` clean (199 functions, 0 errors/0 warnings/1 info), full 199-key pricing map applied via
+`update_pricing` after `suspend_app`, resubmitted (`pending_review`, all 4 checks passed). Commit
+`3e10f83`, pushed, deployed (`developer.deploy_app` → commit `3e10f831`, status=warning 18/21 —
+same known cosmetic pattern as every prior deploy this session, not a regression).
+
+**Group M — Action Scheduler / Background Job Queue (6 functions, `handlers_action_scheduler.py`,
+new, Bridge-only via new SECTION 16):** `list_scheduled_actions`, `get_scheduled_action`,
+`run_scheduled_action`, `cancel_scheduled_action`, `retry_failed_action`, `count_actions_by_status`.
+Action Scheduler ships bundled inside WooCommerce (NOT WordPress core, NOT guaranteed present) —
+verified its real public API by reading its own source on GitHub
+(`woocommerce/action-scheduler` `functions.php` + `ActionScheduler_Store.php`) rather than
+guessing: `ActionScheduler::store()` (query_actions/fetch_action/get_status/cancel_action/
+action_counts), `ActionScheduler::runner()->process_action()` (the exact call the admin's own
+Tools → Scheduled Actions "Run" row action uses), `ActionScheduler::logger()->get_logs()`, and the
+`STATUS_PENDING/RUNNING/COMPLETE/FAILED/CANCELED` constants. Confirmed Action Scheduler has **no
+native retry** — a failed action stays failed forever; `retry_failed_action` re-enqueues a fresh
+attempt via `as_enqueue_async_action()` with the same hook/args/group (the same thing a developer
+calling the API by hand would do), and rejects with a 400 if the action isn't actually in the
+`failed` state. Deliberately Bridge-only, no SSH fallback (unlike every other recent group) — the
+`wp action-scheduler` CLI package needs the exact same WooCommerce/library context loaded as the
+REST call, so a bare SSH session buys nothing extra; this mirrors the Group K/redirects precedent
+for a plugin-owned data source with no meaningful shell equivalent. 18 new Python tests
+(`tests/test_action_scheduler.py`) + 42 new PHP tests (`action_scheduler_logic_test.php`, exercising
+a fake in-memory `ActionScheduler`/`ActionScheduler_Store`/runner/logger — the real library needs
+WooCommerce + MySQL, out of scope for a logic-only harness).
+
+**Pricing — full rebuild, not incremental:** there is still no readback tool for the previously
+saved `tool_prices` map (documented platform limitation, carried across every session this app has
+had). Rebuilt the complete 199-key map from first principles: read every function's real
+`action_type` out of the built `imperal.json` manifest, applied the established tiers (0 =
+front-door/local-only, 1 = single read, 2 = single write/delete, 4 = multi-call bulk/preview/
+aggregation, 6 = CSV-apply), then cross-checked and reconciled every explicit per-function price
+quoted in this file's own history (31 distinct documented overrides found via grep). Caught and
+resolved one real conflict in the process: an earlier 2026-08-10 note priced `update_plugin`/
+`update_core`/`run_wp_cron` at 2 each, but a LATER 2026-08-11 session note explicitly reconciled
+`install_plugin`/`run_wp_cron` to 4 (multi-call tier) — the later, more specific reconciliation was
+treated as authoritative and used (`run_wp_cron`=4, `install_plugin`=4, `update_plugin`=2,
+`update_core`=2 — the two Bridge-added maintenance functions stayed at the single-write tier since
+each is genuinely one call, only `run_wp_cron`/`install_plugin` inherited the multi-call precedent).
+Verified the built map's key-set is an EXACT match (no missing, no extra) against every real
+`@chat.function` name in the manifest before sending. Applied via `developer.suspend_app` →
+`developer.update_pricing` (complete map nested under `pricing_config.tool_prices`, never
+`save_pricing`, never partial) → `developer.submit_for_review`. As with every prior pass, no
+independent readback tool exists to re-confirm persistence after the fact — noted honestly, not
+swept under the rug.
+
+**Bridge:** `imperal-bridge.php` 2.11.0 → 2.12.0 (SECTION 16 appended, `sections` capability list
+updated). Zip rebuilt, README given an Action Scheduler row matching the existing per-section table
+format.
+
+**This closes out today's roadmap-driven session** (`docs/2026-08-11-developer-backend-functions-plan.md`,
+Groups A–M now all ✅ SHIPPED). Remaining unshipped groups in that doc: N (Rewrite Rules &
+Permalinks), O (Import/Export WXR), P (Core/Plugin/Theme Integrity), Q (Mail Deliverability), R (WP
+Site Health), S (Sessions & Auth Hygiene), T (Custom REST Endpoint discovery), U (Site Icon/
+Branding) — plus G (Multisite, gated on confirming real demand) and H (Deploy/Environment Hygiene,
+appears superseded/folded into what SECTION 11 already shipped — needs a status check next
+session, not yet marked SHIPPED in the doc despite Deploy work having landed under a different
+group letter earlier this session).
+
+---
+
 ## 2026-08-11 (evening, cont'd 5) — Bridge SECTION 15 (maintenance): fixed SSH-required gap on update_plugin/update_core/run_wp_cron
 
 **Status:** SHIPPED, tested (702/702), `imperal validate` clean (193 functions — unchanged, this

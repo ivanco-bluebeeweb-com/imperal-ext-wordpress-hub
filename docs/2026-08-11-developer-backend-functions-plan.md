@@ -248,25 +248,39 @@ checks passed. Deployed at `a0152c0d`.
 193-key map (1 credit for reads, 2 for writes — matches the existing coupon/redirect tier),
 resubmitted — `pending_review`, all 4 checks passed.
 
-## Group M — Action Scheduler / Background Job Queue
+## Group M — Action Scheduler / Background Job Queue — ✅ SHIPPED 2026-08-11
 
 WooCommerce (and many other plugins) ship Action Scheduler, which stores every scheduled/queued
-background job as real rows in `wp_actionscheduler_actions` (or as a dedicated custom table on
-newer versions) and exposes an actual wp-admin screen (Tools → Scheduled Actions). This is a
+background job and exposes an actual wp-admin screen (Tools → Scheduled Actions). This is a
 first-class backend-dev diagnostic surface for "why didn't my order emails/webhooks/sync jobs run" —
 distinct from native WP-Cron (Group D), which only decides *when* Action Scheduler's own runner
 next wakes up.
 
-55. `list_scheduled_actions` — pending/in-progress/complete/failed/canceled queue entries, filterable
-    by status and by hook name (WP-CLI `wp action-scheduler list` if the Action Scheduler CLI
-    package is present, else Bridge reading the table directly)
-56. `get_scheduled_action` — full detail (args, group, scheduled date, log) for one action id
-57. `run_scheduled_action` — force-run one pending action immediately (`wp action-scheduler run
-    --hooks=<id>`)
-58. `cancel_scheduled_action` — cancel one pending action
-59. `retry_failed_action` — re-queue one failed action for another attempt
-60. `count_actions_by_status` — quick health snapshot ("47 failed, 3 pending") — the single most
-    useful one-glance backend-dev diagnostic for this whole group
+Implemented Bridge-only (SECTION 16, `imperal-bridge.php` 2.11.0→2.12.0) — verified against Action
+Scheduler's own real source (`functions.php`, `ActionScheduler_Store`): no reliable SSH/WP-CLI
+fallback exists (the `wp action-scheduler` CLI command needs the exact same WooCommerce/library
+context loaded as the REST call, so a bare SSH session buys nothing extra — same precedent as
+Group K/redirects). Also verified Action Scheduler has NO native retry concept — a failed action
+stays failed forever; the real, honest mechanism is `as_enqueue_async_action()` re-enqueuing a
+fresh attempt with the same hook/args/group, exactly what `retry_failed_action` does.
+
+55. `list_scheduled_actions` — ✅ pending/in-progress/complete/failed/canceled queue entries,
+    filterable by status/hook/group, via `as_get_scheduled_actions()`.
+56. `get_scheduled_action` — ✅ full detail (args, group, scheduled date, execution log) for one
+    action id, via `ActionScheduler::store()->fetch_action()` + `ActionScheduler::logger()->get_logs()`.
+57. `run_scheduled_action` — ✅ force-run one action immediately regardless of schedule, via
+    `ActionScheduler::runner()->process_action()` — the exact call the admin list table's "Run" row
+    action uses; surfaces the hook callback's own exception if it throws.
+58. `cancel_scheduled_action` — ✅ cancel one pending action via `ActionScheduler_Store::cancel_action()`.
+59. `retry_failed_action` — ✅ re-enqueue a fresh attempt for one FAILED action via
+    `as_enqueue_async_action()` (rejects with 400 if the action isn't in the failed state).
+60. `count_actions_by_status` — ✅ one-glance health snapshot via `ActionScheduler_Store::action_counts()`.
+
+6 functions in `handlers_action_scheduler.py` (new). 18 new tests (`tests/test_action_scheduler.py`)
++ 42 new PHP tests (`bridge/imperal-bridge/tests/action_scheduler_logic_test.php`, fake in-memory
+ActionScheduler/Store). Full suite 702→720, all green. `imperal validate`: 0 errors/0 warnings, 199
+functions. Repriced the complete 199-key map (1 credit for reads, 2 for writes — matches the
+existing tier convention), resubmitted — `pending_review`, all 4 checks passed.
 
 ## Group N — Rewrite Rules & Permalinks
 

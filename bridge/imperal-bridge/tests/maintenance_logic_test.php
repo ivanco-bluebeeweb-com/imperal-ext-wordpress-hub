@@ -153,6 +153,11 @@ class Automatic_Upgrader_Skin {
 
 $GLOBALS['_upgrade_result'] = true; // true|false|WP_Error, set per-test
 $GLOBALS['_upgrade_calls']  = array();
+$GLOBALS['_install_calls']  = array();
+$GLOBALS['_install_result'] = true; // true|false|WP_Error, set per-test
+$GLOBALS['_install_plugin_file'] = 'installed-plugin/installed-plugin.php';
+$GLOBALS['_activate_calls'] = array();
+$GLOBALS['_activate_result'] = true; // true|WP_Error, set per-test
 
 class Plugin_Upgrader {
 	public function __construct( $skin ) {}
@@ -160,6 +165,15 @@ class Plugin_Upgrader {
 	public function upgrade( $slug ) {
 		$GLOBALS['_upgrade_calls'][] = $slug;
 		return $GLOBALS['_upgrade_result'];
+	}
+
+	public function install( $package ) {
+		$GLOBALS['_install_calls'][] = $package;
+		return $GLOBALS['_install_result'];
+	}
+
+	public function plugin_info() {
+		return $GLOBALS['_install_plugin_file'];
 	}
 }
 
@@ -170,6 +184,16 @@ class Core_Upgrader {
 		$GLOBALS['_upgrade_calls'][] = $update;
 		return $GLOBALS['_upgrade_result'];
 	}
+}
+
+$GLOBALS['_plugins_api_result'] = null; // object with ->download_link, or WP_Error, set per-test
+function plugins_api( $action, $args ) {
+	return $GLOBALS['_plugins_api_result'];
+}
+
+function activate_plugin( $plugin_file ) {
+	$GLOBALS['_activate_calls'][] = $plugin_file;
+	return $GLOBALS['_activate_result'];
 }
 
 // ─────────────────────── fake cron array (same shape as SECTION 14) ───────────────────────
@@ -214,6 +238,12 @@ function reset_maintenance_fixtures() {
 	$GLOBALS['_core_updates']   = array();
 	$GLOBALS['_cron_array']     = array();
 	$GLOBALS['_fired_actions']  = array();
+	$GLOBALS['_install_calls']  = array();
+	$GLOBALS['_install_result'] = true;
+	$GLOBALS['_install_plugin_file'] = 'installed-plugin/installed-plugin.php';
+	$GLOBALS['_activate_calls'] = array();
+	$GLOBALS['_activate_result'] = true;
+	$GLOBALS['_plugins_api_result'] = null;
 }
 
 // ─────────── update_plugin ───────────
@@ -281,6 +311,74 @@ $req                        = new WP_REST_Request();
 $result                     = imperal_maintenance_bridge_update_core( $req );
 assert_true( is_wp_error( $result ), 'update_core surfaces a WP_Error from the upgrader' );
 assert_true( 'Could not download core update.' === $result->get_error_message(), 'update_core surfaces the real upgrader error message' );
+
+// ─────────── install_plugin ───────────
+
+reset_maintenance_fixtures();
+$req    = new WP_REST_Request( array( 'source' => '' ) );
+$result = imperal_maintenance_bridge_install_plugin( $req );
+assert_true( is_wp_error( $result ), 'install_plugin rejects an empty source' );
+assert_true( 'imperal_maintenance_missing_source' === $result->get_error_code(), 'install_plugin missing-source error code' );
+assert_true( 400 === $result->get_status(), 'install_plugin missing-source status is 400' );
+
+reset_maintenance_fixtures();
+$GLOBALS['_plugins_api_result'] = (object) array( 'download_link' => 'https://downloads.wordpress.org/plugin/some-plugin.1.0.0.zip' );
+$req    = new WP_REST_Request( array( 'source' => 'some-plugin', 'activate' => false ) );
+$result = imperal_maintenance_bridge_install_plugin( $req );
+assert_true( ! is_wp_error( $result ), 'install_plugin succeeds for a wordpress.org slug' );
+assert_true( true === $result['installed'], 'install_plugin response marks installed=true' );
+assert_true( 'installed-plugin/installed-plugin.php' === $result['plugin'], 'install_plugin response names the installed plugin file' );
+assert_true( false === $result['activated'], 'install_plugin does not activate when activate=false' );
+assert_true( array( 'https://downloads.wordpress.org/plugin/some-plugin.1.0.0.zip' ) === $GLOBALS['_install_calls'], 'install_plugin resolved the slug to its real download_link before installing' );
+assert_true( array() === $GLOBALS['_activate_calls'], 'install_plugin never called activate_plugin when activate=false' );
+
+reset_maintenance_fixtures();
+$req    = new WP_REST_Request( array( 'source' => 'https://example.com/custom-plugin.zip', 'activate' => true ) );
+$result = imperal_maintenance_bridge_install_plugin( $req );
+assert_true( ! is_wp_error( $result ), 'install_plugin succeeds for a direct .zip URL' );
+assert_true( array( 'https://example.com/custom-plugin.zip' ) === $GLOBALS['_install_calls'], 'install_plugin passes a direct URL straight through, skipping plugins_api()' );
+assert_true( true === $result['activated'], 'install_plugin activates when activate=true and install succeeded' );
+assert_true( array( 'installed-plugin/installed-plugin.php' ) === $GLOBALS['_activate_calls'], 'install_plugin called activate_plugin with the installed plugin file' );
+
+reset_maintenance_fixtures();
+$GLOBALS['_install_result'] = new WP_Error( 'download_failed', 'Could not download plugin.' );
+$req    = new WP_REST_Request( array( 'source' => 'https://example.com/broken.zip' ) );
+$result = imperal_maintenance_bridge_install_plugin( $req );
+assert_true( is_wp_error( $result ), 'install_plugin surfaces a WP_Error from the upgrader' );
+assert_true( 'Could not download plugin.' === $result->get_error_message(), 'install_plugin surfaces the real upgrader error message' );
+
+reset_maintenance_fixtures();
+$GLOBALS['_plugins_api_result'] = new WP_Error( 'plugins_api_failed', 'Plugin not found.' );
+$req    = new WP_REST_Request( array( 'source' => 'no-such-plugin' ) );
+$result = imperal_maintenance_bridge_install_plugin( $req );
+assert_true( is_wp_error( $result ), 'install_plugin surfaces a plugins_api lookup failure for an unknown slug' );
+assert_true( 'imperal_maintenance_plugin_lookup_failed' === $result->get_error_code(), 'install_plugin lookup-failed error code' );
+assert_true( 404 === $result->get_status(), 'install_plugin lookup-failed status is 404' );
+assert_true( array() === $GLOBALS['_install_calls'], 'install_plugin never calls Plugin_Upgrader::install after a failed lookup' );
+
+reset_maintenance_fixtures();
+$req    = new WP_REST_Request( array( 'source' => 'https://example.com/my-plugin.zip', 'activate' => true ) );
+$result = imperal_maintenance_bridge_install_plugin( $req );
+assert_true( ! is_wp_error( $result ), 'install_plugin succeeds for a direct .zip URL' );
+assert_true( array( 'https://example.com/my-plugin.zip' ) === $GLOBALS['_install_calls'], 'install_plugin passes a .zip URL straight through, skipping plugins_api' );
+assert_true( true === $result['activated'], 'install_plugin activates when activate=true' );
+assert_true( array( 'installed-plugin/installed-plugin.php' ) === $GLOBALS['_activate_calls'], 'install_plugin activated the newly installed plugin file' );
+
+reset_maintenance_fixtures();
+$GLOBALS['_install_result'] = new WP_Error( 'download_failed', 'Could not download the plugin zip.' );
+$req    = new WP_REST_Request( array( 'source' => 'https://example.com/my-plugin.zip' ) );
+$result = imperal_maintenance_bridge_install_plugin( $req );
+assert_true( is_wp_error( $result ), 'install_plugin surfaces a WP_Error from Plugin_Upgrader::install' );
+assert_true( 'imperal_maintenance_install_failed' === $result->get_error_code(), 'install_plugin install-failed error code' );
+assert_true( 'Could not download the plugin zip.' === $result->get_error_message(), 'install_plugin surfaces the real installer error message' );
+
+reset_maintenance_fixtures();
+$GLOBALS['_activate_result'] = new WP_Error( 'could_not_activate', 'A fatal error occurred activating the plugin.' );
+$req    = new WP_REST_Request( array( 'source' => 'https://example.com/my-plugin.zip', 'activate' => true ) );
+$result = imperal_maintenance_bridge_install_plugin( $req );
+assert_true( ! is_wp_error( $result ), 'install_plugin still reports success when only activation fails' );
+assert_true( true === $result['installed'], 'install_plugin keeps installed=true even if activation failed' );
+assert_true( false === $result['activated'], 'install_plugin reports activated=false when activation itself failed' );
 
 // ─────────── run_due_cron ───────────
 

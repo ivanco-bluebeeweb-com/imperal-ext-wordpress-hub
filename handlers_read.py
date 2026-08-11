@@ -13,6 +13,7 @@ from models import (_NoParams, Site, ListContentParams, ListMediaParams,
 import wp_cli
 from wp_client import wp_get, wp_post, wp_request, wp_error_message, wp_error_code, wp_title, now_iso
 import storage
+import handlers_maintenance
 
 
 @chat.function("list_sites", description="List the WordPress sites the user has connected.",
@@ -864,10 +865,12 @@ async def purge_cache(ctx, params: PurgeCacheParams) -> ActionResult:
 
 @chat.function(
     "install_plugin",
-    description=("Install a WordPress plugin via WP-CLI, from a WordPress.org slug "
-                 "or a direct https:// .zip URL, and optionally "
-                 "activate it immediately. Requires SSH access configured with add_ssh. Use this "
-                 "to install Imperal's own companion bridge plugin (Imperal Bridge — SEO + "
+    description=("Install a WordPress plugin from a WordPress.org slug or a direct https:// "
+                 ".zip URL, and optionally activate it immediately. Reads through the Imperal "
+                 "Bridge plugin if it's installed (no SSH needed at all — uses the same "
+                 "Plugin_Upgrader API wp-admin's own 'Add New Plugin' screen uses), or falls "
+                 "back to SSH + WP-CLI (`wp plugin install`) if SSH is configured instead. Use "
+                 "this to install Imperal's own companion bridge plugin (Imperal Bridge — SEO + "
                  "builder + media in one) or any third-party plugin the site needs."),
     action_type="write",
     data_model=PluginInstallResult,
@@ -875,16 +878,40 @@ async def purge_cache(ctx, params: PurgeCacheParams) -> ActionResult:
     event="wordpress-hub.install_plugin",
 )
 async def install_plugin(ctx, params: InstallPluginParams) -> ActionResult:
-    """Install (and optionally activate) a plugin over SSH via `wp plugin install`."""
+    """Install (and optionally activate) a plugin — Bridge-first, SSH-fallback."""
     source = (params.source or "").strip()
     if not source:
         return ActionResult.error("source is required — a WordPress.org slug or a .zip URL.", retryable=False)
 
+    auth, err = await handlers_maintenance._site_auth(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+
+    body = await handlers_maintenance._bridge_post(
+        ctx, base_url, username, pw, handlers_maintenance.BRIDGE_MAINTENANCE_INSTALL_PLUGIN_PATH,
+        json_body={"source": source, "activate": params.activate},
+    )
+    if body is not None:
+        plugin_file = body.get("plugin", "") or source
+        activated = bool(body.get("activated"))
+        output = f"Installed as {plugin_file}." if plugin_file else "Installed."
+        await ctx.log(
+            f"install_plugin: executed via Bridge — source={source} activate={params.activate} "
+            f"site_id={params.site_id}",
+            level="info",
+        )
+        return ActionResult.success(
+            PluginInstallResult(
+                id=params.site_id, title=f"install {source}", kind="wp_plugin_install",
+                source=source, activated=activated, output=output,
+            ),
+            summary=f"Installed plugin '{source}'" + (" and activated it." if activated else "."),
+        )
+
     cred = await storage.get_ssh_cred(ctx, params.site_id)
     if not cred:
-        return ActionResult.error(
-            "SSH is not configured for this site. Add SSH access first.", retryable=False
-        )
+        return handlers_maintenance._no_bridge_no_ssh_error()
 
     try:
         result, cli_error = await wp_cli.install_plugin(cred, source, params.activate)
