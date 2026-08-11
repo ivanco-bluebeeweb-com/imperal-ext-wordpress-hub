@@ -5,6 +5,49 @@
 
 ---
 
+## 2026-08-11 (evening, cont'd) — Group J (CPT/taxonomy introspection, 2 functions) + Bridge SECTION 13 (logs) closing the same "No server data yet" gap for tail_debug_log/clear_debug_log/tail_php_error_log; 184 → 186 functions
+
+**Status:** SHIPPED, tested (667/667), `imperal validate` clean (186 functions, 0 errors/0
+warnings/1 info), 186-key pricing map applied via `update_pricing` after `suspend_app`, resubmitted
+(all 4 checks passed). Bridge zip rebuilt (v2.8.0 → v2.9.0, now 9 files incl. `logs_logic_test.php`).
+Commit + push + deploy is the final step of this entry.
+
+**Group J — CPT/Taxonomy introspection (2 functions, `handlers_cpt_taxonomy.py`, new, no Bridge/SSH
+needed):** `list_registered_post_types`, `list_registered_taxonomies` — thin wrappers over
+WordPress core's own native `GET /wp/v2/types` / `GET /wp/v2/taxonomies` (shipped since the REST
+API's introduction). Verified against WP core's own `class-wp-rest-post-types-controller.php` /
+`class-wp-rest-taxonomies-controller.php` source: the single most useful discovery field on each
+(`viewable` for types, `visibility.public` for taxonomies) is marked `'context' => array('edit')`
+in WP core's OWN schema, so a plain view-context GET never returns it. Both functions request
+`context=edit` first and transparently retry at the default view context on a 401/403 (lower-
+privileged connected user) rather than failing outright or silently defaulting the field without
+saying why. 7 new tests.
+
+**Bridge SECTION 13 (logs) — the SAME "No server data yet" gap found in database, now closed for
+logs too:** `tail_debug_log`, `clear_debug_log`, `tail_php_error_log` (Group I, shipped earlier this
+session) were SSH/WP-CLI-only, exactly like the 8 database functions were before today's fix — same
+root cause, same remedy. Added 3 routes to imperal-bridge.php (`/logs/debug-log` GET,
+`/logs/debug-log/clear` POST, `/logs/php-error-log` GET, all `manage_options`-gated), wired
+`handlers_logs.py` to try the Bridge route first and fall back to SSH/WP-CLI only when the Bridge
+plugin isn't installed or predates 2.9.0 — same bridge-first/SSH-fallback contract as
+`get_server_info` and the SECTION 12 database tools. All three still honestly report "no file"
+rather than fabricating content when the file genuinely doesn't exist. Added
+`bridge/imperal-bridge/tests/logs_logic_test.php` (19 PHP-side logic assertions, all passing) and
+rewrote `tests/test_logs.py` (12 tests: Bridge-success + honest-empty + SSH-fallback + neither-
+available, for all 3 functions). README.md: added Logs row to the features table and the test file
+to the Tests section.
+
+**Pricing:** `list_registered_post_types` and `list_registered_taxonomies` priced at 1 credit each
+(single core REST GET, same tier as `get_php_info`/`list_rest_routes` — matches the standing
+"price = real work done" rule, not "importance"). 186-key map verified to exactly match the 186
+function names in the built manifest before calling `update_pricing`.
+
+**Next up (Group K, per docs/2026-08-11-developer-backend-functions-plan.md):** reusable
+blocks/patterns (`wp_block` post type + `/wp/v2/block-patterns/patterns`), then Group L (WooCommerce
+webhooks: list/get/create/update/delete via `wc/v3/webhooks`).
+
+---
+
 ## 2026-08-11 (evening) — Shipped Group I (Logs, 3 functions) + fixed "No server data yet" Bridge gap for database tools; 181 → 184 functions
 
 **Status:** SHIPPED, tested (657/657), `imperal validate` clean (184 functions, 0 errors/0 warnings/1
