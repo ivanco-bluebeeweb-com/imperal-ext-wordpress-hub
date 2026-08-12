@@ -241,5 +241,17 @@
   "preview_bulk_order_status": 40,
   "apply_bulk_order_status": 60,
   "preview_bulk_menu_order": 40,
-  "apply_bulk_menu_order": 60
+  "apply_bulk_menu_order": 60,
+  "preview_bulk_term_meta": 40,
+  "apply_bulk_term_meta": 60,
+  "preview_bulk_redirect_status": 40,
+  "apply_bulk_redirect_status": 60,
+  "preview_bulk_webhook_status": 40,
+  "apply_bulk_webhook_status": 60,
+  "preview_bulk_user_name": 40,
+  "apply_bulk_user_name": 60,
+  "preview_bulk_post_comment_status": 40,
+  "apply_bulk_post_comment_status": 60,
+  "preview_bulk_term_seo_meta": 40,
+  "apply_bulk_term_seo_meta": 60
 }

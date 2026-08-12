@@ -6,7 +6,9 @@ import app  # noqa: F401
 import handlers_users as hu
 import storage
 from models import (
+    ApplyBulkUserNameParams,
     ApplyBulkUserRoleParams,
+    BulkUserNameParams,
     BulkUserRoleParams,
     CreateUserParams,
     DeleteUserParams,
@@ -116,6 +118,39 @@ async def test_apply_bulk_user_role_refuses_stale_token():
         site_id="blog-test", user_ids=[12], role="editor", expected_state_token="0" * 64))
     assert result.status == "error"
     assert result.error_code == "WP_USER_BULK_STATE_CHANGED"
+
+
+async def test_preview_and_apply_bulk_user_name():
+    ctx = await _ctx()
+    ctx.http._mocks.extend([
+        ("GET", f"{BASE}/users/12", _user(12), 200, {}),
+        ("GET", f"{BASE}/users/13", _user(13), 200, {}),
+    ])
+    preview = await hu.preview_bulk_user_name(ctx, BulkUserNameParams(
+        site_id="blog-test", user_ids=[12, 13], first_name="Jane"))
+    assert preview.status == "success"
+    assert preview.data.preview is True
+
+    ctx.http._mocks.extend([
+        ("GET", f"{BASE}/users/12", _user(12), 200, {}),
+        ("GET", f"{BASE}/users/13", _user(13), 200, {}),
+    ])
+    ctx.http.mock_post(f"{BASE}/users/12", _user(12, first_name="Jane"))
+    ctx.http.mock_post(f"{BASE}/users/13", _user(13, first_name="Jane"))
+    result = await hu.apply_bulk_user_name(ctx, ApplyBulkUserNameParams(
+        site_id="blog-test", user_ids=[12, 13], first_name="Jane",
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success"
+    assert result.data.updated_ids == [12, 13]
+
+
+async def test_apply_bulk_user_name_refuses_stale_token():
+    ctx = await _ctx()
+    ctx.http._mocks.append(("GET", f"{BASE}/users/12", _user(12), 200, {}))
+    result = await hu.apply_bulk_user_name(ctx, ApplyBulkUserNameParams(
+        site_id="blog-test", user_ids=[12], first_name="Jane", expected_state_token="0" * 64))
+    assert result.status == "error"
+    assert result.error_code == "WP_USER_NAME_BULK_STATE_CHANGED"
 
 
 async def test_update_user_rejects_invalid_role():

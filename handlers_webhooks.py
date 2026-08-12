@@ -12,11 +12,17 @@ function in this app.
 `secret` is write-only per WooCommerce's own schema (never returned by a
 GET), so it is never echoed back in any response entity here either.
 """
+import hashlib
+import json
+
 from imperal_sdk import ActionResult, sdl
 
 from app import chat
 from handlers_woocommerce import WC_BASE, _authed, _failure, _request
 from models import (
+    ApplyBulkWebhookStatusParams,
+    BulkWebhookStatusParams,
+    BulkWebhookStatusResult,
     CreateWebhookParams,
     DeleteWebhookParams,
     ListWebhooksParams,
@@ -197,3 +203,79 @@ async def delete_webhook(ctx, params: DeleteWebhookParams) -> ActionResult:
         WebhookDeleteResult(id=str(params.webhook_id), title=str(params.webhook_id),
                              kind="wc_webhook_delete", deleted=True),
         summary=f"Webhook {params.webhook_id} deleted", refresh_panels=["center"])
+
+
+def _webhook_state_token(rows: list[dict]) -> str:
+    state = [{"id": row.get("id"), "status": row.get("status", ""), "date_modified": str(row.get("date_modified", ""))}
+             for row in sorted(rows, key=lambda value: value.get("id", 0))]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_webhook_targets(ctx, params: BulkWebhookStatusParams):
+    status = params.status.strip().lower()
+    if status not in _STATUSES:
+        return None, _error("status must be 'active', 'paused', or 'disabled'.")
+    if len(set(params.webhook_ids)) != len(params.webhook_ids):
+        return None, ActionResult.error("Each webhook id may appear only once.", retryable=False,
+                                        code="WEBHOOK_DUPLICATE_IDS")
+    rows = []
+    for webhook_id in params.webhook_ids:
+        data, err = await _request(ctx, params.site_id, f"/webhooks/{webhook_id}", expected_type=dict)
+        if err:
+            return None, err
+        rows.append(data)
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, err
+    base_url, username, password = auth
+    return (base_url, username, password, status, rows), None
+
+
+@chat.function(
+    "preview_bulk_webhook_status",
+    description="Preview changing status for 1-100 explicit WooCommerce webhooks. Makes no writes and returns the exact token required to apply.",
+    action_type="read", data_model=BulkWebhookStatusResult,
+)
+async def preview_bulk_webhook_status(ctx, params: BulkWebhookStatusParams) -> ActionResult:
+    """Read every explicit webhook target and return a reviewed batch diff."""
+    targets, err = await _bulk_webhook_targets(ctx, params)
+    if err:
+        return err
+    _, _, _, status, rows = targets
+    changes = [f"#{row.get('id')}: {row.get('status', '')} -> {status}" for row in rows]
+    return ActionResult.success(BulkWebhookStatusResult(
+        id=params.site_id, preview=True, requested=len(params.webhook_ids), matched=len(rows),
+        state_token=_webhook_state_token(rows), changes=changes),
+        summary=f"Preview: {len(rows)} webhook(s) would move to '{status}'; no changes made.")
+
+
+@chat.function(
+    "apply_bulk_webhook_status",
+    description="Apply a previously previewed status change to 1-100 explicit WooCommerce webhooks. Re-reads every target and stops before all writes if any webhook changed.",
+    action_type="write", data_model=BulkWebhookStatusResult,
+    effects=["wc.webhook_bulk_status_update"], event="wordpress-hub.apply_bulk_webhook_status",
+)
+async def apply_bulk_webhook_status(ctx, params: ApplyBulkWebhookStatusParams) -> ActionResult:
+    """Recheck the webhook batch snapshot, then apply the reviewed status change."""
+    targets, err = await _bulk_webhook_targets(ctx, params)
+    if err:
+        return err
+    base_url, username, password, status, rows = targets
+    if _webhook_state_token(rows) != params.expected_state_token:
+        return ActionResult.error("One or more webhooks changed since preview; preview again before applying.",
+                                  retryable=False, code="WEBHOOK_BULK_STATE_CHANGED")
+    updated_ids, failed_ids = [], []
+    for row in rows:
+        webhook_id = int(row.get("id", 0))
+        data, werr = await _write(ctx, "post", params.site_id, f"/webhooks/{webhook_id}", {"status": status})
+        if werr:
+            failed_ids.append(webhook_id)
+            continue
+        updated_ids.append(webhook_id)
+    result = BulkWebhookStatusResult(id=params.site_id, preview=False, requested=len(params.webhook_ids),
+                                     matched=len(rows), updated=len(updated_ids), failed=len(failed_ids),
+                                     updated_ids=updated_ids, failed_ids=failed_ids)
+    if not updated_ids:
+        return ActionResult.error("No webhooks were updated.", retryable=False, code="WEBHOOK_BULK_ALL_FAILED")
+    return ActionResult.success(result, summary=f"Updated {len(updated_ids)} webhook(s) to '{status}'; {len(failed_ids)} failed.",
+                                refresh_panels=["center"])

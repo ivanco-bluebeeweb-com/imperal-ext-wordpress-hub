@@ -9,6 +9,8 @@ import app  # noqa: F401
 import handlers_webhooks as hw
 import storage
 from models import (
+    ApplyBulkWebhookStatusParams,
+    BulkWebhookStatusParams,
     CreateWebhookParams,
     DeleteWebhookParams,
     ListWebhooksParams,
@@ -155,3 +157,32 @@ async def test_delete_webhook_not_found():
     result = await hw.delete_webhook(ctx, DeleteWebhookParams(site_id="shop-test", webhook_id=999))
     assert result.status == "error"
     assert result.error_code == "WOOCOMMERCE_ITEM_NOT_FOUND"
+
+
+# ─────────── bulk webhook status ───────────
+
+async def test_preview_and_apply_bulk_webhook_status():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/webhooks/1", _webhook(1, status="active"))
+    ctx.http.mock_get(f"{BASE}/webhooks/2", _webhook(2, status="active"))
+    preview = await hw.preview_bulk_webhook_status(ctx, BulkWebhookStatusParams(
+        site_id="shop-test", webhook_ids=[1, 2], status="paused"))
+    assert preview.status == "success" and preview.data.preview is True
+    assert preview.data.matched == 2
+
+    ctx.http.mock_get(f"{BASE}/webhooks/1", _webhook(1, status="active"))
+    ctx.http.mock_get(f"{BASE}/webhooks/2", _webhook(2, status="active"))
+    ctx.http.mock_post(f"{BASE}/webhooks/1", _webhook(1, status="paused"))
+    ctx.http.mock_post(f"{BASE}/webhooks/2", _webhook(2, status="paused"))
+    result = await hw.apply_bulk_webhook_status(ctx, ApplyBulkWebhookStatusParams(
+        site_id="shop-test", webhook_ids=[1, 2], status="paused",
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success" and result.data.updated == 2
+
+
+async def test_apply_bulk_webhook_status_refuses_stale_token():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/webhooks/1", _webhook(1, status="active"))
+    result = await hw.apply_bulk_webhook_status(ctx, ApplyBulkWebhookStatusParams(
+        site_id="shop-test", webhook_ids=[1], status="paused", expected_state_token="0" * 64))
+    assert result.status == "error" and result.error_code == "WEBHOOK_BULK_STATE_CHANGED"

@@ -732,6 +732,37 @@ class BulkSeoMetaResult(sdl.Entity):
     failed_ids: list[int] = Field(default_factory=list)
 
 
+class BulkTermSeoMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    term_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit taxonomy term ids; 1-100, never inferred")
+    taxonomy: str | None = Field(default=None, description="Optional common taxonomy to disambiguate all term ids")
+    meta_title: str | None = Field(default=None, description="Same Rank Math SEO title to set on every target term; omit to leave unchanged")
+    meta_description: str | None = Field(default=None, description="Same Rank Math description to set on every target term; omit to leave unchanged")
+    canonical_url: str | None = Field(default=None, description="Same canonical URL to set on every target term; omit to leave unchanged")
+    robots: list[str] | None = Field(default=None, description="Same allowed robots directives to set on every target term; omit to leave unchanged")
+    focus_keyword: str | None = Field(default=None, description="Same focus keyword to set on every target term; omit to leave unchanged")
+    rich_snippet: str | None = Field(default=None, description="Same Rank Math schema type to set on every target term; omit to leave unchanged")
+
+
+class ApplyBulkTermSeoMetaParams(BulkTermSeoMetaParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any term SEO target changed")
+
+
+class BulkTermSeoMetaResult(sdl.Entity):
+    id: str = ""
+    title: str = "Term SEO batch"
+    kind: str = "wp_bulk_term_seo"
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
+
+
 class GetTermSeoMetaParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     term_id: int | None = Field(default=None, description="Numeric id of the category/tag term. Give this OR slug.")
@@ -831,6 +862,32 @@ class ApplyBulkUserRoleParams(BulkUserRoleParams):
 
 
 class BulkUserRoleResult(sdl.Entity):
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
+
+
+class BulkUserNameParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    user_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit WordPress user ids; 1-100, never inferred")
+    first_name: str | None = Field(default=None, description="Same first name to set on every target user; omit to leave unchanged")
+    last_name: str | None = Field(default=None, description="Same last name to set on every target user; omit to leave unchanged")
+
+
+class ApplyBulkUserNameParams(BulkUserNameParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any user changed")
+
+
+class BulkUserNameResult(sdl.Entity):
+    id: str = ""
+    title: str = "Bulk user name batch"
+    kind: str = "wp_bulk_user_name"
     preview: bool = True
     requested: int = 0
     matched: int = 0
@@ -1710,6 +1767,29 @@ class BulkUpdatePostStatusParams(ApplyBulkPostStatusParams):
     """Backward-compatible alias for the guarded bulk post-status apply payload."""
 
 
+class BulkPostCommentStatusParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit post/page ids; 1-100, never inferred")
+    post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug — all ids must share this type")
+    comment_status: str = Field(description="New comment status for every listed item: 'open' or 'closed'")
+
+
+class ApplyBulkPostCommentStatusParams(BulkPostCommentStatusParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any item changed")
+
+
+class BulkPostCommentStatusResult(sdl.Entity):
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
+
+
 class BulkPostStatusResult(sdl.Entity):
     preview: bool = True
     requested: int = 0
@@ -1911,6 +1991,31 @@ class SetRedirectStatusParams(BaseModel):
 
 class RedirectDeleteResult(sdl.Entity):
     deleted: bool = False
+
+
+class BulkRedirectStatusParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    redirect_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit redirect ids from list_redirects; 1-100, never inferred")
+    status: str = Field(description="New status for every target redirect: 'active', 'inactive', or 'trashed'")
+
+
+class ApplyBulkRedirectStatusParams(BulkRedirectStatusParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any target redirect changed")
+
+
+class BulkRedirectStatusResult(sdl.Entity):
+    id: str = ""
+    title: str = "Redirect status batch"
+    kind: str = "wp_bulk_redirect_status"
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
 
 
 class UpdateSiteSettingsParams(BaseModel):
@@ -2218,6 +2323,28 @@ class UpdateTermMetaParams(BaseModel):
 class TermMetaUpdateResult(sdl.Entity):
     term_id: int = 0
     updated: list[str] = Field(default_factory=list)
+
+
+class BulkTermMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    term_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit taxonomy term ids; 1-100, never inferred")
+    meta: dict = Field(min_length=1, description="The same plain safe meta key/value pairs to set on every explicit target")
+
+
+class ApplyBulkTermMetaParams(BulkTermMetaParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any target meta changed")
+
+
+class BulkTermMetaResult(sdl.Entity):
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
 
 
 class DeleteTermMetaParams(BaseModel):
@@ -2621,6 +2748,31 @@ class DeleteWebhookParams(BaseModel):
 
 class WebhookDeleteResult(sdl.Entity):
     deleted: bool = False
+
+
+class BulkWebhookStatusParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    webhook_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit webhook ids from list_registered_webhooks; 1-100, never inferred")
+    status: str = Field(description="New status for every target webhook: 'active', 'paused', or 'disabled'")
+
+
+class ApplyBulkWebhookStatusParams(BulkWebhookStatusParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any target webhook changed")
+
+
+class BulkWebhookStatusResult(sdl.Entity):
+    id: str = ""
+    title: str = "Webhook status batch"
+    kind: str = "wc_bulk_webhook_status"
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
 
 
 class BlockPattern(sdl.Entity):

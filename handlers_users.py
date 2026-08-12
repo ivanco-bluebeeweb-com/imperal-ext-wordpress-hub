@@ -15,7 +15,10 @@ from imperal_sdk import ActionResult
 
 from app import chat
 from models import (
+    ApplyBulkUserNameParams,
     ApplyBulkUserRoleParams,
+    BulkUserNameParams,
+    BulkUserNameResult,
     BulkUserRoleParams,
     BulkUserRoleResult,
     CreateUserParams,
@@ -262,6 +265,98 @@ async def apply_bulk_user_role(ctx, params: ApplyBulkUserRoleParams) -> ActionRe
         return ActionResult.error("No user role changes were applied.", retryable=True,
                                   code="WP_USER_BULK_ALL_FAILED")
     summary = f"Updated {len(updated_ids)} user role(s) to '{role}'"
+    if failed_ids:
+        summary += f"; {len(failed_ids)} failed"
+    return ActionResult.success(result, summary=summary, refresh_panels=["center"])
+
+
+async def _bulk_user_name_targets(ctx, params: BulkUserNameParams):
+    if params.first_name is None and params.last_name is None:
+        return None, ActionResult.error("Provide at least one of first_name or last_name to change.",
+                                        retryable=False, code="WP_USER_INVALID_REQUEST")
+    if len(set(params.user_ids)) != len(params.user_ids):
+        return None, ActionResult.error("Each user id may appear only once.", retryable=False,
+                                        code="WP_USER_DUPLICATE_IDS")
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, err
+    base_url, username, pw = auth
+    users = []
+    for user_id in params.user_ids:
+        response = await wp_get(ctx, base_url, f"/wp-json/wp/v2/users/{user_id}",
+                                username=username, app_password=pw, params={"context": "edit"})
+        if response.status_code != 200 or not isinstance(response.body, dict):
+            return None, _failure(response.status_code, response.body)
+        users.append(response.body)
+    return (base_url, username, pw, users), None
+
+
+def _user_name_token(users: list[dict]) -> str:
+    state = [{"id": item.get("id"), "first_name": item.get("first_name", ""),
+              "last_name": item.get("last_name", ""), "modified": item.get("modified", "")}
+             for item in sorted(users, key=lambda value: value.get("id", 0))]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+@chat.function(
+    "preview_bulk_user_name",
+    description="Preview setting the same first and/or last name on 1-100 explicit WordPress users. Makes no writes and returns the exact token required to apply.",
+    action_type="read", data_model=BulkUserNameResult,
+)
+async def preview_bulk_user_name(ctx, params: BulkUserNameParams) -> ActionResult:
+    """Read every explicit user and show the reviewed name change."""
+    targets, err = await _bulk_user_name_targets(ctx, params)
+    if err:
+        return err
+    _, _, _, users = targets
+    parts = []
+    if params.first_name is not None:
+        parts.append(f"first_name → '{params.first_name}'")
+    if params.last_name is not None:
+        parts.append(f"last_name → '{params.last_name}'")
+    return ActionResult.success(BulkUserNameResult(
+        id=params.site_id, preview=True, requested=len(params.user_ids), matched=len(users),
+        state_token=_user_name_token(users),
+        changes=[f"#{item['id']}: {', '.join(parts)}" for item in users],
+    ), summary=f"Previewed {len(users)} user name change(s); no changes made.")
+
+
+@chat.function(
+    "apply_bulk_user_name",
+    description="Apply a previously previewed first/last name change to 1-100 explicit WordPress users. Stops before all writes if any user changed.",
+    action_type="write", data_model=BulkUserNameResult,
+    effects=["wp.user_update"], event="wordpress-hub.apply_bulk_user_name",
+)
+async def apply_bulk_user_name(ctx, params: ApplyBulkUserNameParams) -> ActionResult:
+    """Recheck every user before applying a reviewed explicit name batch."""
+    targets, err = await _bulk_user_name_targets(ctx, params)
+    if err:
+        return err
+    base_url, username, pw, users = targets
+    token = _user_name_token(users)
+    if token != params.expected_state_token:
+        return ActionResult.error("One or more users changed after preview; preview again before applying.",
+                                  retryable=False, code="WP_USER_NAME_BULK_STATE_CHANGED")
+    payload = {}
+    if params.first_name is not None:
+        payload["first_name"] = params.first_name
+    if params.last_name is not None:
+        payload["last_name"] = params.last_name
+    updated_ids, failed_ids = [], []
+    for item in users:
+        user_id = int(item["id"])
+        response = await wp_request(ctx, "post", base_url, f"/wp-json/wp/v2/users/{user_id}",
+                                    username=username, app_password=pw, json=payload)
+        (updated_ids if 200 <= response.status_code < 300 else failed_ids).append(user_id)
+    result = BulkUserNameResult(
+        id=params.site_id, preview=False, requested=len(params.user_ids), matched=len(users),
+        updated=len(updated_ids), failed=len(failed_ids), state_token=token,
+        updated_ids=updated_ids, failed_ids=failed_ids,
+    )
+    if not updated_ids:
+        return ActionResult.error("No user name changes were applied.", retryable=True,
+                                  code="WP_USER_NAME_BULK_ALL_FAILED")
+    summary = f"Updated name on {len(updated_ids)} user(s)"
     if failed_ids:
         summary += f"; {len(failed_ids)} failed"
     return ActionResult.success(result, summary=summary, refresh_panels=["center"])

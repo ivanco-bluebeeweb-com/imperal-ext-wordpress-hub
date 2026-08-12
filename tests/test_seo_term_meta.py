@@ -21,7 +21,8 @@ from imperal_sdk.testing import MockContext
 import app  # noqa: F401
 import handlers_seo as hs
 import storage
-from models import GetTermSeoMetaParams, UpdateTermSeoMetaParams, SiteIdParams
+from models import (ApplyBulkTermSeoMetaParams, BulkTermSeoMetaParams,
+                    GetTermSeoMetaParams, UpdateTermSeoMetaParams, SiteIdParams)
 
 TERM = "https://x.com/wp-json/imperal/v1/seo/term"
 STATUS = "https://x.com/wp-json/imperal/v1/seo/status"
@@ -92,6 +93,34 @@ def _term_payload(**over):
 
 
 # ── reading ──────────────────────────────────────────────────────────────────
+
+async def test_preview_and_apply_bulk_term_seo_meta():
+    ctx = await _ctx()
+    first = _term_payload(id=11, slug="sisteme")
+    second = _term_payload(id=12, slug="electrice")
+    for payload in (first, second):
+        ctx.http.mock_get(TERM, payload, 200)
+    preview = await hs.preview_bulk_term_seo_meta(ctx, BulkTermSeoMetaParams(
+        site_id="x-com", term_ids=[11, 12], meta_title="New title"))
+    assert preview.status == "success" and preview.data.preview is True
+    assert preview.data.matched == 2
+
+    for payload in (first, second):
+        ctx.http.mock_get(TERM, payload, 200)
+    ctx.http.mock_post(TERM, {**first, "meta_title": "New title", "updated_fields": ["meta_title"]}, 200)
+    result = await hs.apply_bulk_term_seo_meta(ctx, ApplyBulkTermSeoMetaParams(
+        site_id="x-com", term_ids=[11, 12], meta_title="New title",
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success" and result.data.updated == 2
+
+
+async def test_apply_bulk_term_seo_meta_refuses_stale_token():
+    ctx = await _ctx()
+    ctx.http.mock_get(TERM, _term_payload(id=11), 200)
+    result = await hs.apply_bulk_term_seo_meta(ctx, ApplyBulkTermSeoMetaParams(
+        site_id="x-com", term_ids=[11], meta_title="New title", expected_state_token="0" * 64))
+    assert result.status == "error" and result.error_code == "SEO_BULK_STATE_CHANGED"
+
 
 async def test_get_reads_term_title_and_description():
     ctx = await _ctx()

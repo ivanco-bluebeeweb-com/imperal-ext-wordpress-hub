@@ -32,7 +32,8 @@ import uuid
 from imperal_sdk import ActionResult, sdl
 
 from app import chat
-from models import (ApplyBulkSeoMetaParams, BulkSeoMetaParams, BulkSeoMetaResult,
+from models import (ApplyBulkSeoMetaParams, ApplyBulkTermSeoMetaParams, BulkSeoMetaParams,
+                    BulkSeoMetaResult, BulkTermSeoMetaParams, BulkTermSeoMetaResult,
                     GetSeoMetaParams, UpdateSeoMetaParams, GetTermSeoMetaParams,
                     UpdateTermSeoMetaParams, SeoMeta, SiteIdParams)
 from wp_client import wp_get, wp_post, wp_error_message, wp_error_code
@@ -634,6 +635,119 @@ def _term_summary(entity: SeoMeta) -> str:
         return f"{label}: " + ", ".join(bits)
     return (f"{label}: no Rank Math title or description set — Rank Math falls back "
             "to its archive template for this taxonomy.")
+
+
+def _bulk_term_seo_fields(params: BulkTermSeoMetaParams):
+    fields = {name: getattr(params, name) for name in (
+        "meta_title", "meta_description", "focus_keyword", "canonical_url", "robots", "rich_snippet")
+        if getattr(params, name) is not None}
+    if not fields:
+        return None, ActionResult.error("Provide at least one SEO field to change.", retryable=False,
+                                        code="SEO_INVALID_REQUEST")
+    if params.robots is not None:
+        invalid = [value for value in params.robots if value not in ROBOTS_CHOICES]
+        if invalid:
+            return None, ActionResult.error(
+                f"Unsupported robots value(s): {', '.join(invalid)}.", retryable=False,
+                code="SEO_INVALID_REQUEST")
+    return fields, None
+
+
+def _term_seo_state_token(items: list) -> str:
+    state = [{"id": item.post_id, "taxonomy": item.taxonomy, "meta_title": item.meta_title,
+              "meta_description": item.meta_description, "focus_keyword": item.focus_keyword,
+              "canonical_url": item.canonical_url, "robots": sorted(item.robots),
+              "rich_snippet": item.rich_snippet}
+             for item in sorted(items, key=lambda value: value.post_id)]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_term_seo_targets(ctx, params: BulkTermSeoMetaParams):
+    fields, field_err = _bulk_term_seo_fields(params)
+    if field_err:
+        return None, field_err
+    if len(set(params.term_ids)) != len(params.term_ids):
+        return None, ActionResult.error("Each term id may appear only once.", retryable=False,
+                                        code="SEO_DUPLICATE_IDS")
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, err
+    base_url, username, pw = auth
+    items = []
+    for term_id in params.term_ids:
+        query = {"id": term_id}
+        if params.taxonomy:
+            query["taxonomy"] = params.taxonomy.strip()
+        try:
+            response = await wp_get(ctx, base_url, BRIDGE_TERM_PATH, username=username,
+                                    app_password=pw, params=_cache_busted(query))
+        except Exception as exc:
+            await ctx.log(f"bulk term SEO read #{term_id} failed: {exc}", level="error")
+            return None, ActionResult.error("Could not reach the site — try again.", retryable=True,
+                                            code="WP_UNREACHABLE")
+        if response.status_code == 404 and isinstance(response.body, dict) and response.body.get("code") == "rest_no_route":
+            return None, _term_bridge_missing()
+        if response.status_code != 200 or not isinstance(response.body, dict):
+            return None, _http_failure(response.status_code, response.body)
+        item = _term_entity(response.body, base_url)
+        if item.seo_plugin == "none":
+            return None, ActionResult.error("Rank Math is not active on this site.", retryable=False,
+                                            code="SEO_PLUGIN_MISSING")
+        items.append(item)
+    return (base_url, username, pw, fields, items), None
+
+
+@chat.function(
+    "preview_bulk_term_seo_meta",
+    description="Preview setting the same Rank Math SEO fields on 1-100 explicit taxonomy terms (categories/tags). Makes no writes and returns the exact token required to apply.",
+    action_type="read", data_model=BulkTermSeoMetaResult,
+)
+async def preview_bulk_term_seo_meta(ctx, params: BulkTermSeoMetaParams) -> ActionResult:
+    """Return a no-write reviewed term SEO batch diff and its state token."""
+    targets, err = await _bulk_term_seo_targets(ctx, params)
+    if err:
+        return err
+    _, _, _, fields, items = targets
+    return ActionResult.success(BulkTermSeoMetaResult(
+        id=params.site_id, preview=True,
+        requested=len(params.term_ids), matched=len(items), state_token=_term_seo_state_token(items),
+        changes=[f"#{item.post_id}: set {', '.join(sorted(fields))}" for item in items]),
+        summary=f"Preview: {len(items)} term SEO item(s) would be updated; no changes made.")
+
+
+@chat.function(
+    "apply_bulk_term_seo_meta",
+    description="Apply a previously previewed Rank Math SEO meta change to 1-100 explicit taxonomy terms. Re-reads every target and stops before all writes if any state changed.",
+    action_type="write", data_model=BulkTermSeoMetaResult, effects=["wp.seo_bulk_update"],
+    event="wordpress-hub.apply_bulk_term_seo_meta",
+)
+async def apply_bulk_term_seo_meta(ctx, params: ApplyBulkTermSeoMetaParams) -> ActionResult:
+    """Recheck the term SEO batch snapshot, then apply the reviewed changes."""
+    targets, err = await _bulk_term_seo_targets(ctx, params)
+    if err:
+        return err
+    base_url, username, pw, fields, items = targets
+    if _term_seo_state_token(items) != params.expected_state_token:
+        return ActionResult.error("One or more term SEO targets changed since preview; preview again before applying.",
+                                  retryable=False, code="SEO_BULK_STATE_CHANGED")
+    updated_ids, failed_ids = [], []
+    for item in items:
+        payload = {"id": item.post_id, **fields}
+        if params.taxonomy:
+            payload["taxonomy"] = params.taxonomy.strip()
+        response = await wp_post(ctx, base_url, BRIDGE_TERM_PATH, username=username,
+                                 app_password=pw, json=payload)
+        if 200 <= response.status_code < 300:
+            updated_ids.append(item.post_id)
+        else:
+            failed_ids.append(item.post_id)
+    result = BulkTermSeoMetaResult(id=params.site_id, preview=False, requested=len(params.term_ids),
+                                   matched=len(items), updated=len(updated_ids), failed=len(failed_ids),
+                                   updated_ids=updated_ids, failed_ids=failed_ids)
+    if not updated_ids:
+        return ActionResult.error("No term SEO items were updated.", retryable=False, code="SEO_BULK_ALL_FAILED")
+    return ActionResult.success(result, summary=f"Updated SEO meta for {len(updated_ids)} term(s); {len(failed_ids)} failed.",
+                                refresh_panels=["center"])
 
 
 def _term_bridge_missing():

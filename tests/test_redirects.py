@@ -5,7 +5,14 @@ from imperal_sdk.testing import MockContext
 import app  # noqa: F401
 import handlers_redirects as hr
 import storage
-from models import CreateRedirectParams, DeleteRedirectParams, ListRedirectsParams, SetRedirectStatusParams
+from models import (
+    ApplyBulkRedirectStatusParams,
+    BulkRedirectStatusParams,
+    CreateRedirectParams,
+    DeleteRedirectParams,
+    ListRedirectsParams,
+    SetRedirectStatusParams,
+)
 
 BRIDGE = "https://shop.test/wp-json/imperal/v1/redirects"
 
@@ -42,6 +49,40 @@ async def test_list_redirects_maps_fields_and_sums_hits():
     assert len(result.data.items) == 2
     assert result.data.items[0].url_to == "/new/"
     assert "15 total hit" in result.summary
+
+
+async def test_preview_and_apply_bulk_redirect_status():
+    ctx = await _ctx()
+    rows = [_redirect(1, status="active"), _redirect(2, status="active")]
+    ctx.http.mock_get(BRIDGE, rows)
+    preview = await hr.preview_bulk_redirect_status(ctx, BulkRedirectStatusParams(
+        site_id="shop-test", redirect_ids=[1, 2], status="inactive"))
+    assert preview.status == "success" and preview.data.preview is True
+    assert preview.data.matched == 2
+
+    ctx.http.mock_get(BRIDGE, rows)
+    ctx.http.mock_post(f"{BRIDGE}/1/status", _redirect(1, status="inactive"))
+    ctx.http.mock_post(f"{BRIDGE}/2/status", _redirect(2, status="inactive"))
+    result = await hr.apply_bulk_redirect_status(ctx, ApplyBulkRedirectStatusParams(
+        site_id="shop-test", redirect_ids=[1, 2], status="inactive",
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success" and result.data.updated == 2
+
+
+async def test_apply_bulk_redirect_status_refuses_stale_token():
+    ctx = await _ctx()
+    ctx.http.mock_get(BRIDGE, [_redirect(1, status="active")])
+    result = await hr.apply_bulk_redirect_status(ctx, ApplyBulkRedirectStatusParams(
+        site_id="shop-test", redirect_ids=[1], status="inactive", expected_state_token="0" * 64))
+    assert result.status == "error" and result.error_code == "REDIRECT_BULK_STATE_CHANGED"
+
+
+async def test_preview_bulk_redirect_status_rejects_unknown_id():
+    ctx = await _ctx()
+    ctx.http.mock_get(BRIDGE, [_redirect(1, status="active")])
+    result = await hr.preview_bulk_redirect_status(ctx, BulkRedirectStatusParams(
+        site_id="shop-test", redirect_ids=[1, 99], status="inactive"))
+    assert result.status == "error" and result.error_code == "REDIRECT_NOT_FOUND"
 
 
 async def test_list_redirects_reports_bridge_missing():

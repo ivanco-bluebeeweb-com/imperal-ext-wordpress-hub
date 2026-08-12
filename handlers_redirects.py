@@ -12,6 +12,9 @@ from imperal_sdk import ActionResult, sdl
 
 from app import chat
 from models import (
+    ApplyBulkRedirectStatusParams,
+    BulkRedirectStatusParams,
+    BulkRedirectStatusResult,
     CreateRedirectParams,
     DeleteRedirectParams,
     ListRedirectsParams,
@@ -20,6 +23,9 @@ from models import (
     RedirectSource,
     SetRedirectStatusParams,
 )
+import hashlib
+import json
+
 import storage
 from wp_client import wp_error_code, wp_error_message, wp_get, wp_post, wp_request
 
@@ -213,3 +219,95 @@ async def set_redirect_status(ctx, params: SetRedirectStatusParams) -> ActionRes
         id=str(params.redirect_id), title=str(params.redirect_id), kind="wp_redirect", status=status)
     return ActionResult.success(result, summary=f"Redirect {params.redirect_id} is now {status}",
                                  refresh_panels=["center"])
+
+
+def _redirect_state_token(rows: list[dict]) -> str:
+    state = [{"id": row.get("id"), "status": row.get("status", ""), "updated": row.get("updated", "")}
+             for row in sorted(rows, key=lambda value: value.get("id", 0))]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_redirect_targets(ctx, params: BulkRedirectStatusParams):
+    status = params.status.strip().lower()
+    if status not in ("active", "inactive", "trashed"):
+        return None, ActionResult.error(
+            "status must be 'active', 'inactive', or 'trashed'.",
+            retryable=False, code="REDIRECT_INVALID_STATUS")
+    if len(set(params.redirect_ids)) != len(params.redirect_ids):
+        return None, ActionResult.error("Each redirect id may appear only once.", retryable=False,
+                                        code="REDIRECT_DUPLICATE_IDS")
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, err
+    base_url, username, pw = auth
+    r = await wp_get(ctx, base_url, BRIDGE_PATH, username=username, app_password=pw, params={"status": "all"})
+    if not 200 <= r.status_code < 300:
+        return None, _failure(r.status_code, r.body)
+    data = r.body if isinstance(r.body, list) else (r.body or {}).get("redirects", [])
+    if not isinstance(data, list):
+        data = []
+    by_id = {int(row.get("id", 0)): row for row in data if isinstance(row, dict)}
+    missing = [rid for rid in params.redirect_ids if rid not in by_id]
+    if missing:
+        return None, ActionResult.error(
+            f"Redirect id(s) not found: {', '.join(str(m) for m in missing)}. Run list_redirects first.",
+            retryable=False, code="REDIRECT_NOT_FOUND")
+    rows = [by_id[rid] for rid in params.redirect_ids]
+    return (base_url, username, pw, status, rows), None
+
+
+@chat.function(
+    "preview_bulk_redirect_status",
+    description="Preview changing status ('active'/'inactive'/'trashed') for 1-100 explicit Rank Math redirects. Makes no writes and returns the exact token required to apply.",
+    action_type="read", data_model=BulkRedirectStatusResult,
+)
+async def preview_bulk_redirect_status(ctx, params: BulkRedirectStatusParams) -> ActionResult:
+    """Read every explicit redirect target and return a reviewed batch diff."""
+    targets, err = await _bulk_redirect_targets(ctx, params)
+    if err:
+        return err
+    _, _, _, status, rows = targets
+    changes = [f"#{row.get('id')}: {row.get('status', '')} → {status}" for row in rows]
+    return ActionResult.success(BulkRedirectStatusResult(
+        id=params.site_id, title="Bulk redirect status preview", kind="wp_bulk_redirect_status", preview=True,
+        requested=len(params.redirect_ids), matched=len(rows),
+        state_token=_redirect_state_token(rows), changes=changes),
+        summary=f"Preview: {len(rows)} redirect(s) would become '{status}'")
+
+
+@chat.function(
+    "apply_bulk_redirect_status",
+    description="Apply a previewed status change to 1-100 explicit Rank Math redirects. Re-reads every target and stops before all writes if any redirect changed.",
+    action_type="write", data_model=BulkRedirectStatusResult,
+    effects=["wp.redirect_bulk_status_update"], event="wordpress-hub.apply_bulk_redirect_status",
+)
+async def apply_bulk_redirect_status(ctx, params: ApplyBulkRedirectStatusParams) -> ActionResult:
+    """Recheck the redirect batch snapshot, then apply the reviewed status change."""
+    targets, err = await _bulk_redirect_targets(ctx, params)
+    if err:
+        return err
+    base_url, username, pw, status, rows = targets
+    if _redirect_state_token(rows) != params.expected_state_token:
+        return ActionResult.error("One or more redirects changed since preview; preview again before applying.",
+                                  retryable=False, code="REDIRECT_BULK_STATE_CHANGED")
+    updated_ids, failed_ids = [], []
+    for row in rows:
+        rid = int(row.get("id", 0))
+        try:
+            resp = await wp_post(ctx, base_url, f"{BRIDGE_PATH}/{rid}/status",
+                                 username=username, app_password=pw, json={"status": status})
+        except Exception as exc:
+            await ctx.log(f"bulk redirect status #{rid} failed: {exc}", level="error")
+            failed_ids.append(rid)
+            continue
+        if 200 <= resp.status_code < 300:
+            updated_ids.append(rid)
+        else:
+            failed_ids.append(rid)
+    result = BulkRedirectStatusResult(id=params.site_id, preview=False, requested=len(params.redirect_ids),
+                                      matched=len(rows), updated=len(updated_ids), failed=len(failed_ids),
+                                      updated_ids=updated_ids, failed_ids=failed_ids)
+    if not updated_ids:
+        return ActionResult.error("No redirects were updated.", retryable=True, code="REDIRECT_BULK_ALL_FAILED")
+    return ActionResult.success(result, summary=f"Set {len(updated_ids)} redirect(s) to '{status}'; {len(failed_ids)} failed.",
+                                refresh_panels=["center"])

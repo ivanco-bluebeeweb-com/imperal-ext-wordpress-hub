@@ -14,7 +14,10 @@ from imperal_sdk import ActionResult, sdl
 
 from app import chat
 from models import (
+    ApplyBulkPostCommentStatusParams,
     ApplyBulkPostStatusParams,
+    BulkPostCommentStatusParams,
+    BulkPostCommentStatusResult,
     BulkPostStatusParams,
     BulkPostStatusResult,
     DeletePostParams,
@@ -260,6 +263,95 @@ async def bulk_update_post_status(ctx, params: ApplyBulkPostStatusParams) -> Act
     if not updated_ids:
         return ActionResult.error("WordPress did not update any requested posts.", retryable=True, code="POST_BULK_ALL_FAILED")
     return ActionResult.success(result, summary=f"Updated {len(updated_ids)} item(s) to '{status}'; {len(failed_ids)} failed", refresh_panels=["center"])
+
+
+def _comment_status_token(items: list[dict]) -> str:
+    state = [
+        {"id": int(item.get("id", 0)), "modified": item.get("modified_gmt", ""),
+         "comment_status": item.get("comment_status", "")}
+        for item in sorted(items, key=lambda row: int(row.get("id", 0)))
+    ]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_comment_status_targets(ctx, params: BulkPostCommentStatusParams):
+    comment_status = params.comment_status.strip().lower()
+    if comment_status not in ("open", "closed"):
+        return None, ActionResult.error(
+            f"Invalid comment_status '{params.comment_status}' — use 'open' or 'closed'.",
+            retryable=False, code="POST_INVALID_COMMENT_STATUS")
+    if len(set(params.post_ids)) != len(params.post_ids):
+        return None, ActionResult.error("Each post id may appear only once.", retryable=False, code="POST_DUPLICATE_IDS")
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, err
+    base_url, username, pw = auth
+    rest_base = _rest_base(params.post_type.strip() or "post")
+    items = []
+    for post_id in params.post_ids:
+        try:
+            response = await wp_get(ctx, base_url, f"/wp-json/wp/v2/{rest_base}/{post_id}",
+                                    username=username, app_password=pw, params={"context": "edit"})
+        except Exception as exc:
+            await ctx.log(f"bulk comment-status preview read #{post_id} failed: {exc}", level="error")
+            return None, ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")
+        if not 200 <= response.status_code < 300 or not isinstance(response.body, dict):
+            return None, _failure(response.status_code, response.body)
+        items.append(response.body)
+    return (base_url, username, pw, rest_base, comment_status, items), None
+
+
+@chat.function(
+    "preview_bulk_post_comment_status",
+    description="Preview changing the comment status (open/closed) for 1-100 explicit posts/pages/CPT items. Makes no writes and returns the exact state token required to apply.",
+    action_type="read", data_model=BulkPostCommentStatusResult,
+)
+async def preview_bulk_post_comment_status(ctx, params: BulkPostCommentStatusParams) -> ActionResult:
+    """Read every explicit target and produce a non-mutating comment-status diff."""
+    targets, err = await _bulk_comment_status_targets(ctx, params)
+    if err:
+        return err
+    _, _, _, _, comment_status, items = targets
+    changes = [f"#{item['id']} {wp_title(item) or '(untitled)'}: {item.get('comment_status', '')} → {comment_status}" for item in items]
+    result = BulkPostCommentStatusResult(
+        id=params.site_id, title="Bulk comment status preview", kind="wp_bulk_comment_status", preview=True,
+        requested=len(params.post_ids), matched=len(items), state_token=_comment_status_token(items), changes=changes,
+    )
+    return ActionResult.success(result, summary=f"Preview: {len(items)} item(s) → comments '{comment_status}'")
+
+
+@chat.function(
+    "apply_bulk_post_comment_status",
+    description="Apply a previewed comment-status change to 1-100 explicit posts/pages/CPT items. Requires the exact state token and performs no writes if any item changed since preview.",
+    action_type="write", data_model=BulkPostCommentStatusResult,
+    effects=["wp.post_bulk_comment_status_update"], event="wordpress-hub.apply_bulk_post_comment_status",
+)
+async def apply_bulk_post_comment_status(ctx, params: ApplyBulkPostCommentStatusParams) -> ActionResult:
+    """Apply a reviewed comment-status change only after all explicit targets still match preview."""
+    targets, err = await _bulk_comment_status_targets(ctx, params)
+    if err:
+        return err
+    base_url, username, pw, rest_base, comment_status, items = targets
+    if _comment_status_token(items) != params.expected_state_token:
+        return ActionResult.error("One or more posts changed since preview. Run preview_bulk_post_comment_status again.", retryable=False, code="POST_COMMENT_BULK_STATE_CHANGED")
+    updated_ids, failed_ids = [], []
+    for item in items:
+        post_id = int(item["id"])
+        try:
+            response = await wp_update_post(ctx, base_url, username, pw, post_id=post_id, post_type=rest_base, comment_status=comment_status)
+        except Exception as exc:
+            await ctx.log(f"bulk comment-status write #{post_id} failed: {exc}", level="error")
+            failed_ids.append(post_id)
+            continue
+        (updated_ids if 200 <= response.status_code < 300 else failed_ids).append(post_id)
+    result = BulkPostCommentStatusResult(
+        id=params.site_id, title="Bulk comment status result", kind="wp_bulk_comment_status", preview=False,
+        requested=len(params.post_ids), matched=len(items), updated=len(updated_ids), failed=len(failed_ids),
+        updated_ids=updated_ids, failed_ids=failed_ids,
+    )
+    if not updated_ids:
+        return ActionResult.error("WordPress did not update any requested posts.", retryable=True, code="POST_COMMENT_BULK_ALL_FAILED")
+    return ActionResult.success(result, summary=f"Updated comment status for {len(updated_ids)} item(s) to '{comment_status}'; {len(failed_ids)} failed", refresh_panels=["center"])
 
 
 @chat.function(
