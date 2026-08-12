@@ -139,7 +139,9 @@ async def test_sidebar_connected_badge_green():
         {"id": "x-com", "name": "X", "url": "https://x.com", "status": "connected"},
     )
     node = await panels.sidebar(ctx)
-    assert "green" in str(node)
+    s = str(node)
+    assert "green" in s
+    assert "Connected" in s
 
 
 async def test_sidebar_error_badge_red():
@@ -147,7 +149,64 @@ async def test_sidebar_error_badge_red():
         {"id": "x-com", "name": "X", "url": "https://x.com", "status": "error"},
     )
     node = await panels.sidebar(ctx)
-    assert "red" in str(node)
+    s = str(node)
+    assert "red" in s
+    assert "Error" in s
+
+
+async def test_sidebar_updates_badge_yellow():
+    ctx = await _ctx_with_sites(
+        {"id": "x-com", "name": "X", "url": "https://x.com", "status": "connected",
+         "pending_updates": 3},
+    )
+    node = await panels.sidebar(ctx)
+    s = str(node)
+    assert "yellow" in s
+    assert "Updates" in s
+
+
+async def test_sidebar_error_beats_updates_badge():
+    """An erroring site shows the red Error badge even if it also has pending
+    updates on record -- red always wins over yellow."""
+    ctx = await _ctx_with_sites(
+        {"id": "x-com", "name": "X", "url": "https://x.com", "status": "error",
+         "pending_updates": 5},
+    )
+    node = await panels.sidebar(ctx)
+    s = str(node)
+    assert "Error" in s
+    assert "Updates" not in s
+
+
+async def test_sidebar_has_no_refresh_all_button():
+    """User directive: Refresh All must be removed entirely — only the one
+    primary Connect Site button stays at the top."""
+    ctx = await _ctx_with_sites(
+        {"id": "x-com", "name": "X", "url": "https://x.com", "status": "connected"},
+    )
+    node = await panels.sidebar(ctx)
+    s = str(node)
+    assert "Refresh All" not in s
+    assert "refresh_all_sites" not in s
+
+
+async def test_sidebar_connect_button_is_primary_and_full_width():
+    ctx = MockContext()
+    node = await panels.sidebar(ctx)
+    s = str(node)
+    assert "'variant': 'primary'" in s
+    assert "'full_width': True" in s
+
+
+async def test_sidebar_has_no_avatar_lamp():
+    """User directive: the little colored square/dot left of the site name
+    must be gone entirely — status now lives only in the badge."""
+    ctx = await _ctx_with_sites(
+        {"id": "x-com", "name": "X", "url": "https://x.com", "status": "connected"},
+    )
+    node = await panels.sidebar(ctx)
+    s = str(node)
+    assert "'avatar'" not in s
 
 
 # ── center panel ──────────────────────────────────────────────────────────────

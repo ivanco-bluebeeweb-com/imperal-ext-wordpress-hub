@@ -1821,6 +1821,49 @@ actual `ui.Input`/`ui.Form` capabilities (no JSON/object widget exists — confi
 where a Pydantic-typed param submitted from a plain-string panel Input can silently fail
 validation before the handler ever runs).
 
+## 2026-08-12 — Sidebar redesign: one primary Connect Site button, badge-only status (v1.41.0)
+
+**Status:** ✅ done. User's exact ask: VPS sites sidebar should have exactly one primary
+button ("Connect Site") at the top; "Refresh All" button removed entirely; each site row
+shows just its domain name with a `ui.Badge` underneath instead of plain "Connected" text
+(green=connected, yellow=updates/plugin updates, red=critical error); the colored
+square/dot to the left of the site name is removed entirely.
+
+**Implementation (`panels.py`, `sidebar()`):**
+- `top_bar`: was a horizontal `ui.Stack` with two buttons (Connect Site + Refresh All in a
+  Tooltip). Now a single `ui.Button("Connect Site", variant="primary", full_width=True)` —
+  no Stack wrapper needed for one button.
+- Removed the "Refresh All" button and its Tooltip entirely from the sidebar. The
+  `refresh_all_sites` chat function itself is UNCHANGED and still callable from chat/DUI —
+  only the sidebar button was removed, per the user's literal ask ("Refresh all кнопку
+  нужно вообще убрать" was about the button, not the underlying capability). Left it in the
+  panel's `refresh=` event list so the sidebar still repaints if it's invoked from chat.
+- `_lamp()` deleted (was `ui.Badge(color=...)` passed to `ListItem(avatar=...)` — the
+  colored dot left of the site name). `avatar=` is no longer passed to `ListItem` at all.
+- `_site_badge_color()` renamed/expanded to `_site_status_badge()`, now returns a full
+  `ui.Badge(label=..., color=...)` instead of just a color string, passed to
+  `ListItem(badge=...)`: red "Error" (status == "error") beats yellow "Updates"
+  (pending_updates > 0) beats green "Connected" (default).
+- `_site_subtitle()` simplified: no longer emits the plain-text "connected"/"error"
+  fallback string (that's the badge's job now) or the "⚠️ N update(s)"/"✅ up to date"
+  text (also now the badge's job) — it's purely the technical WP/PHP version line, empty
+  string when SSH isn't configured (nothing else to show).
+- **Known gap, called out honestly rather than faked**: the user's example wording
+  mentioned a "comment updates" signal alongside plugin updates. No per-site comment-
+  moderation count is currently tracked anywhere in this app (`list_comments` is a live
+  per-site fetch, not persisted to the site record) — so the yellow "Updates" badge
+  currently only reflects `pending_updates` (plugin/theme/core, from `get_server_info` via
+  SSH or Bridge). Extending it to also count pending comment moderation would need a new
+  per-site tracked field and its own periodic check — not done here, flagged as an open
+  item if the user wants it.
+- `tests/test_panels.py`: rewrote `test_sidebar_connected_badge_green`/
+  `..._error_badge_red` to also assert the badge *label* text now shown, and added
+  `test_sidebar_updates_badge_yellow`, `test_sidebar_error_beats_updates_badge` (red wins
+  over yellow when both conditions are true), `test_sidebar_has_no_refresh_all_button`,
+  `test_sidebar_connect_button_is_primary_and_full_width`, `test_sidebar_has_no_avatar_lamp`.
+- 840/840 tests pass, `imperal validate` clean (0 errors/warnings, same pre-existing V12
+  info about no `@ext.on_install` hook). Version 1.40.0 → 1.41.0.
+
 ## 2026-08-12 — Detect 49 more WordPress builders/block-libraries (v1.40.0, Bridge 2.21.0)
 
 **Status:** ✅ done. User asked for a popularity-ranked list of ~50+ WordPress page

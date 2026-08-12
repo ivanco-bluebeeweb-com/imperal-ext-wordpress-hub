@@ -49,33 +49,34 @@ async def _sites_registry_installed(ctx) -> bool:
 # ── Left sidebar ──────────────────────────────────────────────────────────────
 
 def _site_subtitle(r: dict) -> str:
-    """Build a rich subtitle for a site list item."""
-    if r.get("ssh_host"):
-        parts = []
-        if r.get("wp_version"):
-            parts.append(f"WP {r['wp_version']}")
-        if r.get("php_version"):
-            parts.append(f"PHP {r['php_version']}")
-        updates = r.get("pending_updates", 0)
-        if updates:
-            parts.append(f"⚠️ {updates} update(s)")
-        elif r.get("wp_version"):
-            parts.append("✅ up to date")
-        return " · ".join(parts) if parts else r.get("status", "connected")
-    return r.get("status", "connected")
+    """Technical detail line under the site name -- WP/PHP version, only
+    available once SSH or the Bridge plugin has reported server info.
+    Connection health itself is conveyed by _site_status_badge(), not by
+    text here, so there is no "connected"/"error" fallback string anymore."""
+    if not r.get("ssh_host"):
+        return ""
+    parts = []
+    if r.get("wp_version"):
+        parts.append(f"WP {r['wp_version']}")
+    if r.get("php_version"):
+        parts.append(f"PHP {r['php_version']}")
+    return " · ".join(parts)
 
 
-def _site_badge_color(r: dict) -> str:
+def _site_status_badge(r: dict) -> ui.Badge:
+    """One status badge per site, red beats yellow beats green:
+    - red 'Error'      -- the last connectivity/health check failed.
+    - yellow 'Updates' -- connected fine, but has pending plugin/theme/core
+      updates (from get_server_info via SSH or the Bridge plugin). Comment-
+      moderation counts aren't tracked per-site yet, so they can't feed this
+      badge until that's added separately.
+    - green 'Connected' -- connected, nothing pending that we know of.
+    """
     if r.get("status") == "error":
-        return "red"
+        return ui.Badge(label="Error", color="red")
     if r.get("pending_updates", 0) > 0:
-        return "yellow"
-    return "green"
-
-
-def _lamp(r: dict) -> ui.Badge:
-    """Status indicator left of site name. ui.Html in avatar= doesn't render (BUG-002)."""
-    return ui.Badge(color=_site_badge_color(r))
+        return ui.Badge(label="Updates", color="yellow")
+    return ui.Badge(label="Connected", color="green")
 
 
 @ext.panel(
@@ -93,16 +94,8 @@ def _lamp(r: dict) -> ui.Badge:
 async def sidebar(ctx, active_site_id="", **kwargs):
     rows = await storage.list_site_records(ctx)
 
-    top_bar = ui.Stack(direction="h", gap=2, children=[
-        ui.Button("Connect Site", icon="Plus", variant="primary",
-                  on_click=ui.Call("__panel__center", view="connect", site_id="")),
-        ui.Tooltip(
-            content="Pings all connected sites in parallel, updates their stored status, and clears content caches so the next view fetches fresh data.",
-            children=ui.Button("Refresh All", icon="RefreshCw", variant="secondary",
-                               disabled=not rows,
-                               on_click=ui.Call("refresh_all_sites")),
-        ),
-    ])
+    top_bar = ui.Button("Connect Site", icon="Plus", variant="primary", full_width=True,
+                        on_click=ui.Call("__panel__center", view="connect", site_id=""))
 
     if not rows:
         site_list = ui.Empty(message="No sites connected yet.")
@@ -112,7 +105,7 @@ async def sidebar(ctx, active_site_id="", **kwargs):
                 id=r["id"],
                 title=urlparse(r.get("url", "")).netloc or r.get("name", r["id"]),
                 subtitle=_site_subtitle(r),
-                avatar=_lamp(r),
+                badge=_site_status_badge(r),
                 selected=(active_site_id == r["id"]),
                 on_click=ui.Call("__panel__center", view="", site_id=r["id"]),
                 actions=[
