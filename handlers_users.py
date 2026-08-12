@@ -6,6 +6,8 @@ contributor to editor, or offboarding someone -- had no path at all. These
 hit the native /wp/v2/users REST endpoints directly (Application Password
 auth, no Bridge/SSH needed).
 """
+import hashlib
+import json
 import secrets
 import string
 
@@ -13,6 +15,9 @@ from imperal_sdk import ActionResult
 
 from app import chat
 from models import (
+    ApplyBulkUserRoleParams,
+    BulkUserRoleParams,
+    BulkUserRoleResult,
     CreateUserParams,
     DeleteUserParams,
     PasswordResetParams,
@@ -23,7 +28,7 @@ from models import (
     WPUser,
 )
 import storage
-from wp_client import wp_error_code, wp_error_message, wp_post, wp_request
+from wp_client import wp_error_code, wp_error_message, wp_get, wp_post, wp_request
 
 _VALID_ROLES = {"administrator", "editor", "author", "contributor", "subscriber"}
 
@@ -172,6 +177,94 @@ async def update_user(ctx, params: UpdateUserParams) -> ActionResult:
     entity = _user_entity(response.body if isinstance(response.body, dict) else {})
     return ActionResult.success(
         entity, summary=f"Updated user {entity.title} (#{entity.id})", refresh_panels=["center"])
+
+
+def _user_state_token(users: list[dict]) -> str:
+    state = [
+        {"id": int(item.get("id", 0)), "roles": sorted(item.get("roles", [])),
+         "email": item.get("email", ""), "modified": item.get("modified", "")}
+        for item in sorted(users, key=lambda user: int(user.get("id", 0)))
+    ]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_user_targets(ctx, params: BulkUserRoleParams):
+    role = params.role.strip().lower()
+    if role not in _VALID_ROLES:
+        return None, ActionResult.error(
+            f"Invalid role '{params.role}' — use one of: {', '.join(sorted(_VALID_ROLES))}.",
+            retryable=False, code="WP_USER_INVALID_ROLE")
+    if len(set(params.user_ids)) != len(params.user_ids):
+        return None, ActionResult.error("Each user id may appear only once.", retryable=False,
+                                        code="WP_USER_DUPLICATE_IDS")
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, err
+    base_url, username, pw = auth
+    users = []
+    for user_id in params.user_ids:
+        response = await wp_get(ctx, base_url, f"/wp-json/wp/v2/users/{user_id}",
+                                username=username, app_password=pw, params={"context": "edit"})
+        if response.status_code != 200 or not isinstance(response.body, dict):
+            return None, _failure(response.status_code, response.body)
+        users.append(response.body)
+    return (base_url, username, pw, users), None
+
+
+@chat.function(
+    "preview_bulk_user_role",
+    description="Preview changing the role for 1-100 explicit WordPress users. Makes no writes and returns the exact token required to apply.",
+    action_type="read", data_model=BulkUserRoleResult,
+)
+async def preview_bulk_user_role(ctx, params: BulkUserRoleParams) -> ActionResult:
+    """Read every explicit user and show the reviewed role change."""
+    targets, err = await _bulk_user_targets(ctx, params)
+    if err:
+        return err
+    _, _, _, users = targets
+    role = params.role.strip().lower()
+    return ActionResult.success(BulkUserRoleResult(
+        id=params.site_id, title="Bulk user role preview", kind="wp_bulk_user_role",
+        preview=True, requested=len(params.user_ids), matched=len(users), state_token=_user_state_token(users),
+        changes=[f"#{item['id']}: {', '.join(item.get('roles', [])) or '(none)'} → {role}" for item in users],
+    ), summary=f"Previewed {len(users)} user role change(s); no changes made.")
+
+
+@chat.function(
+    "apply_bulk_user_role",
+    description="Apply a previously previewed role change to 1-100 explicit WordPress users. Stops before all writes if any user changed.",
+    action_type="write", data_model=BulkUserRoleResult,
+    effects=["wp.user_update"], event="wordpress-hub.apply_bulk_user_role",
+)
+async def apply_bulk_user_role(ctx, params: ApplyBulkUserRoleParams) -> ActionResult:
+    """Recheck every user before applying a reviewed explicit role batch."""
+    targets, err = await _bulk_user_targets(ctx, params)
+    if err:
+        return err
+    base_url, username, pw, users = targets
+    token = _user_state_token(users)
+    if token != params.expected_state_token:
+        return ActionResult.error("One or more users changed after preview; preview again before applying.",
+                                  retryable=False, code="WP_USER_BULK_STATE_CHANGED")
+    role = params.role.strip().lower()
+    updated_ids, failed_ids = [], []
+    for item in users:
+        user_id = int(item["id"])
+        response = await wp_request(ctx, "post", base_url, f"/wp-json/wp/v2/users/{user_id}",
+                                    username=username, app_password=pw, json={"roles": [role]})
+        (updated_ids if 200 <= response.status_code < 300 else failed_ids).append(user_id)
+    result = BulkUserRoleResult(
+        id=params.site_id, title="Bulk user role applied", kind="wp_bulk_user_role", preview=False,
+        requested=len(params.user_ids), matched=len(users), updated=len(updated_ids), failed=len(failed_ids),
+        state_token=token, updated_ids=updated_ids, failed_ids=failed_ids,
+    )
+    if not updated_ids:
+        return ActionResult.error("No user role changes were applied.", retryable=True,
+                                  code="WP_USER_BULK_ALL_FAILED")
+    summary = f"Updated {len(updated_ids)} user role(s) to '{role}'"
+    if failed_ids:
+        summary += f"; {len(failed_ids)} failed"
+    return ActionResult.success(result, summary=summary, refresh_panels=["center"])
 
 
 @chat.function(

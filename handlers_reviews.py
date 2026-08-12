@@ -7,10 +7,16 @@ but this was a WooCommerce-specific gap: store owners had list_comments
 (which does NOT include product reviews) but no way to see or act on the
 reviews actually driving purchase decisions on their catalogue.
 """
+import hashlib
+import json
+
 from imperal_sdk import ActionResult, sdl
 
 from app import chat
 from models import (
+    ApplyBulkProductReviewStatusParams,
+    BulkProductReviewStatusParams,
+    BulkProductReviewStatusResult,
     Comment,
     ListProductReviewsParams,
     ProductReview,
@@ -145,6 +151,104 @@ async def set_product_review_status(ctx, params: SetProductReviewStatusParams) -
     entity = _review_entity(r.body if isinstance(r.body, dict) else {})
     return ActionResult.success(entity, summary=f"Review {params.review_id} set to '{status}'",
                                  refresh_panels=["center"])
+
+
+def _review_state_token(reviews: list[dict]) -> str:
+    state = [
+        {"id": int(item.get("id", 0)), "status": item.get("status", ""),
+         "date_created": item.get("date_created", ""), "review": item.get("review", "")}
+        for item in sorted(reviews, key=lambda review: int(review.get("id", 0)))
+    ]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_review_targets(ctx, params: BulkProductReviewStatusParams):
+    status = params.status.strip().lower()
+    if status not in {"approved", "hold", "spam", "trash"}:
+        return None, ActionResult.error("Use approved, hold, spam, or trash.", retryable=False,
+                                        code="WC_REVIEW_INVALID_STATUS")
+    if len(set(params.review_ids)) != len(params.review_ids):
+        return None, ActionResult.error("Each review id may appear only once.", retryable=False,
+                                        code="WC_REVIEW_DUPLICATE_IDS")
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, err
+    base_url, username, pw = auth
+    reviews = []
+    for review_id in params.review_ids:
+        try:
+            response = await wp_get(ctx, base_url, f"{WC_BASE}/products/reviews/{review_id}",
+                                    username=username, app_password=pw)
+        except Exception as exc:
+            await ctx.log(f"bulk review read #{review_id} failed: {exc}", level="error")
+            return None, ActionResult.error("Could not reach the site — try again.", retryable=True,
+                                            code="WP_UNREACHABLE")
+        if response.status_code != 200 or not isinstance(response.body, dict):
+            return None, _failure(response.status_code, response.body)
+        reviews.append(response.body)
+    return (base_url, username, pw, reviews), None
+
+
+@chat.function(
+    "preview_bulk_product_review_status",
+    description="Preview changing moderation status for 1-100 explicit WooCommerce product reviews. Makes no writes and returns the exact token required to apply.",
+    action_type="read", data_model=BulkProductReviewStatusResult,
+)
+async def preview_bulk_product_review_status(ctx, params: BulkProductReviewStatusParams) -> ActionResult:
+    """Read every listed review and show the exact safe moderation batch."""
+    targets, err = await _bulk_review_targets(ctx, params)
+    if err:
+        return err
+    _, _, _, reviews = targets
+    status = params.status.strip().lower()
+    return ActionResult.success(BulkProductReviewStatusResult(
+        id=params.site_id, title="Bulk product review status preview", kind="wc_bulk_review_status",
+        preview=True, requested=len(params.review_ids), matched=len(reviews),
+        state_token=_review_state_token(reviews),
+        changes=[f"#{item['id']}: {item.get('status', '')} → {status}" for item in reviews],
+    ), summary=f"Previewed {len(reviews)} product review status change(s); no changes made.")
+
+
+@chat.function(
+    "apply_bulk_product_review_status",
+    description="Apply a previously previewed product-review moderation status change to 1-100 explicit review ids. Stops before all writes if any review changed.",
+    action_type="write", data_model=BulkProductReviewStatusResult,
+    effects=["wc.product_review_status_update"], event="wordpress-hub.apply_bulk_product_review_status",
+)
+async def apply_bulk_product_review_status(ctx, params: ApplyBulkProductReviewStatusParams) -> ActionResult:
+    """Atomically recheck the reviewed snapshot, then apply explicit review statuses."""
+    targets, err = await _bulk_review_targets(ctx, params)
+    if err:
+        return err
+    base_url, username, pw, reviews = targets
+    token = _review_state_token(reviews)
+    if token != params.expected_state_token:
+        return ActionResult.error("One or more product reviews changed after preview; preview again before applying.",
+                                  retryable=False, code="WC_REVIEW_BULK_STATE_CHANGED")
+    status = params.status.strip().lower()
+    updated_ids, failed_ids = [], []
+    for item in reviews:
+        review_id = int(item["id"])
+        try:
+            response = await wp_request(ctx, "put", base_url, f"{WC_BASE}/products/reviews/{review_id}",
+                                        username=username, app_password=pw, json={"status": status})
+        except Exception as exc:
+            await ctx.log(f"bulk review write #{review_id} failed: {exc}", level="error")
+            failed_ids.append(review_id)
+            continue
+        (updated_ids if 200 <= response.status_code < 300 else failed_ids).append(review_id)
+    result = BulkProductReviewStatusResult(
+        id=params.site_id, title="Bulk product review status applied", kind="wc_bulk_review_status",
+        preview=False, requested=len(params.review_ids), matched=len(reviews), updated=len(updated_ids),
+        failed=len(failed_ids), state_token=token, updated_ids=updated_ids, failed_ids=failed_ids,
+    )
+    if not updated_ids:
+        return ActionResult.error("No product-review status changes were applied.", retryable=True,
+                                  code="WC_REVIEW_BULK_ALL_FAILED")
+    summary = f"Updated {len(updated_ids)} product review(s) to '{status}'"
+    if failed_ids:
+        summary += f"; {len(failed_ids)} failed"
+    return ActionResult.success(result, summary=summary, refresh_panels=["center"])
 
 
 @chat.function(

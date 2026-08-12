@@ -681,6 +681,28 @@ class UpdateUserParams(BaseModel):
     last_name: str | None = Field(default=None, description="New last name")
 
 
+class BulkUserRoleParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    user_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit WordPress user ids; 1-100, never inferred")
+    role: str = Field(description="New role for every listed user: administrator, editor, author, contributor, or subscriber")
+
+
+class ApplyBulkUserRoleParams(BulkUserRoleParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any user changed")
+
+
+class BulkUserRoleResult(sdl.Entity):
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
+
+
 class UserCreateResult(sdl.Entity):
     """Result of create_user -- carries the generated password ONCE, if one was generated."""
     role: str = ""
@@ -1527,6 +1549,28 @@ class SetProductReviewStatusParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     review_id: int = Field(gt=0, description="Numeric review id from list_product_reviews")
     status: str = Field(description="New status: 'approved' (publish), 'hold' (unapprove/pending), 'spam', or 'trash'")
+
+
+class BulkProductReviewStatusParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    review_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit WooCommerce product review ids; 1-100, never inferred")
+    status: str = Field(description="New status for every listed review: approved, hold, spam, or trash")
+
+
+class ApplyBulkProductReviewStatusParams(BulkProductReviewStatusParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any review changed")
+
+
+class BulkProductReviewStatusResult(sdl.Entity):
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
 
 
 class ReplyToProductReviewParams(BaseModel):

@@ -5,7 +5,13 @@ from imperal_sdk.testing import MockContext
 import app  # noqa: F401
 import handlers_reviews as hr
 import storage
-from models import ListProductReviewsParams, ReplyToProductReviewParams, SetProductReviewStatusParams
+from models import (
+    ApplyBulkProductReviewStatusParams,
+    BulkProductReviewStatusParams,
+    ListProductReviewsParams,
+    ReplyToProductReviewParams,
+    SetProductReviewStatusParams,
+)
 
 WC_BASE = "https://shop.test/wp-json/wc/v3"
 
@@ -67,6 +73,36 @@ async def test_set_product_review_status_rejects_invalid_status():
         ctx, SetProductReviewStatusParams(site_id="shop-test", review_id=5, status="bogus"))
     assert result.status == "error"
     assert result.error_code == "WC_REVIEW_INVALID_STATUS"
+
+
+async def test_preview_and_apply_bulk_product_review_status():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{WC_BASE}/products/reviews/5", _review(5))
+    ctx.http.mock_get(f"{WC_BASE}/products/reviews/6", _review(6))
+    preview = await hr.preview_bulk_product_review_status(ctx, BulkProductReviewStatusParams(
+        site_id="shop-test", review_ids=[5, 6], status="approved"))
+    assert preview.status == "success"
+    assert preview.data.preview is True
+
+    ctx.http.mock_get(f"{WC_BASE}/products/reviews/5", _review(5))
+    ctx.http.mock_get(f"{WC_BASE}/products/reviews/6", _review(6))
+    for review_id in (5, 6):
+        ctx.http._mocks.append(("PUT", f"{WC_BASE}/products/reviews/{review_id}",
+                                _review(review_id, status="approved"), 200, {}))
+    result = await hr.apply_bulk_product_review_status(ctx, ApplyBulkProductReviewStatusParams(
+        site_id="shop-test", review_ids=[5, 6], status="approved",
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success"
+    assert result.data.updated_ids == [5, 6]
+
+
+async def test_apply_bulk_product_review_status_refuses_stale_token():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{WC_BASE}/products/reviews/5", _review(5))
+    result = await hr.apply_bulk_product_review_status(ctx, ApplyBulkProductReviewStatusParams(
+        site_id="shop-test", review_ids=[5], status="spam", expected_state_token="0" * 64))
+    assert result.status == "error"
+    assert result.error_code == "WC_REVIEW_BULK_STATE_CHANGED"
 
 
 async def test_reply_to_product_review_looks_up_parent_product_then_posts_comment():

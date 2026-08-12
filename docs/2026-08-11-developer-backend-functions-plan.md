@@ -505,6 +505,10 @@ the entire apply operation before it can write.
   on 1–100 explicit post/page/CPT ids, through Bridge section 9.
 - `preview_bulk_comment_status` + `apply_bulk_comment_status` — comment moderation
   for 1–100 explicit ids via native WordPress REST.
+- `preview_bulk_product_review_status` + `apply_bulk_product_review_status` —
+  WooCommerce review moderation for 1–100 explicit review ids.
+- `preview_bulk_user_role` + `apply_bulk_user_role` — role changes for 1–100
+  explicit WordPress users; roles are allowlisted to core roles.
 
 Preview is 40 credits and guarded batch application is 60 credits. Reads are never
 charged zero: zero remains reserved only for fair local connection/access actions
