@@ -215,5 +215,10 @@
   "update_imperal_bridge": 16,
   "list_network_sites": 8,
   "list_network_plugins": 8,
-  "create_network_site": 16
+  "create_network_site": 16,
+  "preview_bulk_post_status": 40,
+  "preview_bulk_post_meta": 40,
+  "apply_bulk_post_meta": 60,
+  "preview_bulk_comment_status": 40,
+  "apply_bulk_comment_status": 60
 }

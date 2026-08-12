@@ -470,6 +470,28 @@ class SetCommentStatusParams(BaseModel):
     status: str = Field(description="New status: 'approved' (publish), 'hold' (unapprove/pending), 'spam', or 'trash'")
 
 
+class BulkCommentStatusParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    comment_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit comment ids; 1-100, never inferred")
+    status: str = Field(description="New status for every listed comment: approved, hold, spam, or trash")
+
+
+class ApplyBulkCommentStatusParams(BulkCommentStatusParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any comment changed")
+
+
+class BulkCommentStatusResult(sdl.Entity):
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
+
+
 class ReplyToCommentParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     comment_id: int = Field(gt=0, description="Numeric WordPress comment id being replied to, from list_comments")
@@ -1425,14 +1447,29 @@ class DuplicatePostParams(BaseModel):
     title_suffix: str = Field(default=" (Copy)", description="Text appended to the duplicated title")
 
 
-class BulkUpdatePostStatusParams(BaseModel):
+class BulkPostStatusParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
-    post_ids: list[int] = Field(min_length=1, max_length=50, description="Explicit post/page ids; 1-50, never inferred")
+    post_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit post/page ids; 1-100, never inferred")
     post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug — all ids must share this type")
     status: str = Field(description="New status for every listed post: publish, draft, pending, private, or trash")
 
 
+class ApplyBulkPostStatusParams(BulkPostStatusParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token returned by preview; execution stops before all writes if any post changed")
+
+
+class BulkUpdatePostStatusParams(ApplyBulkPostStatusParams):
+    """Backward-compatible alias for the guarded bulk post-status apply payload."""
+
+
 class BulkPostStatusResult(sdl.Entity):
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
     updated_ids: list[int] = Field(default_factory=list)
     failed_ids: list[int] = Field(default_factory=list)
 
@@ -1794,6 +1831,28 @@ class UpdatePostMetaParams(BaseModel):
 class PostMetaUpdateResult(sdl.Entity):
     post_id: int = 0
     updated: list[str] = Field(default_factory=list)
+
+
+class BulkPostMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit post/page/CPT ids; 1-100, never inferred")
+    meta: dict = Field(min_length=1, description="The same plain safe meta key/value pairs to set on every explicit target")
+
+
+class ApplyBulkPostMetaParams(BulkPostMetaParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any target meta changed")
+
+
+class BulkPostMetaResult(sdl.Entity):
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
 
 
 class DeletePostMetaParams(BaseModel):

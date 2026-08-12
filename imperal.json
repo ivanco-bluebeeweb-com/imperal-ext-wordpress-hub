@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.26.0",
+  "version": "1.27.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -2939,6 +2939,364 @@
         "x-sdl": "entity"
       },
       "event": "wordpress-hub.set_comment_status",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "preview_bulk_comment_status",
+      "description": "Preview changing moderation status for 1-100 explicit comments. Makes no writes and returns the exact token required to apply.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "comment_ids": {
+            "description": "Explicit comment ids; 1-100, never inferred",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Comment Ids",
+            "type": "array"
+          },
+          "status": {
+            "description": "New status for every listed comment: approved, hold, spam, or trash",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "comment_ids",
+          "status"
+        ],
+        "title": "BulkCommentStatusParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "failed_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Failed Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "BulkCommentStatusResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "apply_bulk_comment_status",
+      "description": "Apply a previously previewed comment moderation status change to 1-100 explicit comment ids. Stops before all writes if any comment changed.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wp.comment_status_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "comment_ids": {
+            "description": "Explicit comment ids; 1-100, never inferred",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Comment Ids",
+            "type": "array"
+          },
+          "status": {
+            "description": "New status for every listed comment: approved, hold, spam, or trash",
+            "title": "Status",
+            "type": "string"
+          },
+          "expected_state_token": {
+            "description": "Exact token from preview; execution stops before all writes if any comment changed",
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Expected State Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "comment_ids",
+          "status",
+          "expected_state_token"
+        ],
+        "title": "ApplyBulkCommentStatusParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "failed_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Failed Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "BulkCommentStatusResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.apply_bulk_comment_status",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -22022,13 +22380,11 @@
       "owner_chat_tool": "wordpress-hub"
     },
     {
-      "name": "bulk_update_post_status",
-      "description": "Change the status (publish, draft, pending, private, or trash) of several explicit posts/pages at once. All ids must be the same post_type. Partial failures are reported per id, not silently dropped.",
-      "action_type": "write",
+      "name": "preview_bulk_post_status",
+      "description": "Preview a status change for 1-100 explicit posts/pages/CPT items. Makes no writes and returns the exact state token required to apply.",
+      "action_type": "read",
       "chain_callable": true,
-      "effects": [
-        "wp.post_update"
-      ],
+      "effects": [],
       "id_projection": "",
       "params_schema": {
         "properties": {
@@ -22038,11 +22394,11 @@
             "type": "string"
           },
           "post_ids": {
-            "description": "Explicit post/page ids; 1-50, never inferred",
+            "description": "Explicit post/page ids; 1-100, never inferred",
             "items": {
               "type": "integer"
             },
-            "maxItems": 50,
+            "maxItems": 100,
             "minItems": 1,
             "title": "Post Ids",
             "type": "array"
@@ -22064,7 +22420,7 @@
           "post_ids",
           "status"
         ],
-        "title": "BulkUpdatePostStatusParams",
+        "title": "BulkPostStatusParams",
         "type": "object"
       },
       "return_schema": {
@@ -22136,6 +22492,233 @@
             ],
             "default": null,
             "title": "Url"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "failed_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Failed Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "BulkPostStatusResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "bulk_update_post_status",
+      "description": "Apply a previewed status change to 1-100 explicit posts/pages/CPT items. Requires the exact state token and performs no writes if any item changed since preview.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wp.post_bulk_status_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_ids": {
+            "description": "Explicit post/page ids; 1-100, never inferred",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Post Ids",
+            "type": "array"
+          },
+          "post_type": {
+            "default": "post",
+            "description": "'post', 'page', or a custom post type's slug — all ids must share this type",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "status": {
+            "description": "New status for every listed post: publish, draft, pending, private, or trash",
+            "title": "Status",
+            "type": "string"
+          },
+          "expected_state_token": {
+            "description": "Exact token returned by preview; execution stops before all writes if any post changed",
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Expected State Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "post_ids",
+          "status",
+          "expected_state_token"
+        ],
+        "title": "ApplyBulkPostStatusParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
           },
           "updated_ids": {
             "items": {
@@ -26697,6 +27280,368 @@
         "x-sdl": "entity"
       },
       "event": "wordpress-hub.update_post_meta",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "preview_bulk_post_meta",
+      "description": "Preview setting the same safe custom-meta key/value pairs on 1-100 explicit posts/pages/CPT items. Makes no writes and returns the exact token required to apply.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_ids": {
+            "description": "Explicit post/page/CPT ids; 1-100, never inferred",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Post Ids",
+            "type": "array"
+          },
+          "meta": {
+            "additionalProperties": true,
+            "description": "The same plain safe meta key/value pairs to set on every explicit target",
+            "minProperties": 1,
+            "title": "Meta",
+            "type": "object"
+          }
+        },
+        "required": [
+          "site_id",
+          "post_ids",
+          "meta"
+        ],
+        "title": "BulkPostMetaParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "failed_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Failed Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "BulkPostMetaResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "apply_bulk_post_meta",
+      "description": "Apply a previewed safe custom-meta update to 1-100 explicit posts/pages/CPT items. Stops before all writes if any target's reviewed keys changed.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "wp.bulk_update_post_meta"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_ids": {
+            "description": "Explicit post/page/CPT ids; 1-100, never inferred",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Post Ids",
+            "type": "array"
+          },
+          "meta": {
+            "additionalProperties": true,
+            "description": "The same plain safe meta key/value pairs to set on every explicit target",
+            "minProperties": 1,
+            "title": "Meta",
+            "type": "object"
+          },
+          "expected_state_token": {
+            "description": "Exact token from preview; execution stops before all writes if any target meta changed",
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Expected State Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "post_ids",
+          "meta",
+          "expected_state_token"
+        ],
+        "title": "ApplyBulkPostMetaParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "failed_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Failed Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "BulkPostMetaResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.apply_bulk_post_meta",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -38026,7 +38971,12 @@
       "update_imperal_bridge": 16,
       "list_network_sites": 8,
       "list_network_plugins": 8,
-      "create_network_site": 16
+      "create_network_site": 16,
+      "preview_bulk_post_status": 40,
+      "preview_bulk_post_meta": 40,
+      "apply_bulk_post_meta": 60,
+      "preview_bulk_comment_status": 40,
+      "apply_bulk_comment_status": 60
     },
     "free_tools": [
       "add_ssh",

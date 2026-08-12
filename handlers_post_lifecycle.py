@@ -7,12 +7,16 @@ create_post/update_post covered writing content; there was no way back out
 three are common everyday WP Core actions on the native /wp/v2 REST API,
 no Bridge/SSH needed.
 """
+import hashlib
+import json
+
 from imperal_sdk import ActionResult, sdl
 
 from app import chat
 from models import (
+    ApplyBulkPostStatusParams,
+    BulkPostStatusParams,
     BulkPostStatusResult,
-    BulkUpdatePostStatusParams,
     DeletePostParams,
     DuplicatePostParams,
     GetPostRevisionsParams,
@@ -167,56 +171,95 @@ async def duplicate_post(ctx, params: DuplicatePostParams) -> ActionResult:
                                  refresh_panels=["center"])
 
 
-@chat.function(
-    "bulk_update_post_status",
-    description=(
-        "Change the status (publish, draft, pending, private, or trash) of several explicit "
-        "posts/pages at once. All ids must be the same post_type. Partial failures are "
-        "reported per id, not silently dropped."
-    ),
-    action_type="write",
-    data_model=BulkPostStatusResult,
-    effects=["wp.post_update"],
-    event="wordpress-hub.bulk_update_post_status",
-)
-async def bulk_update_post_status(ctx, params: BulkUpdatePostStatusParams) -> ActionResult:
-    """Apply a single status change to each listed post/page id independently."""
+def _post_state_token(items: list[dict]) -> str:
+    """Hash only mutable core fields that make a reviewed status change stale."""
+    state = [
+        {"id": int(item.get("id", 0)), "modified": item.get("modified_gmt", ""),
+         "status": item.get("status", "")}
+        for item in sorted(items, key=lambda row: int(row.get("id", 0)))
+    ]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_post_targets(ctx, params: BulkPostStatusParams):
     valid_statuses = {"publish", "draft", "pending", "private", "trash"}
     status = params.status.strip().lower()
     if status not in valid_statuses:
-        return ActionResult.error(
+        return None, ActionResult.error(
             f"Invalid status '{params.status}' — use one of {', '.join(sorted(valid_statuses))}.",
             retryable=False, code="POST_INVALID_STATUS")
-
+    if len(set(params.post_ids)) != len(params.post_ids):
+        return None, ActionResult.error("Each post id may appear only once.", retryable=False, code="POST_DUPLICATE_IDS")
     auth, err = await _authed(ctx, params.site_id)
     if err:
-        return err
+        return None, err
     base_url, username, pw = auth
     rest_base = _rest_base(params.post_type.strip() or "post")
-
-    updated_ids: list[int] = []
-    failed_ids: list[int] = []
+    items = []
     for post_id in params.post_ids:
         try:
-            r = await wp_update_post(ctx, base_url, username, pw, post_id=post_id,
-                                     post_type=rest_base, status=status)
-        except Exception as e:
-            await ctx.log(f"bulk_update_post_status failed for {post_id}: {e}", level="error")
+            response = await wp_get(ctx, base_url, f"/wp-json/wp/v2/{rest_base}/{post_id}",
+                                    username=username, app_password=pw, params={"context": "edit"})
+        except Exception as exc:
+            await ctx.log(f"bulk post preview read #{post_id} failed: {exc}", level="error")
+            return None, ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")
+        if not 200 <= response.status_code < 300 or not isinstance(response.body, dict):
+            return None, _failure(response.status_code, response.body)
+        items.append(response.body)
+    return (base_url, username, pw, rest_base, status, items), None
+
+
+@chat.function(
+    "preview_bulk_post_status",
+    description="Preview a status change for 1-100 explicit posts/pages/CPT items. Makes no writes and returns the exact state token required to apply.",
+    action_type="read", data_model=BulkPostStatusResult,
+)
+async def preview_bulk_post_status(ctx, params: BulkPostStatusParams) -> ActionResult:
+    """Read every explicit target and produce a non-mutating status-change diff."""
+    targets, err = await _bulk_post_targets(ctx, params)
+    if err:
+        return err
+    _, _, _, _, status, items = targets
+    changes = [f"#{item['id']} {wp_title(item) or '(untitled)'}: {item.get('status', '')} → {status}" for item in items]
+    result = BulkPostStatusResult(
+        id=params.site_id, title="Bulk post status preview", kind="wp_bulk_post_status", preview=True,
+        requested=len(params.post_ids), matched=len(items), state_token=_post_state_token(items), changes=changes,
+    )
+    return ActionResult.success(result, summary=f"Preview: {len(items)} item(s) → '{status}'")
+
+
+@chat.function(
+    "bulk_update_post_status",
+    description="Apply a previewed status change to 1-100 explicit posts/pages/CPT items. Requires the exact state token and performs no writes if any item changed since preview.",
+    action_type="destructive", data_model=BulkPostStatusResult,
+    effects=["wp.post_bulk_status_update"], event="wordpress-hub.bulk_update_post_status",
+)
+async def bulk_update_post_status(ctx, params: ApplyBulkPostStatusParams) -> ActionResult:
+    """Apply a reviewed status change only after all explicit targets still match preview."""
+    targets, err = await _bulk_post_targets(ctx, params)
+    if err:
+        return err
+    base_url, username, pw, rest_base, status, items = targets
+    if _post_state_token(items) != params.expected_state_token:
+        return ActionResult.error("One or more posts changed since preview. Run preview_bulk_post_status again.", retryable=False, code="POST_BULK_STATE_CHANGED")
+    updated_ids, failed_ids = [], []
+    for item in items:
+        post_id = int(item["id"])
+        try:
+            response = await wp_update_post(ctx, base_url, username, pw, post_id=post_id, post_type=rest_base, status=status)
+        except Exception as exc:
+            await ctx.log(f"bulk post write #{post_id} failed: {exc}", level="error")
             failed_ids.append(post_id)
             continue
-        if 200 <= r.status_code < 300:
-            updated_ids.append(post_id)
-        else:
-            failed_ids.append(post_id)
-
+        (updated_ids if 200 <= response.status_code < 300 else failed_ids).append(post_id)
     result = BulkPostStatusResult(
-        id=params.site_id, title="", kind="wp_bulk_post_status",
+        id=params.site_id, title="Bulk post status result", kind="wp_bulk_post_status", preview=False,
+        requested=len(params.post_ids), matched=len(items), updated=len(updated_ids), failed=len(failed_ids),
         updated_ids=updated_ids, failed_ids=failed_ids,
     )
-    summary = f"{len(updated_ids)}/{len(params.post_ids)} updated to '{status}'"
-    if failed_ids:
-        summary += f" — {len(failed_ids)} failed: {failed_ids}"
-    return ActionResult.success(result, summary=summary, refresh_panels=["center"])
+    if not updated_ids:
+        return ActionResult.error("WordPress did not update any requested posts.", retryable=True, code="POST_BULK_ALL_FAILED")
+    return ActionResult.success(result, summary=f"Updated {len(updated_ids)} item(s) to '{status}'; {len(failed_ids)} failed", refresh_panels=["center"])
 
 
 @chat.function(

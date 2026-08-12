@@ -6,7 +6,13 @@ from imperal_sdk.testing import MockContext
 import app  # noqa: F401
 import handlers_read as hr
 import storage
-from models import SetCommentStatusParams, ReplyToCommentParams, EditCommentContentParams
+from models import (
+    ApplyBulkCommentStatusParams,
+    BulkCommentStatusParams,
+    EditCommentContentParams,
+    ReplyToCommentParams,
+    SetCommentStatusParams,
+)
 
 
 async def _connected_ctx():
@@ -111,6 +117,45 @@ async def test_unknown_site_errors():
     r = await hr.set_comment_status(ctx, SetCommentStatusParams(
         site_id="missing", comment_id=5, status="approved"))
     assert r.status == "error"
+
+
+# --- guarded bulk comment moderation -------------------------------------
+
+
+def _comment(comment_id, status="hold", date_gmt="2026-08-01T10:00:00"):
+    return {"id": comment_id, "author_name": "Jane", "status": status,
+            "date_gmt": date_gmt, "content": {"rendered": "<p>Text</p>"},
+            "post": 3, "date": "2026-08-01"}
+
+
+async def test_preview_and_apply_bulk_comment_status():
+    ctx = await _connected_ctx()
+    base = "https://x.com/wp-json/wp/v2/comments/"
+    ctx.http.mock_get(base + "5", _comment(5))
+    ctx.http.mock_get(base + "6", _comment(6))
+    preview = await hr.preview_bulk_comment_status(ctx, BulkCommentStatusParams(
+        site_id="x-com", comment_ids=[5, 6], status="approved"))
+    assert preview.status == "success"
+    assert preview.data.preview is True
+
+    ctx.http.mock_get(base + "5", _comment(5))
+    ctx.http.mock_get(base + "6", _comment(6))
+    ctx.http.mock_post(base + "5", _comment(5, "approved"))
+    ctx.http.mock_post(base + "6", _comment(6, "approved"))
+    result = await hr.apply_bulk_comment_status(ctx, ApplyBulkCommentStatusParams(
+        site_id="x-com", comment_ids=[5, 6], status="approved",
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success"
+    assert result.data.updated_ids == [5, 6]
+
+
+async def test_apply_bulk_comment_status_refuses_stale_token():
+    ctx = await _connected_ctx()
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/comments/5", _comment(5))
+    result = await hr.apply_bulk_comment_status(ctx, ApplyBulkCommentStatusParams(
+        site_id="x-com", comment_ids=[5], status="spam", expected_state_token="0" * 64))
+    assert result.status == "error"
+    assert result.error_code == "COMMENT_BULK_STATE_CHANGED"
 
 
 # --- reply_to_comment -----------------------------------------------------

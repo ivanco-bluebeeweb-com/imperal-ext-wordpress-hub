@@ -490,3 +490,23 @@ network settings, user creation, plugin installation, or cross-site bulk mutatio
 Groups **K**, **H**, and **T** were rechecked and were already covered by shipped functions:
 `list_reusable_blocks`/`list_block_patterns`; `get_wp_config_constants`, `list_must_use_plugins`,
 `list_drop_ins`, `get_environment_type`; and `list_rest_routes` plus `get_rest_route_schema`.
+
+## Bulk safety foundation — ✅ SHIPPED 2026-08-12
+
+The existing explicit-ID bulk product/variation and CSV flows are now joined by a
+reusable guarded pattern for WordPress core operations: every new batch action
+reads each explicitly supplied target, returns a no-write preview and deterministic
+state token, then re-reads all targets before any write. A changed snapshot stops
+the entire apply operation before it can write.
+
+- `preview_bulk_post_status` + `bulk_update_post_status` — 1–100 post/page/CPT
+  status changes, including trash, via native WordPress REST.
+- `preview_bulk_post_meta` + `apply_bulk_post_meta` — same safe custom meta pairs
+  on 1–100 explicit post/page/CPT ids, through Bridge section 9.
+- `preview_bulk_comment_status` + `apply_bulk_comment_status` — comment moderation
+  for 1–100 explicit ids via native WordPress REST.
+
+Preview is 40 credits and guarded batch application is 60 credits. Reads are never
+charged zero: zero remains reserved only for fair local connection/access actions
+that perform no WordPress work. Broad, inferred, wildcard, arbitrary SQL/PHP, and
+blind builder-tree batch writes remain deliberately excluded.

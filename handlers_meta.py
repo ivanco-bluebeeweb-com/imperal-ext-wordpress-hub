@@ -19,12 +19,18 @@ object-injection risk). This handler does not maintain its own copy of the
 allowlist -- the Bridge is the single source of truth and returns a 403 with
 a clear message if a name isn't on it.
 """
+import hashlib
+import json
+
 from imperal_sdk import ActionResult
 
 from app import chat
 from models import (
     AcfFieldsParams,
     AcfFieldsResult,
+    ApplyBulkPostMetaParams,
+    BulkPostMetaParams,
+    BulkPostMetaResult,
     DeletePostMetaParams,
     DeleteTermMetaParams,
     DeleteUserMetaParams,
@@ -137,6 +143,79 @@ async def update_post_meta(ctx, params: UpdatePostMetaParams) -> ActionResult:
                               updated=updated),
         summary=f"Updated {len(updated)} meta key(s) on post {params.post_id}.",
     )
+
+
+def _bulk_post_meta_token(rows: list[tuple[int, dict]], keys: list[str]) -> str:
+    state = [
+        {"post_id": post_id, "meta": {key: meta.get(key) for key in sorted(keys)}}
+        for post_id, meta in sorted(rows)
+    ]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+
+
+async def _bulk_post_meta_targets(ctx, params: BulkPostMetaParams):
+    if len(set(params.post_ids)) != len(params.post_ids):
+        return None, ActionResult.error("Each post id may appear only once.", retryable=False, code="POST_META_DUPLICATE_IDS")
+    cred, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, err
+    base_url, username, app_password = cred
+    rows = []
+    for post_id in params.post_ids:
+        resp = await wp_get(ctx, base_url, f"{BRIDGE_BASE}/postmeta/{post_id}",
+                            username=username, app_password=app_password)
+        if resp.status_code >= 400:
+            return None, _bridge_missing_error(resp)
+        body = resp.body or {}
+        rows.append((post_id, body.get("meta", {})))
+    return (base_url, username, app_password, rows), None
+
+
+@chat.function(
+    "preview_bulk_post_meta",
+    description="Preview setting the same safe custom-meta key/value pairs on 1-100 explicit posts/pages/CPT items. Makes no writes and returns the exact token required to apply.",
+    action_type="read", data_model=BulkPostMetaResult,
+)
+async def preview_bulk_post_meta(ctx, params: BulkPostMetaParams) -> ActionResult:
+    """Read every explicit meta target and return a reviewed batch diff."""
+    targets, err = await _bulk_post_meta_targets(ctx, params)
+    if err:
+        return err
+    _, _, _, rows = targets
+    changes = [f"#{post_id}: set {', '.join(sorted(params.meta))}" for post_id, _ in rows]
+    return ActionResult.success(BulkPostMetaResult(
+        id=params.site_id, title="Bulk post meta preview", kind="wp_bulk_post_meta", preview=True,
+        requested=len(params.post_ids), matched=len(rows),
+        state_token=_bulk_post_meta_token(rows, list(params.meta)), changes=changes),
+        summary=f"Preview: set {len(params.meta)} meta key(s) on {len(rows)} item(s)")
+
+
+@chat.function(
+    "apply_bulk_post_meta",
+    description="Apply a previewed safe custom-meta update to 1-100 explicit posts/pages/CPT items. Stops before all writes if any target's reviewed keys changed.",
+    action_type="destructive", data_model=BulkPostMetaResult,
+    effects=["wp.bulk_update_post_meta"], event="wordpress-hub.apply_bulk_post_meta",
+)
+async def apply_bulk_post_meta(ctx, params: ApplyBulkPostMetaParams) -> ActionResult:
+    """Apply identical meta only if every target still matches the preview token."""
+    targets, err = await _bulk_post_meta_targets(ctx, params)
+    if err:
+        return err
+    base_url, username, app_password, rows = targets
+    if _bulk_post_meta_token(rows, list(params.meta)) != params.expected_state_token:
+        return ActionResult.error("One or more post meta values changed since preview. Run preview_bulk_post_meta again.", retryable=False, code="POST_META_BULK_STATE_CHANGED")
+    updated_ids, failed_ids = [], []
+    for post_id, _ in rows:
+        resp = await wp_request(ctx, "post", base_url, f"{BRIDGE_BASE}/postmeta/{post_id}",
+                                username=username, app_password=app_password, json={"meta": params.meta})
+        (updated_ids if resp.status_code < 400 else failed_ids).append(post_id)
+    result = BulkPostMetaResult(
+        id=params.site_id, title="Bulk post meta result", kind="wp_bulk_post_meta", preview=False,
+        requested=len(params.post_ids), matched=len(rows), updated=len(updated_ids), failed=len(failed_ids),
+        updated_ids=updated_ids, failed_ids=failed_ids)
+    if not updated_ids:
+        return ActionResult.error("WordPress did not update any requested post meta.", retryable=True, code="POST_META_BULK_ALL_FAILED")
+    return ActionResult.success(result, summary=f"Updated meta on {len(updated_ids)} item(s); {len(failed_ids)} failed", refresh_panels=["center"])
 
 
 @chat.function(

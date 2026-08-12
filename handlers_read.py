@@ -1,10 +1,13 @@
 import asyncio
+import hashlib
+import json
 
 from imperal_sdk import ActionResult, sdl
 from app import chat, ext
 from models import (_NoParams, Site, ListContentParams, ListMediaParams,
                     Post, Page, MediaItem, SiteIdParams, SiteHealth, RefreshAllResult,
-                    ListCommentsParams, SetCommentStatusParams, ReplyToCommentParams,
+                    ListCommentsParams, SetCommentStatusParams, BulkCommentStatusParams,
+                    ApplyBulkCommentStatusParams, BulkCommentStatusResult, ReplyToCommentParams,
                     EditCommentContentParams,
                     ListCustomPostsParams, Comment, WPUser, Plugin,
                     PurgeCacheParams, CacheActionResult, InstallPluginParams, PluginInstallResult,
@@ -564,6 +567,91 @@ async def set_comment_status(ctx, params: SetCommentStatusParams) -> ActionResul
     return ActionResult.success(
         entity, summary=f"Comment #{entity.id} set to '{status}'.",
         refresh_panels=["center"])
+
+
+def _comment_state_token(comments: list[dict]) -> str:
+    state = [{"id": int(c.get("id", 0)), "status": c.get("status", ""),
+              "modified": c.get("date_gmt", "")}
+             for c in sorted(comments, key=lambda item: int(item.get("id", 0)))]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_comment_targets(ctx, params: BulkCommentStatusParams):
+    status = params.status.strip().lower()
+    if status not in {"approved", "hold", "spam", "trash"}:
+        return None, ActionResult.error("Use approved, hold, spam, or trash.", retryable=False, code="COMMENT_INVALID_STATUS")
+    if len(set(params.comment_ids)) != len(params.comment_ids):
+        return None, ActionResult.error("Each comment id may appear only once.", retryable=False, code="COMMENT_DUPLICATE_IDS")
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, ActionResult.error(err, retryable=False)
+    base_url, username, pw = auth
+    comments = []
+    for comment_id in params.comment_ids:
+        try:
+            response = await wp_get(ctx, base_url, f"/wp-json/wp/v2/comments/{comment_id}",
+                                    username=username, app_password=pw, params={"context": "edit"})
+        except Exception as exc:
+            await ctx.log(f"bulk comment read #{comment_id} failed: {exc}", level="error")
+            return None, ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")
+        if response.status_code != 200 or not isinstance(response.body, dict):
+            code = "COMMENT_NOT_FOUND" if response.status_code == 404 else wp_error_code(response.status_code)
+            return None, ActionResult.error(wp_error_message(response.status_code), retryable=response.status_code >= 500,
+                                            code=code)
+        comments.append(response.body)
+    return (base_url, username, pw, status, comments), None
+
+
+@chat.function(
+    "preview_bulk_comment_status",
+    description="Preview changing moderation status for 1-100 explicit comments. Makes no writes and returns the exact token required to apply.",
+    action_type="read", data_model=BulkCommentStatusResult,
+)
+async def preview_bulk_comment_status(ctx, params: BulkCommentStatusParams) -> ActionResult:
+    """Read every explicit comment and produce its guarded bulk-status diff."""
+    targets, err = await _bulk_comment_targets(ctx, params)
+    if err:
+        return err
+    _, _, _, status, comments = targets
+    return ActionResult.success(BulkCommentStatusResult(
+        id=params.site_id, title="Bulk comment status preview", kind="wp_bulk_comment_status",
+        preview=True, requested=len(params.comment_ids), matched=len(comments),
+        state_token=_comment_state_token(comments),
+        changes=[f"#{c['id']}: {c.get('status', '')} → {status}" for c in comments],
+    ), summary=f"Previewed {len(comments)} comment status change(s); no changes made.")
+
+
+@chat.function(
+    "apply_bulk_comment_status",
+    description="Apply a previously previewed comment moderation status change to 1-100 explicit comment ids. Stops before all writes if any comment changed.",
+    action_type="destructive", data_model=BulkCommentStatusResult,
+    effects=["wp.comment_status_update"], event="wordpress-hub.apply_bulk_comment_status",
+)
+async def apply_bulk_comment_status(ctx, params: ApplyBulkCommentStatusParams) -> ActionResult:
+    """Revalidate every comment snapshot, then update the reviewed explicit targets."""
+    targets, err = await _bulk_comment_targets(ctx, params)
+    if err:
+        return err
+    base_url, username, pw, status, comments = targets
+    if _comment_state_token(comments) != params.expected_state_token:
+        return ActionResult.error("One or more comments changed since preview. Preview again before applying.", retryable=False, code="COMMENT_BULK_STATE_CHANGED")
+    updated, failed = [], []
+    for comment in comments:
+        comment_id = int(comment["id"])
+        try:
+            response = await wp_request(ctx, "post", base_url, f"/wp-json/wp/v2/comments/{comment_id}",
+                                        username=username, app_password=pw, json={"status": status})
+        except Exception as exc:
+            await ctx.log(f"bulk comment update #{comment_id} failed: {exc}", level="error")
+            failed.append(comment_id)
+            continue
+        (updated if response.status_code == 200 else failed).append(comment_id)
+    result = BulkCommentStatusResult(id=params.site_id, title="Bulk comment status result", kind="wp_bulk_comment_status",
+        preview=False, requested=len(params.comment_ids), matched=len(comments), updated=len(updated), failed=len(failed),
+        updated_ids=updated, failed_ids=failed)
+    if not updated:
+        return ActionResult.error("No comment statuses were changed.", retryable=bool(failed), code="COMMENT_BULK_ALL_FAILED")
+    return ActionResult.success(result, summary=f"Changed {len(updated)} comment status(es); {len(failed)} failed.", refresh_panels=["center"])
 
 
 @chat.function(

@@ -6,7 +6,8 @@ import app  # noqa: F401
 import handlers_post_lifecycle as hpl
 import storage
 from models import (
-    BulkUpdatePostStatusParams,
+    ApplyBulkPostStatusParams,
+    BulkPostStatusParams,
     DeletePostParams,
     DuplicatePostParams,
     GetPostRevisionsParams,
@@ -97,32 +98,39 @@ async def test_duplicate_post_source_missing():
     assert result.error_code == "WP_POST_NOT_FOUND"
 
 
-async def test_bulk_update_post_status_all_succeed():
+async def test_preview_and_apply_bulk_post_status_all_succeed():
     ctx = await _ctx()
-    ctx.http.mock_post(f"{BASE}/posts/1", {"id": 1, "status": "publish"})
-    ctx.http.mock_post(f"{BASE}/posts/2", {"id": 2, "status": "publish"})
-    result = await hpl.bulk_update_post_status(ctx, BulkUpdatePostStatusParams(
-        site_id="blog-test", post_ids=[1, 2], status="publish"))
+    ctx.http.mock_get(f"{BASE}/posts/1", _post(1, modified_gmt="2026-01-01T10:00:00"))
+    ctx.http.mock_get(f"{BASE}/posts/2", _post(2, modified_gmt="2026-01-01T10:00:00"))
+    preview = await hpl.preview_bulk_post_status(ctx, BulkPostStatusParams(
+        site_id="blog-test", post_ids=[1, 2], status="draft"))
+    assert preview.status == "success"
+    assert preview.data.preview is True
+    assert len(preview.data.state_token) == 64
+
+    ctx.http.mock_get(f"{BASE}/posts/1", _post(1, modified_gmt="2026-01-01T10:00:00"))
+    ctx.http.mock_get(f"{BASE}/posts/2", _post(2, modified_gmt="2026-01-01T10:00:00"))
+    ctx.http.mock_post(f"{BASE}/posts/1", {"id": 1, "status": "draft"})
+    ctx.http.mock_post(f"{BASE}/posts/2", {"id": 2, "status": "draft"})
+    result = await hpl.bulk_update_post_status(ctx, ApplyBulkPostStatusParams(
+        site_id="blog-test", post_ids=[1, 2], status="draft", expected_state_token=preview.data.state_token))
     assert result.status == "success"
     assert result.data.updated_ids == [1, 2]
     assert result.data.failed_ids == []
 
 
-async def test_bulk_update_post_status_partial_failure_reported_not_dropped():
+async def test_apply_bulk_post_status_refuses_stale_token_before_writes():
     ctx = await _ctx()
-    ctx.http.mock_post(f"{BASE}/posts/1", {"id": 1, "status": "draft"})
-    ctx.http.mock_post(f"{BASE}/posts/2", {"code": "rest_post_invalid_id"}, 404)
-    result = await hpl.bulk_update_post_status(ctx, BulkUpdatePostStatusParams(
-        site_id="blog-test", post_ids=[1, 2], status="draft"))
-    assert result.status == "success"
-    assert result.data.updated_ids == [1]
-    assert result.data.failed_ids == [2]
-    assert "1/2" in result.summary
+    ctx.http.mock_get(f"{BASE}/posts/1", _post(1, modified_gmt="2026-01-01T10:00:00"))
+    result = await hpl.bulk_update_post_status(ctx, ApplyBulkPostStatusParams(
+        site_id="blog-test", post_ids=[1], status="draft", expected_state_token="0" * 64))
+    assert result.status == "error"
+    assert result.error_code == "POST_BULK_STATE_CHANGED"
 
 
-async def test_bulk_update_post_status_rejects_invalid_status():
+async def test_preview_bulk_post_status_rejects_invalid_status():
     ctx = await _ctx()
-    result = await hpl.bulk_update_post_status(ctx, BulkUpdatePostStatusParams(
+    result = await hpl.preview_bulk_post_status(ctx, BulkPostStatusParams(
         site_id="blog-test", post_ids=[1], status="not-a-status"))
     assert result.status == "error"
     assert result.error_code == "POST_INVALID_STATUS"
