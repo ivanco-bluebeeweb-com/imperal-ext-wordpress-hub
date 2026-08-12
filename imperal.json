@@ -19948,6 +19948,254 @@
       "owner_chat_tool": "wordpress-hub"
     },
     {
+      "name": "create_bricks_heading",
+      "description": "Create exactly one semantic Bricks heading in an existing page or template zone. Use only after get_builder_element confirms a missing heading and provides the exact parent_id and state_token. This cannot replace arbitrary builder JSON or create any other element.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.builder_heading_create"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "description": "Safely append one semantic heading to an existing Bricks zone.\n\nThis deliberately does not accept arbitrary Bricks JSON. It exists for\nrepairs such as a confirmed missing H1 in a category/archive template,\nwhile retaining an explicit parent, insertion position, and optimistic\nconcurrency guard.",
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Numeric page/template id; give this or slug",
+            "title": "Post Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Slug of the target; give this or post_id",
+            "title": "Slug"
+          },
+          "post_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional post type to disambiguate a slug",
+            "title": "Post Type"
+          },
+          "zone": {
+            "default": "content",
+            "description": "Bricks zone: header, content, or footer",
+            "title": "Zone",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Existing Bricks parent element id, or omit only to create a top-level heading",
+            "title": "Parent Id"
+          },
+          "position": {
+            "default": 0,
+            "description": "Zero-based position among the selected parent's direct children; 0 inserts first",
+            "minimum": 0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "tag": {
+            "default": "h1",
+            "description": "Semantic HTML heading tag, h1 through h6",
+            "pattern": "^h[1-6]$",
+            "title": "Tag",
+            "type": "string"
+          },
+          "text": {
+            "description": "Plain heading text; HTML is stripped by the Bridge",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "state_token": {
+            "description": "Exact token from a preceding get_builder_element call for this Bricks zone",
+            "minLength": 1,
+            "title": "State Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "text",
+          "state_token"
+        ],
+        "title": "CreateBricksHeadingParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "post_id": {
+            "default": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "builder": {
+            "default": "bricks",
+            "title": "Builder",
+            "type": "string"
+          },
+          "zone": {
+            "default": "",
+            "title": "Zone",
+            "type": "string"
+          },
+          "element_id": {
+            "default": "",
+            "title": "Element Id",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Parent Id"
+          },
+          "position": {
+            "default": 0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "tag": {
+            "default": "",
+            "title": "Tag",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "BuilderHeadingCreateResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.create_bricks_heading",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
       "name": "check_builder_support",
       "description": "Check whether a connected WordPress site can read/edit Elementor or Bricks page-builder content — whether the Imperal Bridge plugin is installed and which builder plugin(s) are active site-wide.",
       "action_type": "read",

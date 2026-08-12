@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.19.0
+ * Version:           2.20.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.19.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.20.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -1731,6 +1731,164 @@ function imperal_builder_bridge_update_field( $request ) {
 }
 
 /**
+ * POST /imperal/v1/builder/heading — append exactly one semantic Bricks
+ * heading element to an existing zone, guarded by state_token.
+ *
+ * Deliberately narrow: this is a constrained repair tool for confirmed gaps
+ * (e.g. a template missing its H1), not a general "create any element"
+ * route — it can only create a `heading` element with a tag and text.
+ *
+ * Body: { id (post), zone, tag, text, state_token, parent_id?, position? }
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_builder_bridge_create_heading( $request ) {
+	$post = imperal_builder_bridge_resolve_post( $request );
+	if ( is_wp_error( $post ) ) {
+		return $post;
+	}
+
+	$zone        = strtolower( (string) $request->get_param( 'zone' ) );
+	$tag         = strtolower( trim( (string) $request->get_param( 'tag' ) ) );
+	$text        = (string) $request->get_param( 'text' );
+	$state_token = (string) $request->get_param( 'state_token' );
+	$parent_id   = trim( (string) $request->get_param( 'parent_id' ) );
+	$position    = max( 0, (int) $request->get_param( 'position' ) );
+
+	if ( '' === $zone || ! isset( IMPERAL_BUILDER_BRICKS_META[ $zone ] ) ) {
+		return new WP_Error(
+			'imperal_builder_zone_missing',
+			__( "zone is required and must be 'header', 'content' or 'footer'.", 'imperal-builder-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+	if ( ! in_array( $tag, array( 'h1', 'h2', 'h3', 'h4', 'h5', 'h6' ), true ) ) {
+		return new WP_Error(
+			'imperal_builder_invalid_tag',
+			__( 'tag must be h1 through h6.', 'imperal-builder-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+	$text = trim( wp_strip_all_tags( $text ) );
+	if ( '' === $text ) {
+		return new WP_Error(
+			'imperal_builder_text_missing',
+			__( 'text is required.', 'imperal-builder-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+	if ( '' === trim( $state_token ) ) {
+		return new WP_Error(
+			'imperal_builder_state_token_missing',
+			__( 'state_token is required — call the read endpoint first.', 'imperal-builder-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$meta_key = IMPERAL_BUILDER_BRICKS_META[ $zone ];
+	$raw      = get_post_meta( $post->ID, $meta_key, true );
+
+	if ( imperal_builder_bridge_state_token( $raw ) !== $state_token ) {
+		return new WP_Error(
+			'imperal_builder_stale_state',
+			__( 'This page changed since you read it — read it again and retry with the fresh state_token.', 'imperal-builder-bridge' ),
+			array( 'status' => 409 )
+		);
+	}
+
+	$decoded = imperal_builder_bridge_decode_meta( $raw );
+	if ( ! is_array( $decoded ) ) {
+		$decoded = array();
+	}
+
+	if ( '' !== $parent_id ) {
+		$parent_found = false;
+		foreach ( $decoded as $node ) {
+			if ( is_array( $node ) && isset( $node['id'] ) && (string) $node['id'] === $parent_id ) {
+				$parent_found = true;
+				break;
+			}
+		}
+		if ( ! $parent_found ) {
+			return new WP_Error(
+				'imperal_builder_parent_not_found',
+				__( 'No element with that parent_id in this zone.', 'imperal-builder-bridge' ),
+				array( 'status' => 404 )
+			);
+		}
+	}
+
+	$new_id = substr( str_replace( array( '.', '/' ), '', (string) wp_generate_password( 8, false, false ) ), 0, 6 );
+
+	$new_node = array(
+		'id'       => $new_id,
+		'name'     => 'heading',
+		'parent'   => '' !== $parent_id ? $parent_id : 0,
+		'children' => array(),
+		'settings' => array(
+			'tag'  => $tag,
+			'text' => $text,
+		),
+	);
+
+	// Insert at the requested position among nodes that share the same
+	// parent — never reordering or touching any other element.
+	$siblings_seen = 0;
+	$inserted      = false;
+	$result_nodes  = array();
+
+	foreach ( $decoded as $node ) {
+		$same_parent = is_array( $node )
+			&& ( ( '' === $parent_id && ( ! isset( $node['parent'] ) || '' === (string) $node['parent'] || 0 === $node['parent'] ) )
+				|| ( '' !== $parent_id && isset( $node['parent'] ) && (string) $node['parent'] === $parent_id ) );
+
+		if ( $same_parent && $siblings_seen === $position && ! $inserted ) {
+			$result_nodes[] = $new_node;
+			$inserted       = true;
+		}
+		if ( $same_parent ) {
+			++$siblings_seen;
+		}
+		$result_nodes[] = $node;
+	}
+	if ( ! $inserted ) {
+		$result_nodes[] = $new_node;
+	}
+
+	// If this new heading has a parent, register it as a child on the
+	// parent node too — Bricks keeps both the flat list and each node's
+	// own `children` id array in sync.
+	if ( '' !== $parent_id ) {
+		foreach ( $result_nodes as &$node ) {
+			if ( is_array( $node ) && isset( $node['id'] ) && (string) $node['id'] === $parent_id ) {
+				$children = isset( $node['children'] ) && is_array( $node['children'] ) ? $node['children'] : array();
+				$children[] = $new_id;
+				$node['children'] = $children;
+				break;
+			}
+		}
+		unset( $node );
+	}
+
+	imperal_builder_bridge_write_meta( $post->ID, $meta_key, $raw, $result_nodes );
+
+	return rest_ensure_response(
+		array(
+			'id'          => $post->ID,
+			'builder'     => 'bricks',
+			'zone'        => $zone,
+			'element_id'  => $new_id,
+			'parent_id'   => '' !== $parent_id ? $parent_id : null,
+			'position'    => $position,
+			'tag'         => $tag,
+			'text'        => $text,
+			'state_token' => imperal_builder_bridge_state_token( $result_nodes ),
+		)
+	);
+}
+
+/**
  * GET /imperal/v1/builder/status — capability discovery: is the bridge
  * present, and which builder plugins are active site-wide (not just on one
  * post — Elementor/Bricks activation is a whole-site fact).
@@ -1818,6 +1976,29 @@ function imperal_builder_bridge_register_routes() {
 				'permission_callback' => function () {
 					return current_user_can( 'edit_posts' );
 				},
+			),
+		)
+	);
+
+	register_rest_route(
+		IMPERAL_BUILDER_BRIDGE_NAMESPACE,
+		'/builder/heading',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_builder_bridge_create_heading',
+				'permission_callback' => 'imperal_builder_bridge_permission',
+				'args'                => array(
+					'id'          => array( 'type' => 'integer' ),
+					'slug'        => array( 'type' => 'string' ),
+					'type'        => array( 'type' => 'string' ),
+					'zone'        => array( 'type' => 'string', 'required' => true ),
+					'tag'         => array( 'type' => 'string', 'required' => true ),
+					'text'        => array( 'type' => 'string', 'required' => true ),
+					'parent_id'   => array( 'type' => 'string' ),
+					'position'    => array( 'type' => 'integer' ),
+					'state_token' => array( 'type' => 'string', 'required' => true ),
+				),
 			),
 		)
 	);

@@ -1306,6 +1306,38 @@ class UpdateBuilderFieldParams(BaseModel):
     zone: str | None = Field(default=None, description="Bricks only: 'header', 'content', or 'footer' — which template area the element lives in")
 
 
+class CreateBricksHeadingParams(BaseModel):
+    """Safely append one semantic heading to an existing Bricks zone.
+
+    This deliberately does not accept arbitrary Bricks JSON. It exists for
+    repairs such as a confirmed missing H1 in a category/archive template,
+    while retaining an explicit parent, insertion position, and optimistic
+    concurrency guard.
+    """
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int | None = Field(default=None, description="Numeric page/template id; give this or slug")
+    slug: str | None = Field(default=None, description="Slug of the target; give this or post_id")
+    post_type: str | None = Field(default=None, description="Optional post type to disambiguate a slug")
+    zone: str = Field(default="content", description="Bricks zone: header, content, or footer")
+    parent_id: str | None = Field(default=None, description="Existing Bricks parent element id, or omit only to create a top-level heading")
+    position: int = Field(default=0, ge=0, description="Zero-based position among the selected parent's direct children; 0 inserts first")
+    tag: str = Field(default="h1", pattern="^h[1-6]$", description="Semantic HTML heading tag, h1 through h6")
+    text: str = Field(min_length=1, max_length=500, description="Plain heading text; HTML is stripped by the Bridge")
+    state_token: str = Field(min_length=1, description="Exact token from a preceding get_builder_element call for this Bricks zone")
+
+
+class BuilderHeadingCreateResult(sdl.Entity):
+    post_id: int = 0
+    builder: str = "bricks"
+    zone: str = ""
+    element_id: str = ""
+    parent_id: str | None = None
+    position: int = 0
+    tag: str = ""
+    text: str = ""
+    state_token: str = ""
+
+
 class BuilderFieldAssignment(BaseModel):
     element_id: str = Field(min_length=1, description="Builder-native element id from get_builder_content")
     field: str = Field(min_length=1, description="Exact existing builder settings field to replace")

@@ -33,6 +33,7 @@ from imperal_sdk import ActionResult, sdl
 
 from app import chat
 from models import (GetBuilderContentParams, UpdateBuilderFieldParams,
+                    CreateBricksHeadingParams, BuilderHeadingCreateResult,
                     BulkBuilderFieldParams, ApplyBulkBuilderFieldParams, BulkBuilderFieldResult,
                     BuilderContent, BuilderElement, BuilderFieldUpdateResult,
                     BuilderScanItem, BuilderSupport, SiteIdParams)
@@ -84,6 +85,7 @@ BRIDGE_PATH = "/wp-json/imperal/v1/builder"
 BRIDGE_FIELD_PATH = "/wp-json/imperal/v1/builder/field"
 BRIDGE_STATUS_PATH = "/wp-json/imperal/v1/builder/status"
 BRIDGE_SCAN_PATH = "/wp-json/imperal/v1/builder/scan"
+BRIDGE_HEADING_PATH = "/wp-json/imperal/v1/builder/heading"
 
 _INSTALL_HINT = (
     "Install the Imperal Bridge plugin on the site (bridge/imperal-bridge "
@@ -475,6 +477,59 @@ async def update_builder_field(ctx, params: UpdateBuilderFieldParams) -> ActionR
     return ActionResult.success(
         result,
         summary=f"Updated '{result.field}' on element {result.element_id} ({result.builder}{zone_bit}).")
+
+
+@chat.function(
+    "create_bricks_heading",
+    description=("Create exactly one semantic Bricks heading in an existing page or template zone. "
+                 "Use only after get_builder_element confirms a missing heading and provides the exact "
+                 "parent_id and state_token. This cannot replace arbitrary builder JSON or create any other element."),
+    action_type="write",
+    data_model=BuilderHeadingCreateResult,
+    effects=["wp.builder_heading_create"],
+    event="wordpress-hub.create_bricks_heading",
+)
+async def create_bricks_heading(ctx, params: CreateBricksHeadingParams) -> ActionResult:
+    """Create one constrained Bricks heading with optimistic concurrency protection."""
+    bad_target = _target_error(params.post_id, params.slug)
+    if bad_target:
+        return bad_target
+    zone = params.zone.strip().lower()
+    if zone not in ("header", "content", "footer"):
+        return ActionResult.error("zone must be header, content, or footer.", retryable=False,
+                                  code="BUILDER_INVALID_ZONE")
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+    body = _target_query(params.post_id, params.slug, params.post_type)
+    body.update({
+        "builder": "bricks", "zone": zone, "parent_id": params.parent_id or "",
+        "position": params.position, "tag": params.tag, "text": params.text,
+        "state_token": params.state_token,
+    })
+    try:
+        r = await wp_post(ctx, base_url, BRIDGE_HEADING_PATH, username=username,
+                          app_password=pw, json=body)
+    except Exception as e:
+        await ctx.log(f"create_bricks_heading request failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True,
+                                  code="WP_UNREACHABLE")
+    if r.status_code != 200 or not isinstance(r.body, dict):
+        return _http_failure(r.status_code, r.body)
+    payload = r.body
+    result = BuilderHeadingCreateResult(
+        id=f"{payload.get('id', 0)}:bricks:{payload.get('element_id', '')}",
+        title="Bricks heading created", kind="wp_builder_heading_create",
+        post_id=int(payload.get("id", 0) or 0), builder="bricks",
+        zone=str(payload.get("zone", "") or ""),
+        element_id=str(payload.get("element_id", "") or ""),
+        parent_id=payload.get("parent_id") or None, position=int(payload.get("position", 0) or 0),
+        tag=str(payload.get("tag", "") or ""), text=str(payload.get("text", "") or ""),
+        state_token=str(payload.get("state_token", "") or ""),
+    )
+    return ActionResult.success(result, summary=(f"Created {result.tag} heading on Bricks element "
+                                f"{result.element_id} ({result.zone})."))
 
 
 @chat.function(

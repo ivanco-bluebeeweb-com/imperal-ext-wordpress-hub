@@ -11,12 +11,13 @@ import app  # noqa: F401
 import handlers_builders as hb
 import storage
 from models import (ApplyBulkBuilderFieldParams, BuilderFieldAssignment, BulkBuilderFieldParams,
-                    GetBuilderContentParams, UpdateBuilderFieldParams, SiteIdParams)
+                    CreateBricksHeadingParams, GetBuilderContentParams, UpdateBuilderFieldParams, SiteIdParams)
 
 TREE = "https://x.com/wp-json/imperal/v1/builder"
 FIELD = "https://x.com/wp-json/imperal/v1/builder/field"
 STATUS = "https://x.com/wp-json/imperal/v1/builder/status"
 SCAN = "https://x.com/wp-json/imperal/v1/builder/scan"
+HEADING = "https://x.com/wp-json/imperal/v1/builder/heading"
 
 
 async def _ctx():
@@ -410,6 +411,50 @@ async def test_update_without_post_id_or_slug_is_refused_locally():
         site_id="x-com", element_id="abc123", field="title", value="X", state_token="tok-1"))
     assert r.status == "error"
     assert r.error_code == "BUILDER_TARGET_MISSING"
+
+
+async def test_create_bricks_heading_success():
+    ctx = await _ctx()
+    ctx.http.mock_post(HEADING, {
+        "id": 42, "builder": "bricks", "zone": "content", "element_id": "newh1",
+        "parent_id": "tfdups", "position": 0, "tag": "h1", "text": "New Section Heading",
+        "state_token": "tok-after-insert",
+    }, 200)
+    r = await hb.create_bricks_heading(ctx, CreateBricksHeadingParams(
+        site_id="x-com", post_id=42, zone="content", parent_id="tfdups",
+        tag="h1", text="New Section Heading", state_token="tok-content"))
+    assert r.status == "success"
+    assert r.data.element_id == "newh1"
+    assert r.data.tag == "h1"
+    assert "h1" in r.summary
+
+
+async def test_create_bricks_heading_rejects_invalid_zone_locally():
+    ctx = await _ctx()
+    r = await hb.create_bricks_heading(ctx, CreateBricksHeadingParams(
+        site_id="x-com", post_id=42, zone="sidebar", tag="h1",
+        text="X", state_token="tok-1"))
+    assert r.status == "error"
+    assert r.error_code == "BUILDER_INVALID_ZONE"
+
+
+async def test_create_bricks_heading_without_target_is_refused_locally():
+    ctx = await _ctx()
+    r = await hb.create_bricks_heading(ctx, CreateBricksHeadingParams(
+        zone="content", tag="h1", text="X", state_token="tok-1", site_id="x-com"))
+    assert r.status == "error"
+    assert r.error_code == "BUILDER_TARGET_MISSING"
+
+
+async def test_create_bricks_heading_refuses_stale_state_token():
+    ctx = await _ctx()
+    ctx.http.mock_post(HEADING, {"code": "imperal_builder_stale_state",
+                                 "message": "This page changed since you read it."}, 409)
+    r = await hb.create_bricks_heading(ctx, CreateBricksHeadingParams(
+        site_id="x-com", post_id=42, zone="content", tag="h1",
+        text="X", state_token="stale-tok"))
+    assert r.status == "error"
+    assert r.error_code == "BUILDER_STALE_STATE"
 
 
 async def test_preview_and_apply_bulk_builder_fields():
