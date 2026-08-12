@@ -1044,6 +1044,16 @@ async def _render_builders_block(ctx, site_id, base_url, username, pw, builder_s
                  color="green" if bricks_active else "gray"),
     ])
 
+    detected = support.get("detected_builders") or []
+    other_active = [d for d in detected if isinstance(d, dict) and d.get("active")]
+    other_badges = None
+    if other_active:
+        other_badges = ui.Stack(direction="h", gap=2, children=[
+            ui.Badge(label=str(d.get("label") or d.get("slug") or ""),
+                     color="green" if d.get("confidence") == "verified" else "yellow")
+            for d in other_active
+        ])
+
     lookup_form = ui.Form(
         action="__panel__center", submit_label="Load",
         defaults={"view": "", "site_id": site_id, "group_tab": "manage", "manage_tab": "builders"},
@@ -1053,7 +1063,17 @@ async def _render_builders_block(ctx, site_id, base_url, username, pw, builder_s
         ],
     )
 
-    sections = [ui.Card(title="Builder support", content=status_badges), lookup_form]
+    sections = [ui.Card(title="Builder support", content=status_badges)]
+    if other_badges:
+        sections.append(ui.Card(
+            title=f"Other detected builders ({len(other_active)})",
+            content=ui.Stack(gap=2, children=[
+                other_badges,
+                ui.Text("Detection only — Imperal cannot point-edit these builders' content yet, "
+                        "only Elementor and Bricks. Yellow badges are best-effort signatures; "
+                        "report a wrong one and we'll fix the check.", variant="caption"),
+            ])))
+    sections.append(lookup_form)
 
     target = (builder_sel or "").strip()
     if not target:

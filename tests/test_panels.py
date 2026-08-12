@@ -851,6 +851,38 @@ async def test_manage_tab_builders_shows_support_badges_and_lookup_form():
     assert "builder_sel" in s
 
 
+async def test_manage_tab_builders_shows_other_detected_builder_badges():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder/status",
+                      {"bridge_version": "2.20.0", "elementor_active": False,
+                       "elementor_version": "", "bricks_active": False,
+                       "bricks_version": "",
+                       "detected_builders": [
+                           {"slug": "divi", "label": "Divi Builder", "active": True,
+                            "confidence": "verified"},
+                           {"slug": "wpbakery", "label": "WPBakery Page Builder", "active": False,
+                            "confidence": "verified"},
+                       ]}, 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="builders")
+    s = str(node)
+    assert "Other detected builders (1)" in s
+    assert "Divi Builder" in s
+    assert "WPBakery Page Builder" not in s  # inactive ones aren't badged
+
+
+async def test_manage_tab_builders_hides_other_builders_card_when_none_active():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder/status",
+                      {"bridge_version": "2.20.0", "elementor_active": True,
+                       "elementor_version": "3.20.0", "bricks_active": False,
+                       "bricks_version": "", "detected_builders": []}, 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="builders")
+    s = str(node)
+    assert "Other detected builders" not in s
+
+
 async def test_manage_tab_builders_loads_element_tree_with_edit_form():
     ctx = await _base_panel_ctx()
     ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder/status",

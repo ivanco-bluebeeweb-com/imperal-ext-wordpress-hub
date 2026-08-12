@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.20.0
+ * Version:           2.21.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.20.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.21.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -1041,7 +1041,7 @@ add_action( 'rest_api_init', 'imperal_seo_bridge_register_routes' );
  * builder content without touching the rest of the page.
  * ============================================================================= */
 
-define( 'IMPERAL_BUILDER_BRIDGE_VERSION', '1.2.0' );
+define( 'IMPERAL_BUILDER_BRIDGE_VERSION', '1.3.0' );
 define( 'IMPERAL_BUILDER_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 
@@ -1051,6 +1051,183 @@ const IMPERAL_BUILDER_BRICKS_META    = array(
 	'content' => '_bricks_page_content_2',
 	'footer'  => '_bricks_page_footer_2',
 );
+
+/**
+ * Site-wide detection registry for 49 additional WordPress page-builder /
+ * block-library plugins, ranked roughly by real-world popularity (installed
+ * base / market share as of 2026). This is DETECTION ONLY -- a badge saying
+ * "this plugin is active on this site" -- not point-editing. Elementor and
+ * Bricks keep their own dedicated `elementor_active`/`bricks_active` fields
+ * above because they are the only two builders this bridge can actually
+ * read/write element trees for; nothing here changes that contract.
+ *
+ * Each entry is checked the cheapest possible way -- a `defined()` constant
+ * or `function_exists()`/`class_exists()` check the plugin itself sets on
+ * load -- so this adds no meaningful overhead to /builder/status.
+ *
+ * `confidence`:
+ *   'verified'   -- signature confirmed against the plugin's own published
+ *                   source/docs during this registry's construction.
+ *   'best_effort'-- signature follows the plugin's documented naming
+ *                   convention but was not individually source-verified;
+ *                   flagged so a false negative here is easy to spot and
+ *                   fix by widening/replacing the single check below.
+ *
+ * @return array Ordered list of ['slug','label','active','confidence'].
+ */
+function imperal_builder_bridge_detect_others() {
+	$checks = array(
+		// -- Rank 2-10: major legacy/commercial builders -----------------
+		array( 'wpbakery', 'WPBakery Page Builder', 'verified',
+			static function () { return defined( 'WPB_VC_VERSION' ); } ),
+		array( 'divi', 'Divi Builder', 'verified',
+			static function () { return defined( 'ET_BUILDER_VERSION' ) || function_exists( 'et_pb_is_pagebuilder_used' ); } ),
+		array( 'beaver_builder', 'Beaver Builder', 'verified',
+			static function () { return defined( 'FL_BUILDER_VERSION' ); } ),
+		array( 'siteorigin', 'SiteOrigin Page Builder', 'verified',
+			static function () { return defined( 'SITEORIGIN_PANELS_VERSION' ); } ),
+		array( 'fusion_builder', 'Fusion Builder (Avada)', 'verified',
+			static function () { return defined( 'FUSION_BUILDER_VERSION' ); } ),
+		array( 'essential_addons_elementor', 'Essential Addons for Elementor', 'verified',
+			static function () { return defined( 'EAEL_VERSION' ) || class_exists( 'Essential_Addons_Elementor\\Classes\\Bootstrap' ); } ),
+		array( 'visual_composer', 'Visual Composer Website Builder', 'verified',
+			static function () { return defined( 'VCV_VERSION' ); } ),
+		array( 'spectra', 'Spectra (Ultimate Addons for Gutenberg)', 'verified',
+			static function () { return defined( 'UAGB_VER' ) || function_exists( 'uagb_blocks_styling' ); } ),
+		array( 'thrive_architect', 'Thrive Architect', 'best_effort',
+			static function () { return defined( 'TVE_VERSION' ) || class_exists( 'TCB_Post_List_Bridge' ); } ),
+		// -- Rank 11-20 ----------------------------------------------------
+		array( 'kadence_blocks', 'Kadence Blocks', 'verified',
+			static function () { return defined( 'KADENCE_BLOCKS_VERSION' ); } ),
+		array( 'generateblocks', 'GenerateBlocks', 'verified',
+			static function () { return defined( 'GENERATEBLOCKS_VERSION' ); } ),
+		array( 'oxygen', 'Oxygen Builder', 'verified',
+			static function () { return defined( 'CT_VERSION' ) && function_exists( 'ct_setup_ct' ); } ),
+		array( 'ultimate_addons_elementor', 'Ultimate Addons for Elementor', 'best_effort',
+			static function () { return defined( 'UAEL_VER' ); } ),
+		array( 'happy_addons', 'Happy Addons for Elementor', 'verified',
+			static function () { return defined( 'HAPPY_ADDONS_VERSION' ); } ),
+		array( 'stackable', 'Stackable', 'verified',
+			static function () { return defined( 'STACKABLE_VERSION' ); } ),
+		array( 'brizy', 'Brizy', 'verified',
+			static function () { return defined( 'BRIZY_VERSION' ) || defined( 'BRIZY_PRO_VERSION' ); } ),
+		array( 'breakdance', 'Breakdance', 'best_effort',
+			static function () { return defined( 'BREAKDANCE_VERSION' ) || class_exists( '\\Breakdance\\Plugin' ); } ),
+		array( 'premium_addons', 'Premium Addons for Elementor', 'best_effort',
+			static function () { return defined( 'PA_VER' ) || defined( 'PREMIUM_ADDONS_VERSION' ); } ),
+		// -- Rank 21-30 ----------------------------------------------------
+		array( 'powerpack', 'PowerPack for Elementor', 'best_effort',
+			static function () { return defined( 'PP_ELEMENTS_VERSION' ) || class_exists( 'PowerpackElementsAdmin\\Powerpack_Elements_Admin' ); } ),
+		array( 'jetelements', 'JetElements (Crocoblock)', 'best_effort',
+			static function () { return defined( 'JET_ELEMENTS_VERSION' ); } ),
+		array( 'ht_mega', 'HT Mega (Elementor addon)', 'best_effort',
+			static function () { return defined( 'HT_MEGA_VERSION' ); } ),
+		array( 'element_pack', 'Element Pack (BdThemes)', 'best_effort',
+			static function () { return defined( 'BDTEP_VER' ); } ),
+		array( 'coblocks', 'CoBlocks', 'verified',
+			static function () { return defined( 'COBLOCKS_VERSION' ); } ),
+		array( 'otter_blocks', 'Otter Blocks', 'verified',
+			static function () { return defined( 'OTTER_BLOCKS_VERSION' ); } ),
+		array( 'getwid', 'Getwid', 'verified',
+			static function () { return defined( 'GETWID_VERSION' ); } ),
+		array( 'qubely', 'Qubely', 'best_effort',
+			static function () { return defined( 'QUBELY_VERSION' ); } ),
+		array( 'ultimate_blocks', 'Ultimate Blocks', 'best_effort',
+			static function () { return defined( 'ULTIMATE_BLOCKS_VER' ); } ),
+		array( 'gutentor', 'Gutentor', 'best_effort',
+			static function () { return defined( 'GUTENTOR_VERSION' ); } ),
+		// -- Rank 31-40 ----------------------------------------------------
+		array( 'cornerstone', 'Cornerstone (Themeco X)', 'best_effort',
+			static function () { return defined( 'CS_VERSION' ) || class_exists( 'CS_App' ); } ),
+		array( 'zion_builder', 'Zion Builder', 'verified',
+			static function () { return defined( 'ZIONBUILDER_VERSION' ); } ),
+		array( 'themify_builder', 'Themify Builder', 'best_effort',
+			static function () { return defined( 'TB_VERSION' ) && function_exists( 'themify_builder_content' ); } ),
+		array( 'king_composer', 'King Composer', 'best_effort',
+			static function () { return defined( 'KC_VERSION' ) || defined( 'KC_PLUGIN_VERSION' ); } ),
+		array( 'live_composer', 'Live Composer', 'verified',
+			static function () { return defined( 'DS_LC_VERSION' ) || defined( 'LIVE_COMPOSER_VERSION' ); } ),
+		array( 'motopress_content_editor', 'MotoPress Content Editor', 'best_effort',
+			static function () { return defined( 'MPCE_VERSION' ) || class_exists( 'MPCE_Plugin' ); } ),
+		array( 'cwicly', 'Cwicly', 'best_effort',
+			static function () { return defined( 'CWICLY_VERSION' ) || class_exists( 'Cwicly_Plugin' ); } ),
+		array( 'bricksforge', 'Bricksforge (Bricks addon)', 'best_effort',
+			static function () { return defined( 'BRICKSFORGE_VERSION' ) || class_exists( 'Bricksforge\\Plugin' ); } ),
+		array( 'automatic_css', 'Automatic.css', 'best_effort',
+			static function () { return defined( 'ACSS_VERSION' ) || defined( 'AUTOMATIC_CSS_VERSION' ); } ),
+		array( 'colibri', 'Colibri Page Builder', 'best_effort',
+			static function () { return defined( 'COLIBRI_PAGE_BUILDER_VERSION' ) || class_exists( 'Colibri\\PageBuilder\\Plugin' ); } ),
+		// -- Rank 41-50 ----------------------------------------------------
+		array( 'page_builder_sandwich', 'Page Builder Sandwich', 'best_effort',
+			static function () { return defined( 'PBS_PLUGIN_VERSION' ) || class_exists( 'Page_Builder_Sandwich' ); } ),
+		array( 'wp_page_builder', 'WP Page Builder (ThemeXpert)', 'best_effort',
+			static function () { return defined( 'WPB_VERSION' ) && class_exists( 'WP_Page_Builder' ); } ),
+		array( 'toolset_blocks', 'Toolset Blocks', 'best_effort',
+			static function () { return defined( 'TOOLSET_BLOCKS_VERSION' ) || class_exists( 'Toolset_Blocks_Loader' ); } ),
+		array( 'muffin_builder', 'Muffin Builder (Jupiter X theme)', 'best_effort',
+			static function () { return class_exists( 'MB_Builder' ) || defined( 'MB_BUILDER_VER' ); } ),
+		array( 'uncode_builder', 'Uncode Builder (theme-bundled)', 'best_effort',
+			static function () { return defined( 'UNCODE_VERSION' ) && function_exists( 'uncode_wpbakery_map' ); } ),
+		array( 'goodlayers_builder', 'GoodLayers Page Builder', 'best_effort',
+			static function () { return defined( 'GDLR_CORE_VERSION' ); } ),
+		array( 'wpzoom_blocks', 'WPZOOM Blocks', 'best_effort',
+			static function () { return defined( 'WPZOOM_BLOCKS_VERSION' ); } ),
+		array( 'content_blocks_builder', 'Content Blocks Builder', 'best_effort',
+			static function () { return defined( 'CBB_PLUGIN_VERSION' ) || class_exists( 'Content_Blocks_Builder' ); } ),
+		array( 'layers', 'Layers (WP)', 'best_effort',
+			static function () { return defined( 'LAYERS_VERSION' ); } ),
+		array( 'droip', 'Droip', 'best_effort',
+			static function () { return defined( 'DROIP_VERSION' ) || class_exists( 'Droip\\Droip' ); } ),
+		// -- Rank 51 --------------------------------------------------------
+		array( 'seedprod', 'SeedProd', 'best_effort',
+			static function () { return defined( 'SEEDPROD_VERSION' ) || class_exists( 'SeedProd_Lite' ); } ),
+	);
+
+	$results = array();
+	foreach ( $checks as $entry ) {
+		list( $slug, $label, $confidence, $fn ) = $entry;
+		$active = false;
+		try {
+			$active = (bool) call_user_func( $fn );
+		} catch ( \Throwable $e ) {
+			$active = false;
+		}
+		$results[] = array(
+			'slug'       => $slug,
+			'label'      => $label,
+			'active'     => $active,
+			'confidence' => $confidence,
+		);
+	}
+	return $results;
+}
+
+/**
+ * GET /imperal/v1/builder/status — capability discovery: is the bridge
+ * present, and which builder plugins are active site-wide (not just on one
+ * post — Elementor/Bricks activation is a whole-site fact).
+ *
+ * `detected_builders` covers 49 additional builders/block-libraries beyond
+ * Elementor/Bricks for DETECTION ONLY (see imperal_builder_bridge_detect_others()
+ * docblock) -- point-editing (`update_builder_field`, `create_bricks_heading`)
+ * remains Elementor/Bricks only; detecting a builder here does not imply this
+ * bridge can edit its content.
+ *
+ * @return WP_REST_Response
+ */
+function imperal_builder_bridge_status() {
+	return rest_ensure_response(
+		array(
+			'bridge'            => true,
+			'bridge_version'    => IMPERAL_BUILDER_BRIDGE_VERSION,
+			'elementor_active'  => defined( 'ELEMENTOR_VERSION' ),
+			'elementor_version' => defined( 'ELEMENTOR_VERSION' ) ? ELEMENTOR_VERSION : '',
+			'bricks_active'     => function_exists( 'bricks_is_builder' ) || defined( 'BRICKS_VERSION' ),
+			'bricks_version'    => defined( 'BRICKS_VERSION' ) ? BRICKS_VERSION : '',
+			'detected_builders' => imperal_builder_bridge_detect_others(),
+		)
+	);
+}
 
 /**
  * Resolve a post from id or slug (+optional type), same contract as the SEO
@@ -1888,25 +2065,7 @@ function imperal_builder_bridge_create_heading( $request ) {
 	);
 }
 
-/**
- * GET /imperal/v1/builder/status — capability discovery: is the bridge
- * present, and which builder plugins are active site-wide (not just on one
- * post — Elementor/Bricks activation is a whole-site fact).
- *
- * @return WP_REST_Response
- */
-function imperal_builder_bridge_status() {
-	return rest_ensure_response(
-		array(
-			'bridge'            => true,
-			'bridge_version'    => IMPERAL_BUILDER_BRIDGE_VERSION,
-			'elementor_active'  => defined( 'ELEMENTOR_VERSION' ),
-			'elementor_version' => defined( 'ELEMENTOR_VERSION' ) ? ELEMENTOR_VERSION : '',
-			'bricks_active'     => function_exists( 'bricks_is_builder' ) || defined( 'BRICKS_VERSION' ),
-			'bricks_version'    => defined( 'BRICKS_VERSION' ) ? BRICKS_VERSION : '',
-		)
-	);
-}
+
 
 /**
  * Register the REST routes.

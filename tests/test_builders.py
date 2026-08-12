@@ -562,6 +562,27 @@ async def test_check_reports_both_builders_active():
     assert "Elementor" in r.summary and "Bricks" in r.summary
 
 
+async def test_check_reports_other_detected_builders():
+    ctx = await _ctx()
+    ctx.http.mock_get(STATUS, {
+        "bridge": True, "bridge_version": "1.0.0",
+        "elementor_active": False, "bricks_active": False,
+        "detected_builders": [
+            {"slug": "divi", "label": "Divi Builder", "active": True, "confidence": "verified"},
+            {"slug": "wpbakery", "label": "WPBakery Page Builder", "active": False, "confidence": "verified"},
+            {"slug": "colibri", "label": "Colibri Page Builder", "active": True, "confidence": "best_effort"},
+        ],
+    }, 200)
+    r = await hb.check_builder_support(ctx, SiteIdParams(site_id="x-com"))
+    assert r.status == "success"
+    assert len(r.data.detected_builders) == 3
+    active_labels = {d.label for d in r.data.detected_builders if d.active}
+    assert active_labels == {"Divi Builder", "Colibri Page Builder"}
+    assert "Divi Builder" in r.summary
+    assert "WPBakery" not in r.summary  # inactive ones aren't listed as active
+    assert "3 other builder(s)" in r.summary
+
+
 async def test_check_reports_neither_builder_active():
     ctx = await _ctx()
     ctx.http.mock_get(STATUS, {

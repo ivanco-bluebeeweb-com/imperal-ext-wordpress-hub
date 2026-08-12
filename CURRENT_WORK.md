@@ -1821,6 +1821,65 @@ actual `ui.Input`/`ui.Form` capabilities (no JSON/object widget exists — confi
 where a Pydantic-typed param submitted from a plain-string panel Input can silently fail
 validation before the handler ever runs).
 
+## 2026-08-12 — Detect 49 more WordPress builders/block-libraries (v1.40.0, Bridge 2.21.0)
+
+**Status:** ✅ done. User asked for a popularity-ranked list of ~50+ WordPress page
+builders/block-libraries, then "сделай детект этих билдеров" — detect them (site-wide
+active/inactive), NOT point-edit them. Point-editing remains Elementor/Bricks only; nothing
+about `update_builder_field`/`create_bricks_heading`/state_token guards changed.
+
+**Ranked list used** (51 total; Elementor/Bricks already had dedicated fields, so 49 new
+registry entries): WPBakery, Divi, Beaver Builder, SiteOrigin, Fusion Builder (Avada),
+Essential Addons for Elementor, Visual Composer Website Builder, Spectra, Thrive Architect,
+Kadence Blocks, GenerateBlocks, Oxygen, Ultimate Addons for Elementor, Happy Addons, Stackable,
+Brizy, Breakdance, Premium Addons, PowerPack, JetElements, HT Mega, Element Pack, CoBlocks,
+Otter Blocks, Getwid, Qubely, Ultimate Blocks, Gutentor, Cornerstone (Themeco X), Zion Builder,
+Themify Builder, King Composer, Live Composer, MotoPress Content Editor, Cwicly, Bricksforge,
+Automatic.css, Colibri, Page Builder Sandwich, WP Page Builder (ThemeXpert), Toolset, Muffin
+Builder, Uncode, GoodLayers, WPZOOM Blocks, Content Blocks Builder, Layers, Droip, SeedProd.
+(Note: an earlier draft of the list mistakenly included Kirki — a Customizer/theme-settings
+framework, not a page builder — corrected to SeedProd before implementation.)
+
+**Implementation:**
+1. **Bridge PHP** (`imperal-bridge.php`, Builder section, `IMPERAL_BUILDER_BRIDGE_VERSION`
+   1.2.0 → 1.3.0; plugin-wide `IMPERAL_BRIDGE_VERSION` 2.20.0 → 2.21.0): added
+   `imperal_builder_bridge_detect_others()` — a flat registry of 49 `[slug, label,
+   confidence, closure]` tuples, each checked with the cheapest possible native signal
+   (`defined()` constant or `function_exists()`/`class_exists()` the plugin itself sets on
+   load — no filesystem/DB scan, negligible overhead on `/builder/status`). Each entry carries
+   `confidence`: `'verified'` (signature confirmed against the plugin's own published
+   source/docs this session) or `'best_effort'` (follows documented naming convention but not
+   individually source-verified — flagged so a wrong signature is easy to spot/fix later
+   without hunting through the whole registry). `imperal_builder_bridge_status()` now also
+   returns `detected_builders` alongside the existing `elementor_active`/`bricks_active`
+   fields, which are UNCHANGED (still their own dedicated fields, still the only two builders
+   this bridge can read/write element trees for).
+2. **models.py**: new `DetectedBuilder` (slug/label/active/confidence) +
+   `BuilderSupport.detected_builders: list[DetectedBuilder]`.
+3. **handlers_builders.py** (`check_builder_support`): parses `detected_builders` from the
+   bridge response into `DetectedBuilder` rows; summary now appends active other-builder
+   labels and a "(scanned N other builder(s))" note when the bridge returned any.
+4. **panels.py** (`_render_builders_block`): new "Other detected builders (N)" card, shown
+   only when at least one of the 49 is active — green badge for `verified` confidence, yellow
+   for `best_effort` (so a wrong yellow badge is visually distinguishable), plus a caption
+   clarifying this is detection-only, not point-editable.
+5. **Tests**: `test_check_reports_other_detected_builders` (handler-level parse + summary),
+   `test_manage_tab_builders_shows_other_detected_builder_badges` /
+   `..._hides_other_builders_card_when_none_active` (panel-level). 835/835 tests pass (was
+   832 before this session's two feature spans); `imperal validate`: 0 errors, 0 warnings.
+6. Rebuilt `bridge/imperal-bridge.zip` (excludes tests/ + README + plugin PHP only, per
+   existing convention) and `bridge/release.json` (version 2.21.0, new sha256) so
+   `update_imperal_bridge`'s self-update path (see 2.17.0 entry above) can deliver this
+   release to sites that already have Bridge ≥2.17.0 installed.
+7. Bumped app version 1.39.0 → 1.40.0 (imperal.json, app.py, pyproject.toml).
+
+**Pricing:** no new chat-tools were added (only `check_builder_support`'s existing response
+shape grew a field) — its existing price (8 credits, a standard read) is unchanged and still
+synced with `tool-prices.json`/manifest. No pricing action needed per the "every new function
+gets a price, same policy" standing rule, since no new *function* was created.
+
+## 2026-08-12 — Builders point-edit UI: on-the-fly Bricks control gap-closing (v1.39.0)
+
 **Что было сделано:**
 1. **Panel → structured value gap.** `UpdateBuilderFieldParams.value` is `JsonValue`
    (`dict|list|str|int|float|bool|None`) so chat callers can already send a real

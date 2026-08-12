@@ -37,7 +37,7 @@ from models import (GetBuilderContentParams, UpdateBuilderFieldParams,
                     CreateBricksHeadingParams, BuilderHeadingCreateResult,
                     BulkBuilderFieldParams, ApplyBulkBuilderFieldParams, BulkBuilderFieldResult,
                     BuilderContent, BuilderElement, BuilderFieldUpdateResult,
-                    BuilderScanItem, BuilderSupport, SiteIdParams)
+                    BuilderScanItem, BuilderSupport, DetectedBuilder, SiteIdParams)
 from wp_client import wp_get, wp_post, wp_error_message, wp_error_code
 import storage
 
@@ -595,6 +595,16 @@ async def check_builder_support(ctx, params: SiteIdParams) -> ActionResult:
         return _http_failure(r.status_code, r.body)
 
     body = r.body
+    detected_raw = body.get("detected_builders", []) or []
+    detected = [
+        DetectedBuilder(
+            slug=str(item.get("slug", "") or ""),
+            label=str(item.get("label", "") or ""),
+            active=bool(item.get("active", False)),
+            confidence=str(item.get("confidence", "") or ""),
+        )
+        for item in detected_raw if isinstance(item, dict)
+    ]
     support = BuilderSupport(
         id=params.site_id, title="Builder support", kind="wp_builder_support",
         bridge_version=str(body.get("bridge_version", "") or ""),
@@ -602,9 +612,13 @@ async def check_builder_support(ctx, params: SiteIdParams) -> ActionResult:
         elementor_version=str(body.get("elementor_version", "") or ""),
         bricks_active=bool(body.get("bricks_active", False)),
         bricks_version=str(body.get("bricks_version", "") or ""),
+        detected_builders=detected,
     )
     active = [name for name, on in (("Elementor", support.elementor_active), ("Bricks", support.bricks_active)) if on]
+    active += [d.label for d in detected if d.active]
     summary = f"Builder bridge v{support.bridge_version} — active: {', '.join(active) if active else 'none'}"
+    if detected:
+        summary += f" (scanned {len(detected)} other builder(s))"
     return ActionResult.success(support, summary=summary)
 
 

@@ -1480,12 +1480,23 @@ class BuilderFieldUpdateResult(sdl.Entity):
     state_token: str = ""
 
 
+class DetectedBuilder(BaseModel):
+    """One additional builder/block-library detected site-wide, beyond the
+    Elementor/Bricks fields BuilderSupport already carries. Detection only --
+    this bridge cannot read/write element trees for anything listed here."""
+    slug: str = ""
+    label: str = ""
+    active: bool = False
+    confidence: str = ""
+
+
 class BuilderSupport(sdl.Entity):
     bridge_version: str = ""
     elementor_active: bool = False
     elementor_version: str = ""
     bricks_active: bool = False
     bricks_version: str = ""
+    detected_builders: list[DetectedBuilder] = Field(default_factory=list)
 
 
 class BuilderScanItem(sdl.Entity):
