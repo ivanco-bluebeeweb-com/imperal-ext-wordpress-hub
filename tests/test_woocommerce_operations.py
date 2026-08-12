@@ -9,9 +9,11 @@ from models import (
     AddOrderNoteParams,
     ApplyBulkCouponUpdateParams,
     ApplyBulkCustomerUpdateParams,
+    ApplyBulkOrderStatusParams,
     ArchiveCouponParams,
     BulkCouponUpdateParams,
     BulkCustomerUpdateParams,
+    BulkOrderStatusParams,
     CreateCouponParams,
     CreateCustomerParams,
     CreateOrderParams,
@@ -244,6 +246,32 @@ async def test_create_customer_normalises_privacy_safe_fields():
     assert seen[-1][1]["json"] == {
         "email": "new@example.com", "first_name": "New",
         "last_name": "User", "username": "new_user"}
+
+
+async def test_preview_and_apply_bulk_order_status():
+    ctx = await _ctx()
+    orders = [_order("pending", 12), _order("on-hold", 13)]
+    for order in orders:
+        ctx.http.mock_get(f"{BASE}/orders/{order['id']}", order, 200)
+    preview = await ho.preview_bulk_order_status(ctx, BulkOrderStatusParams(
+        site_id="shop-test", order_ids=[12, 13], status="processing"))
+    assert preview.status == "success" and preview.data.preview is True
+
+    for order in orders:
+        ctx.http.mock_get(f"{BASE}/orders/{order['id']}", order, 200)
+        ctx.http.mock_post(f"{BASE}/orders/{order['id']}", {**order, "status": "processing"}, 200)
+    result = await ho.apply_bulk_order_status(ctx, ApplyBulkOrderStatusParams(
+        site_id="shop-test", order_ids=[12, 13], status="processing",
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success" and result.data.updated == 2
+
+
+async def test_apply_bulk_order_status_refuses_stale_token():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/orders/12", _order("pending", 12), 200)
+    result = await ho.apply_bulk_order_status(ctx, ApplyBulkOrderStatusParams(
+        site_id="shop-test", order_ids=[12], status="processing", expected_state_token="0" * 64))
+    assert result.status == "error" and result.error_code == "WOOCOMMERCE_BULK_STATE_CHANGED"
 
 
 async def test_preview_and_apply_bulk_customer_update():

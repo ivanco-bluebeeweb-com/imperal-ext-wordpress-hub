@@ -143,6 +143,31 @@ class UpdateOrderStatusParams(BaseModel):
     status: str = Field(description="Target status: pending, on-hold, processing, completed, cancelled, failed, or refunded")
 
 
+class BulkOrderStatusParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    order_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit WooCommerce order ids; 1-100, never inferred")
+    status: str = Field(description="Routine status for every listed order: pending, on-hold, processing, or completed")
+
+
+class ApplyBulkOrderStatusParams(BulkOrderStatusParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any order changed")
+
+
+class BulkOrderStatusResult(sdl.Entity):
+    id: str = ""
+    title: str = "Order status batch"
+    kind: str = "wc_order_status_batch"
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
+
+
 class AddOrderNoteParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     order_id: int = Field(gt=0, description="Numeric WooCommerce order id")

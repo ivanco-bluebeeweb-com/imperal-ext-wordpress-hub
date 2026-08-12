@@ -21,12 +21,15 @@ from handlers_woocommerce import (
 from models import (
     AddOrderNoteParams,
     ApplyBulkCouponUpdateParams,
+    ApplyBulkOrderStatusParams,
     ApplyBulkCustomerUpdateParams,
     ArchiveCouponParams,
     BulkCouponUpdateParams,
     BulkCouponUpdateResult,
     BulkCustomerUpdateParams,
     BulkCustomerUpdateResult,
+    BulkOrderStatusParams,
+    BulkOrderStatusResult,
     Coupon,
     CreateCouponParams,
     CreateCustomerParams,
@@ -310,6 +313,74 @@ async def update_order_status_risky(ctx, params: UpdateOrderStatusParams) -> Act
     if params.status.strip().lower() not in _RISKY_ORDER_STATUSES:
         return _error("Use update_order_status for routine target statuses.")
     return await _set_order_status(ctx, params)
+
+
+def _order_state_token(orders: list[dict]) -> str:
+    state = [{key: order.get(key, "") for key in ("id", "status", "date_modified", "total")}
+             for order in sorted(orders, key=lambda value: value.get("id", 0))]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_order_status_targets(ctx, params: BulkOrderStatusParams):
+    status = params.status.strip().lower()
+    if status not in _ORDER_STATUSES - _RISKY_ORDER_STATUSES:
+        return None, _error("Bulk order status supports only pending, on-hold, processing, or completed.",
+                            code="WOOCOMMERCE_RISKY_STATUS")
+    if len(set(params.order_ids)) != len(params.order_ids):
+        return None, _error("Each order id may appear only once.", code="WOOCOMMERCE_DUPLICATE_IDS")
+    orders = []
+    for order_id in params.order_ids:
+        order, err = await _request(ctx, params.site_id, f"/orders/{order_id}", expected_type=dict)
+        if err:
+            return None, err
+        orders.append(order)
+    return (status, orders), None
+
+
+@chat.function(
+    "preview_bulk_order_status",
+    description="Preview a routine status change for 1-100 explicit WooCommerce orders. Makes no writes and excludes cancelled, failed, and refunded.",
+    action_type="read", data_model=BulkOrderStatusResult)
+async def preview_bulk_order_status(ctx, params: BulkOrderStatusParams) -> ActionResult:
+    """Read explicit orders and return a guarded routine-status batch diff."""
+    target, err = await _bulk_order_status_targets(ctx, params)
+    if err:
+        return err
+    status, orders = target
+    changes = [f"#{order['id']}: status {order.get('status', '')!r} → {status!r}" for order in orders]
+    result = BulkOrderStatusResult(id="orders", preview=True, requested=len(params.order_ids),
+                                   matched=len(orders), state_token=_order_state_token(orders), changes=changes)
+    return ActionResult.success(result, summary=f"Previewed {len(orders)} order status change(s)")
+
+
+@chat.function(
+    "apply_bulk_order_status",
+    description="Apply a previewed routine WooCommerce order-status batch to 1-100 explicit order ids. Rechecks every order before any write.",
+    action_type="write", data_model=BulkOrderStatusResult,
+    effects=["wc.order_bulk_status_update"], event="wordpress-hub.apply_bulk_order_status")
+async def apply_bulk_order_status(ctx, params: ApplyBulkOrderStatusParams) -> ActionResult:
+    """Re-read all explicit orders and apply only the previewed routine status."""
+    target, err = await _bulk_order_status_targets(ctx, params)
+    if err:
+        return err
+    status, orders = target
+    if _order_state_token(orders) != params.expected_state_token:
+        return ActionResult.error("These orders changed since preview; no statuses were updated. Preview again.",
+                                  retryable=False, code="WOOCOMMERCE_BULK_STATE_CHANGED")
+    updated_ids, failed_ids = [], []
+    for order in orders:
+        data, write_err = await _write(ctx, params.site_id, f"/orders/{order['id']}", {"status": status})
+        if write_err:
+            failed_ids.append(order["id"])
+        else:
+            updated_ids.append(int(data.get("id", order["id"])))
+    result = BulkOrderStatusResult(id="orders", preview=False, requested=len(params.order_ids), matched=len(orders),
+                                   updated=len(updated_ids), failed=len(failed_ids), state_token=params.expected_state_token,
+                                   updated_ids=updated_ids, failed_ids=failed_ids)
+    summary = f"Updated {len(updated_ids)} order status(es)"
+    if failed_ids:
+        summary += f"; {len(failed_ids)} failed"
+    return ActionResult.success(result, summary=summary, refresh_panels=["center"])
 
 
 async def _add_note(ctx, params):
