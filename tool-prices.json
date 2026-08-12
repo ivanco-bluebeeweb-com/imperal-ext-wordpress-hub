@@ -183,6 +183,7 @@
   "sync_sites_to_registry": 16,
   "tail_debug_log": 8,
   "tail_php_error_log": 8,
+  "create_bricks_heading": 16,
   "update_builder_field": 16,
   "update_core": 20,
   "update_coupon": 16,
