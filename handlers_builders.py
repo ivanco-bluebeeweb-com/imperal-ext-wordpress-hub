@@ -27,6 +27,7 @@ parent_id, el_type, widget_type, settings) so a caller only needs one mental
 model for both builders.
 """
 
+import json
 import re
 
 from imperal_sdk import ActionResult, sdl
@@ -41,6 +42,36 @@ from wp_client import wp_get, wp_post, wp_error_message, wp_error_code
 import storage
 
 _TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _coerce_panel_value(value):
+    """Turn a plain string typed into a panel form into the same JSON-shaped
+    value chat callers already send natively.
+
+    The panel's ui.Input always submits a plain string (the SDK's Form/Input
+    contract has no JSON/object input widget), so a Bricks/Elementor field
+    that needs a structured value (e.g. {"unit": "px", "size": 20} for
+    spacing/typography) is unreachable from the panel unless a JSON-looking
+    string is parsed back into a real dict/list/number/bool here. Chat
+    callers are unaffected: they already pass a real dict/list/int/bool
+    through `value: JsonValue`, so this only ever fires for `str` input, and
+    a string that fails to parse as JSON is kept exactly as typed (e.g. a
+    plain title stays a plain title, not silently mangled).
+    """
+    if not isinstance(value, str):
+        return value
+    stripped = value.strip()
+    looks_like_json = (
+        stripped[:1] in ("{", "[")
+        or stripped in ("true", "false", "null")
+        or bool(re.fullmatch(r"-?\d+(\.\d+)?", stripped))
+    )
+    if not stripped or not looks_like_json:
+        return value
+    try:
+        return json.loads(stripped)
+    except (ValueError, TypeError):
+        return value
 
 
 def _strip_tags(text: str) -> str:
@@ -444,7 +475,7 @@ async def update_builder_field(ctx, params: UpdateBuilderFieldParams) -> ActionR
     body.update({
         "element_id": params.element_id,
         "field": params.field,
-        "value": params.value,
+        "value": _coerce_panel_value(params.value),
         "state_token": params.state_token,
     })
     if params.builder:
@@ -476,7 +507,8 @@ async def update_builder_field(ctx, params: UpdateBuilderFieldParams) -> ActionR
     zone_bit = f"/{result.zone}" if result.zone else ""
     return ActionResult.success(
         result,
-        summary=f"Updated '{result.field}' on element {result.element_id} ({result.builder}{zone_bit}).")
+        summary=f"Updated '{result.field}' on element {result.element_id} ({result.builder}{zone_bit}).",
+        refresh_panels=["center"])
 
 
 @chat.function(
@@ -529,7 +561,8 @@ async def create_bricks_heading(ctx, params: CreateBricksHeadingParams) -> Actio
         state_token=str(payload.get("state_token", "") or ""),
     )
     return ActionResult.success(result, summary=(f"Created {result.tag} heading on Bricks element "
-                                f"{result.element_id} ({result.zone})."))
+                                f"{result.element_id} ({result.zone})."),
+                                refresh_panels=["center"])
 
 
 @chat.function(

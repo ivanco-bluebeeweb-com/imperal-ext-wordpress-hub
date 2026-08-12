@@ -350,6 +350,65 @@ async def test_update_accepts_structured_json_value():
     assert r.status == "success"
 
 
+async def test_update_coerces_json_looking_string_from_panel_form():
+    # The panel's ui.Input always submits a plain string — a structured
+    # Bricks/Elementor field (e.g. spacing/typography) typed as JSON text in
+    # the panel must reach the bridge as a real dict, not a literal string.
+    ctx = await _ctx()
+    sent = {}
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        if url == FIELD:
+            sent.update(kwargs.get("json") or {})
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_post(FIELD, {
+        "id": 42, "builder": "bricks", "zone": "content", "element_id": "e1",
+        "field": "_padding", "state_token": "tok-2",
+    }, 200)
+    r = await hb.update_builder_field(ctx, UpdateBuilderFieldParams(
+        site_id="x-com", post_id=42, element_id="e1", field="_padding",
+        value='{"unit": "px", "size": 20}', state_token="tok-1",
+        builder="bricks", zone="content"))
+    assert r.status == "success"
+    assert sent["value"] == {"unit": "px", "size": 20}
+
+
+async def test_update_keeps_plain_string_that_is_not_json():
+    ctx = await _ctx()
+    sent = {}
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        if url == FIELD:
+            sent.update(kwargs.get("json") or {})
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_post(FIELD, {
+        "id": 42, "builder": "elementor", "element_id": "abc123",
+        "field": "title", "state_token": "tok-2",
+    }, 200)
+    await hb.update_builder_field(ctx, UpdateBuilderFieldParams(
+        site_id="x-com", post_id=42, element_id="abc123", field="title",
+        value="New heading", state_token="tok-1"))
+    assert sent["value"] == "New heading"
+
+
+async def test_update_field_success_refreshes_center_panel():
+    ctx = await _ctx()
+    ctx.http.mock_post(FIELD, {
+        "id": 42, "builder": "elementor", "element_id": "abc123",
+        "field": "title", "state_token": "tok-2",
+    }, 200)
+    r = await hb.update_builder_field(ctx, UpdateBuilderFieldParams(
+        site_id="x-com", post_id=42, element_id="abc123", field="title",
+        value="New heading", state_token="tok-1"))
+    assert r.refresh_panels == ["center"]
+
+
 async def test_stale_state_token_is_rejected_with_its_own_code():
     ctx = await _ctx()
     ctx.http.mock_post(FIELD, {"code": "imperal_builder_stale_state",
@@ -427,6 +486,7 @@ async def test_create_bricks_heading_success():
     assert r.data.element_id == "newh1"
     assert r.data.tag == "h1"
     assert "h1" in r.summary
+    assert r.refresh_panels == ["center"]
 
 
 async def test_create_bricks_heading_rejects_invalid_zone_locally():

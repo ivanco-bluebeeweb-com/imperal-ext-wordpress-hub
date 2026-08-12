@@ -1109,7 +1109,9 @@ async def _render_builders_block(ctx, site_id, base_url, username, pw, builder_s
                          "builder": _builder, "zone": _zone, "state_token": _state_token},
                 children=[
                     ui.Input(param_name="field", placeholder="Field name, e.g. title or _typography"),
-                    ui.Input(param_name="value", placeholder="New value"),
+                    ui.Input(param_name="value",
+                             placeholder="New value — plain text, or JSON for structured fields "
+                                         'e.g. {"unit": "px", "size": 20}'),
                 ],
             )
             return ui.ListItem(
@@ -1128,6 +1130,28 @@ async def _render_builders_block(ctx, site_id, base_url, username, pw, builder_s
         if heading_card:
             body_children.append(heading_card)
         body_children.append(ui.List(items=[_element_row(el) for el in row.elements]))
+
+        if row.builder == "bricks" and row.zone:
+            add_heading_form = ui.Form(
+                action="create_bricks_heading", submit_label="Add heading",
+                defaults={"site_id": site_id, "post_id": post_id, "zone": row.zone,
+                         "state_token": row.state_token},
+                children=[
+                    ui.Select(param_name="tag", value="h1",
+                              options=[{"value": f"h{n}", "label": f"H{n}"} for n in range(1, 7)]),
+                    ui.Input(param_name="text", placeholder="Required: heading text, e.g. Welcome to our shop"),
+                    ui.Input(param_name="parent_id",
+                             placeholder="Existing parent element id (optional — leave empty for top-level)"),
+                ],
+            )
+            body_children.append(ui.Card(
+                title="Add a missing heading",
+                content=ui.Stack(gap=1, children=[
+                    ui.Text("Repairs a confirmed missing H1/heading in this zone — inserts one new "
+                            "semantic heading, does not touch anything else.", variant="caption"),
+                    add_heading_form,
+                ]),
+            ))
 
         sections.append(ui.Card(
             title=f"{row.builder.capitalize()}{zone_label} — {row.slug or row.post_id}",

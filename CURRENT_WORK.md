@@ -1809,3 +1809,63 @@ release manifest and fixed ZIP URL, verifies the ZIP SHA-256, uses WordPress `Pl
 `overwrite_package`, then verifies the installed version. Once 2.17.0 is installed manually on a
 site, `update_imperal_bridge` (16 credits: a standard single-plugin update) can perform later Bridge
 releases without SSH or a repeated manual ZIP upload. Release metadata is `bridge/release.json`.
+
+## 2026-08-12 — Builders point-edit UI: on-the-fly Bricks control gap-closing (v1.39.0)
+
+**Status:** ✅ done. Goal: "точечный контроль над Bricks на лету" — the panel's existing
+Builders manage-tab (shipped earlier same day, v1.38.0) had three concrete gaps that blocked real
+on-the-fly editing, found by re-reading `_render_builders_block`/`update_builder_field`/
+`create_bricks_heading` end-to-end against the platform's own UI/refresh contract and the SDK's
+actual `ui.Input`/`ui.Form` capabilities (no JSON/object widget exists — confirmed by reading
+`imperal_sdk/ui/input_components.py` directly, and by a recalled repo note on the platform gap
+where a Pydantic-typed param submitted from a plain-string panel Input can silently fail
+validation before the handler ever runs).
+
+**Что было сделано:**
+1. **Panel → structured value gap.** `UpdateBuilderFieldParams.value` is `JsonValue`
+   (`dict|list|str|int|float|bool|None`) so chat callers can already send a real
+   `{"unit": "px", "size": 20}` for typography/spacing fields — but the panel's `ui.Input` can only
+   submit a plain string, so the same edit typed in the panel was reaching the bridge as a literal
+   string, silently breaking structured Bricks/Elementor settings. Added `_coerce_panel_value()` in
+   `handlers_builders.py`: if `value` arrives as a `str` that looks like JSON (starts with `{`/`[`,
+   or is `true`/`false`/`null`/a bare number), it's `json.loads`-parsed back into the real
+   dict/list/number/bool before the bridge call; a plain string that isn't JSON-shaped (e.g. a
+   normal heading title) passes through untouched. Chat callers are unaffected — they already send
+   real Python values, not strings. Panel placeholder text on the value field now says so
+   explicitly ("plain text, or JSON for structured fields").
+2. **Missing auto-refresh after a write (breaks "on the fly").** Per `UI_INTERFACE_STANDARD.md`'s
+   mandatory auto-refresh rule, any write that changes displayed state must refresh the relevant
+   panel automatically. `update_builder_field` and `create_bricks_heading` returned
+   `ActionResult.success(...)` with no `refresh_panels`, so after one point-edit the panel kept
+   showing the *old* `state_token` — the next edit on the same element would then be refused with
+   409 (stale state) by the bridge's own optimistic-concurrency guard, defeating rapid point
+   editing. Both handlers now return `refresh_panels=["center"]` so the panel reloads the fresh
+   tree/state_token immediately after a successful write.
+3. **`create_bricks_heading` had zero panel UI.** It existed chat-tools-only despite being the one
+   Bricks-specific repair tool (append one semantic H1-H6 into an existing Bricks zone, guarded by
+   `state_token`). Added an "Add heading" `ui.Form` to `_render_builders_block` in `panels.py`,
+   shown only when the loaded row is `builder == "bricks"` (a zone always has one) — tag `ui.Select`
+   (h1-h6), heading text `ui.Input` (placeholder marked "Required:" per the same platform gap —
+   `min_length=1` on `text` would otherwise fail silently with no visible error), and an optional
+   `parent_id` `ui.Input` for nesting under an existing element (empty ⇒ top-level, matching the
+   handler's own `parent_id or ""` contract). Not shown for Elementor (which has no zones/heading
+   Bricks-specific repair concept).
+
+**Tests:** added `test_update_coerces_json_looking_string_from_panel_form`,
+`test_update_keeps_plain_string_that_is_not_json` (both `tests/test_builders.py`), a
+`refresh_panels` assertion on `test_create_bricks_heading_success`, and two new panel tests
+(`test_manage_tab_builders_shows_add_heading_form_for_bricks_zone`,
+`test_manage_tab_builders_hides_add_heading_form_for_elementor_only`, both
+`tests/test_panels.py`). Full suite: 832 passed. `imperal validate`: 255 functions, 0 errors,
+0 warnings, 1 pre-existing info (no `@ext.on_install` hook).
+
+**Pricing:** no new chat functions were added this pass (only internal coercion logic + UI wiring
+around two already-priced write tools), so no new price entries were needed — `update_builder_field`
+and `create_bricks_heading` keep their existing prices unchanged.
+
+**Version:** bumped 1.38.0 → 1.39.0 across `imperal.json`, `app.py`, `pyproject.toml`.
+
+**Next steps (not started, no user answer yet on scope):** three standing open questions about a
+future separate "Bricks Studio" full-authoring app remain unanswered — see the working model /
+canonical Imperal note `aaf4c105-320a-4482-8ab2-13f14768ebb3` for the exact three questions. Until
+answered, WP Hub's point-edit UI keeps growing incrementally (this entry) rather than freezing.

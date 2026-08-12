@@ -879,6 +879,56 @@ async def test_manage_tab_builders_loads_element_tree_with_edit_form():
     assert "1 element(s)" in s
 
 
+async def test_manage_tab_builders_shows_add_heading_form_for_bricks_zone():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder/status",
+                      {"bridge_version": "2.20.0", "elementor_active": False,
+                       "elementor_version": "", "bricks_active": True,
+                       "bricks_version": "1.9.0"}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder", {
+        "id": 42, "slug": "home", "type": "page", "link": "https://blog.com/home",
+        "active_builders": ["bricks"],
+        "builders": {
+            "bricks": {"zones": {
+                "content": {"elements": [{"id": "e1", "parent_id": None, "el_type": "section",
+                                          "widget_type": "", "settings": {}, "zone": "content"}],
+                           "state_token": "tok-content"},
+                "header": {"elements": [], "state_token": "tok-header"},
+                "footer": {"elements": [], "state_token": "tok-footer"},
+            }},
+        },
+    }, 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="builders", builder_sel="home")
+    s = str(node)
+    assert "create_bricks_heading" in s
+    assert "tok-content" in s
+
+
+async def test_manage_tab_builders_hides_add_heading_form_for_elementor_only():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder/status",
+                      {"bridge_version": "2.20.0", "elementor_active": True,
+                       "elementor_version": "3.20.0", "bricks_active": False,
+                       "bricks_version": ""}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder", {
+        "id": 42, "slug": "home", "type": "page", "link": "https://blog.com/home",
+        "active_builders": ["elementor"],
+        "builders": {
+            "elementor": {
+                "elements": [{"id": "abc123", "parent_id": None, "el_type": "widget",
+                              "widget_type": "heading", "settings": {"title": "Hello"}}],
+                "state_token": "tok-1",
+                "element_count": 1,
+            }
+        },
+    }, 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="builders", builder_sel="home")
+    s = str(node)
+    assert "create_bricks_heading" not in s
+
+
 async def test_manage_tab_builders_reports_item_not_found():
     ctx = await _base_panel_ctx()
     ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder/status",
