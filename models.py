@@ -1682,6 +1682,31 @@ class SetPluginStatusParams(BaseModel):
         min_length=1, description="Plugin identifier from list_native_plugins, e.g. 'hello-dolly/hello'")
 
 
+class BulkPluginStatusParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    plugins: list[str] = Field(min_length=1, max_length=100, description="Explicit plugin identifiers from list_native_plugins; 1-100, never inferred")
+    status: str = Field(description="Status for every listed plugin: active or inactive")
+
+
+class ApplyBulkPluginStatusParams(BulkPluginStatusParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any plugin changed")
+
+
+class BulkPluginStatusResult(sdl.Entity):
+    id: str = ""
+    title: str = "Plugin status batch"
+    kind: str = "wp_plugin_batch"
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[str] = Field(default_factory=list)
+    failed_ids: list[str] = Field(default_factory=list)
+
+
 class Theme(sdl.Entity):
     """One installed theme as reported by the native /wp/v2/themes REST route."""
     stylesheet: str = ""

@@ -10,10 +10,16 @@ REST route (by design -- WordPress treats it as a higher-risk site change),
 so that stays out of scope here rather than being faked with an SSH escape
 hatch.
 """
+import hashlib
+import json
+
 from imperal_sdk import ActionResult, sdl
 
 from app import chat
 from models import (
+    ApplyBulkPluginStatusParams,
+    BulkPluginStatusParams,
+    BulkPluginStatusResult,
     NativePlugin,
     SetPluginStatusParams,
     SiteIdParams,
@@ -139,6 +145,86 @@ async def _set_plugin_status(ctx, params: SetPluginStatusParams, status: str) ->
         id=params.plugin, title=params.plugin, kind="wp_plugin", plugin=params.plugin, status=status)
     return ActionResult.success(result, summary=f"Plugin '{params.plugin}' is now {status}",
                                  refresh_panels=["center"])
+
+
+def _plugin_state_token(plugins: list[dict]) -> str:
+    state = [{"plugin": item.get("plugin", ""), "status": item.get("status", ""),
+              "version": item.get("version", "")} for item in sorted(plugins, key=lambda value: value.get("plugin", ""))]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_plugin_targets(ctx, params: BulkPluginStatusParams):
+    status = params.status.strip().lower()
+    if status not in {"active", "inactive"}:
+        return None, ActionResult.error("Plugin status must be active or inactive.", retryable=False,
+                                        code="WP_PLUGIN_INVALID_STATUS")
+    plugins = [plugin.strip() for plugin in params.plugins]
+    if any(not plugin for plugin in plugins):
+        return None, ActionResult.error("Plugin identifiers must not be blank.", retryable=False,
+                                        code="WP_PLUGIN_INVALID_ID")
+    if len(set(plugins)) != len(plugins):
+        return None, ActionResult.error("Each plugin identifier may appear only once.", retryable=False,
+                                        code="WP_PLUGIN_DUPLICATE_IDS")
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, err
+    base_url, username, pw = auth
+    current = []
+    for plugin in plugins:
+        response = await wp_get(ctx, base_url, f"{WP_BASE}/plugins/{plugin}",
+                                username=username, app_password=pw)
+        if response.status_code != 200 or not isinstance(response.body, dict):
+            return None, _failure(response.status_code, response.body)
+        current.append(response.body)
+    return (base_url, username, pw, plugins, current, status), None
+
+
+@chat.function(
+    "preview_bulk_plugin_status",
+    description="Preview activating or deactivating 1-100 explicit native WordPress plugins. Makes no writes and returns the exact token required to apply.",
+    action_type="read", data_model=BulkPluginStatusResult,
+)
+async def preview_bulk_plugin_status(ctx, params: BulkPluginStatusParams) -> ActionResult:
+    """Return a no-write plugin status batch diff and deterministic state token."""
+    targets, err = await _bulk_plugin_targets(ctx, params)
+    if err:
+        return err
+    _, _, _, plugins, current, status = targets
+    changes = [f"{plugin}: {item.get('status', 'unknown')} → {status}" for plugin, item in zip(plugins, current)]
+    return ActionResult.success(BulkPluginStatusResult(
+        preview=True, requested=len(plugins), matched=len(current), state_token=_plugin_state_token(current),
+        changes=changes), summary=f"Preview: {len(current)} plugin(s) would become {status}")
+
+
+@chat.function(
+    "apply_bulk_plugin_status",
+    description="Apply a previously previewed plugin status change to 1-100 explicit plugins. Rechecks every plugin before writing and stops before all writes if any changed.",
+    action_type="write", data_model=BulkPluginStatusResult,
+    effects=["wp.plugin_bulk_status_update"], event="wordpress-hub.apply_bulk_plugin_status",
+)
+async def apply_bulk_plugin_status(ctx, params: ApplyBulkPluginStatusParams) -> ActionResult:
+    """Recheck the plugin snapshot, then apply the reviewed activation state."""
+    targets, err = await _bulk_plugin_targets(ctx, params)
+    if err:
+        return err
+    base_url, username, pw, plugins, current, status = targets
+    if _plugin_state_token(current) != params.expected_state_token:
+        return ActionResult.error("One or more plugins changed after preview; no plugin status was changed. Preview again.",
+                                  retryable=False, code="WP_PLUGIN_BULK_STATE_CHANGED")
+    updated, failed = [], []
+    for plugin in plugins:
+        response = await wp_request(ctx, "post", base_url, f"{WP_BASE}/plugins/{plugin}",
+                                    username=username, app_password=pw, json={"status": status})
+        if 200 <= response.status_code < 300:
+            updated.append(plugin)
+        else:
+            failed.append(plugin)
+    result = BulkPluginStatusResult(preview=False, requested=len(plugins), matched=len(current),
+                                    updated=len(updated), failed=len(failed), updated_ids=updated, failed_ids=failed)
+    if failed:
+        return ActionResult.error(f"Updated {len(updated)} plugin(s); {len(failed)} failed: {', '.join(failed)}.",
+                                  retryable=False, code="WP_PLUGIN_BULK_PARTIAL_FAILURE")
+    return ActionResult.success(result, summary=f"Updated {len(updated)} plugin(s) to {status}", refresh_panels=["center"])
 
 
 @chat.function(

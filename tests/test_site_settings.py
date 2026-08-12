@@ -5,7 +5,8 @@ from imperal_sdk.testing import MockContext
 import app  # noqa: F401
 import handlers_site_settings as hss
 import storage
-from models import SetPluginStatusParams, SiteIdParams, UpdateSiteSettingsParams
+from models import (ApplyBulkPluginStatusParams, BulkPluginStatusParams, SetPluginStatusParams,
+                    SiteIdParams, UpdateSiteSettingsParams)
 
 BASE = "https://blog.test/wp-json/wp/v2"
 
@@ -49,6 +50,31 @@ async def test_list_native_plugins_reports_missing_route_on_old_wordpress():
     result = await hss.list_native_plugins(ctx, SiteIdParams(site_id="blog-test"))
     assert result.status == "error"
     assert result.error_code == "WP_ROUTE_NOT_FOUND"
+
+
+async def test_preview_and_apply_bulk_plugin_status():
+    ctx = await _ctx()
+    for plugin_id in ("hello-dolly/hello", "akismet/akismet"):
+        ctx.http.mock_get(f"{BASE}/plugins/{plugin_id}", _plugin(plugin_id), 200)
+    preview = await hss.preview_bulk_plugin_status(ctx, BulkPluginStatusParams(
+        site_id="blog-test", plugins=["hello-dolly/hello", "akismet/akismet"], status="active"))
+    assert preview.status == "success" and preview.data.preview is True
+
+    for plugin_id in ("hello-dolly/hello", "akismet/akismet"):
+        ctx.http.mock_get(f"{BASE}/plugins/{plugin_id}", _plugin(plugin_id), 200)
+        ctx.http.mock_post(f"{BASE}/plugins/{plugin_id}", _plugin(plugin_id, status="active"), 200)
+    result = await hss.apply_bulk_plugin_status(ctx, ApplyBulkPluginStatusParams(
+        site_id="blog-test", plugins=["hello-dolly/hello", "akismet/akismet"], status="active",
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success" and result.data.updated == 2
+
+
+async def test_apply_bulk_plugin_status_refuses_stale_token():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/plugins/hello-dolly/hello", _plugin(), 200)
+    result = await hss.apply_bulk_plugin_status(ctx, ApplyBulkPluginStatusParams(
+        site_id="blog-test", plugins=["hello-dolly/hello"], status="active", expected_state_token="0" * 64))
+    assert result.status == "error" and result.error_code == "WP_PLUGIN_BULK_STATE_CHANGED"
 
 
 async def test_activate_plugin_posts_status_active():
