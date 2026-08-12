@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 from imperal_sdk import ui
 from app import ext
 from wp_client import wp_get, wp_post, wp_title
+from handlers_builders import BRIDGE_PATH, BRIDGE_STATUS_PATH, _content_rows
 import storage
 
 _BUILTIN_TYPES = {
@@ -178,19 +179,19 @@ async def sidebar(ctx, active_site_id="", **kwargs):
 async def center(ctx, view="", site_id="",
                  group_tab="standard",
                  std_tab="posts", act_tab="comments", commerce_tab="overview",
-                 cpt_tab="", tax_tab="", manage_tab="menus", menu_sel="",
+                 cpt_tab="", tax_tab="", manage_tab="menus", menu_sel="", builder_sel="",
                  **kwargs):
     if view == "connect":
         return _render_connect_form()
     if view == "add_ssh" and site_id:
         if await storage.has_ssh(ctx, site_id):
             return await _render_detail(ctx, site_id, group_tab, std_tab, act_tab,
-                                        commerce_tab, cpt_tab, tax_tab, manage_tab, menu_sel)
+                                        commerce_tab, cpt_tab, tax_tab, manage_tab, menu_sel, builder_sel)
         await storage.set_pending_ssh_site(ctx, site_id)
         return _render_add_ssh_form(site_id)
     if site_id:
         return await _render_detail(ctx, site_id, group_tab, std_tab, act_tab,
-                                    commerce_tab, cpt_tab, tax_tab, manage_tab, menu_sel)
+                                    commerce_tab, cpt_tab, tax_tab, manage_tab, menu_sel, builder_sel)
     return ui.Empty(message="Select a site from the list to view its dashboard.")
 
 
@@ -962,10 +963,11 @@ def _taxonomy_manage_block(items: list, site_id: str, tax_slug: str):
 
 # ── Manage tab (menus / redirects / settings / plugins) ────────────────────────
 
-async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, menu_sel, call):
-    """Site management: nav menus, Rank Math redirects, native settings, plugins.
+async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, menu_sel, builder_sel, call):
+    """Site management: nav menus, Rank Math redirects, native settings, plugins,
+    Elementor/Bricks builder point-editing.
 
-    All four sections talk to write handlers that were built and priced but,
+    All sections talk to write handlers that were built and priced but,
     until now, had no UI wiring anywhere on the detail screen — this closes
     that gap. Fetched live (low-traffic admin section, no cache needed).
     """
@@ -985,6 +987,7 @@ async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, m
         _manage_btn("Menus", "menus"),
         _manage_btn("Redirects", "redirects"),
         _manage_btn("SEO", "seo"),
+        _manage_btn("Builders", "builders"),
         _manage_btn("Settings", "settings"),
         _manage_btn("Plugins", "plugins"),
     ]
@@ -993,6 +996,8 @@ async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, m
         body = await _render_redirects_block(ctx, site_id, base_url, username, pw)
     elif manage_tab == "seo":
         body = await _render_rankmath_block(ctx, site_id, base_url, username, pw)
+    elif manage_tab == "builders":
+        body = await _render_builders_block(ctx, site_id, base_url, username, pw, builder_sel, call)
     elif manage_tab == "settings":
         body = await _render_settings_block(ctx, site_id, base_url, username, pw)
     elif manage_tab == "plugins":
@@ -1004,6 +1009,132 @@ async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, m
         ui.Stack(direction="h", gap=1, wrap=True, children=manage_btns),
         body,
     ])
+
+
+async def _render_builders_block(ctx, site_id, base_url, username, pw, builder_sel, call):
+    """Elementor/Bricks point-editing: look up one post/page, see its flattened
+    element tree + heading outline, and edit one field on one element at a time.
+
+    Backed entirely by the existing get_builder_content/update_builder_field
+    chat-tools' own bridge calls (BRIDGE_PATH/BRIDGE_STATUS_PATH) and the same
+    `_content_rows` flattening helper — this block adds no new business logic,
+    it only gives the already-built, already-priced backend a click path.
+    Point edits only: change one field on one existing element. Full authoring
+    (adding/reordering sections, building new layouts) is out of scope here —
+    that lives in a future standalone builder-authoring app.
+    """
+    status_r = await wp_get(ctx, base_url, BRIDGE_STATUS_PATH, username=username, app_password=pw)
+    if status_r is None or status_r.status_code == 404:
+        return ui.Alert(
+            message="This site does not have the Imperal Bridge plugin installed — install/update "
+                    "it to read or edit Elementor/Bricks content.",
+            type="info")
+    if status_r.status_code in (401, 403):
+        return ui.Alert(message="The connected user cannot read builder content.", type="error")
+    if status_r.status_code != 200 or not isinstance(status_r.body, dict):
+        return ui.Alert(message="Could not check builder support — check the connection.", type="error")
+
+    support = status_r.body
+    elementor_active = bool(support.get("elementor_active"))
+    bricks_active = bool(support.get("bricks_active"))
+    status_badges = ui.Stack(direction="h", gap=2, children=[
+        ui.Badge(label=f"Elementor {'active' if elementor_active else 'not active'}",
+                 color="green" if elementor_active else "gray"),
+        ui.Badge(label=f"Bricks {'active' if bricks_active else 'not active'}",
+                 color="green" if bricks_active else "gray"),
+    ])
+
+    lookup_form = ui.Form(
+        action="__panel__center", submit_label="Load",
+        defaults={"view": "", "site_id": site_id, "group_tab": "manage", "manage_tab": "builders"},
+        children=[
+            ui.Input(param_name="builder_sel", value=builder_sel,
+                     placeholder="Post/page id or slug, e.g. 42 or home"),
+        ],
+    )
+
+    sections = [ui.Card(title="Builder support", content=status_badges), lookup_form]
+
+    target = (builder_sel or "").strip()
+    if not target:
+        return ui.Stack(gap=3, children=sections)
+
+    query = {}
+    if target.isdigit():
+        query["id"] = int(target)
+    else:
+        query["slug"] = target
+
+    tree_r = await wp_get(ctx, base_url, BRIDGE_PATH, username=username, app_password=pw, params=query)
+    if tree_r is None:
+        sections.append(ui.Alert(message="Could not reach the site — try again.", type="error"))
+        return ui.Stack(gap=3, children=sections)
+    if tree_r.status_code == 404:
+        sections.append(ui.Alert(
+            message="No item with that id/slug, or it was not built with Elementor or Bricks.",
+            type="info"))
+        return ui.Stack(gap=3, children=sections)
+    if tree_r.status_code == 409:
+        sections.append(ui.Alert(
+            message="Several items share that slug — use the numeric id instead.", type="error"))
+        return ui.Stack(gap=3, children=sections)
+    if tree_r.status_code in (401, 403):
+        sections.append(ui.Alert(message="The connected user cannot read builder content.", type="error"))
+        return ui.Stack(gap=3, children=sections)
+    if tree_r.status_code != 200 or not isinstance(tree_r.body, dict):
+        sections.append(ui.Alert(message="Could not load builder content — check the connection.",
+                                 type="error"))
+        return ui.Stack(gap=3, children=sections)
+
+    rows = _content_rows(tree_r.body)
+    if not rows:
+        sections.append(ui.Empty(message="This item was not built with Elementor or Bricks."))
+        return ui.Stack(gap=3, children=sections)
+
+    post_id = tree_r.body.get("id", 0)
+
+    for row in rows:
+        zone_label = f" — {row.zone} zone" if row.zone else ""
+        heading_card = None
+        if row.heading_outline:
+            heading_card = ui.Card(title="Heading outline",
+                                   content=ui.Code(content=row.heading_outline, language="text"))
+
+        def _element_row(el, *, _post_id=post_id, _builder=row.builder, _zone=row.zone,
+                         _state_token=row.state_token):
+            label = el.widget_type or el.el_type or el.element_id
+            edit_form = ui.Form(
+                action="update_builder_field", submit_label="Update field",
+                defaults={"site_id": site_id, "post_id": _post_id, "element_id": el.element_id,
+                         "builder": _builder, "zone": _zone, "state_token": _state_token},
+                children=[
+                    ui.Input(param_name="field", placeholder="Field name, e.g. title or _typography"),
+                    ui.Input(param_name="value", placeholder="New value"),
+                ],
+            )
+            return ui.ListItem(
+                id=el.element_id, title=label,
+                subtitle=el.el_type, meta=f"id={el.element_id}",
+                expandable=True,
+                expanded_content=[
+                    ui.KeyValue(items=[{"key": k, "value": str(v)}
+                                       for k, v in list(el.settings.items())[:8]]) if el.settings
+                    else ui.Text("No settings on this element.", variant="caption"),
+                    ui.Card(title="Edit one field", content=edit_form),
+                ],
+            )
+
+        body_children = [ui.Text(f"{row.element_count} element(s){zone_label}", variant="caption")]
+        if heading_card:
+            body_children.append(heading_card)
+        body_children.append(ui.List(items=[_element_row(el) for el in row.elements]))
+
+        sections.append(ui.Card(
+            title=f"{row.builder.capitalize()}{zone_label} — {row.slug or row.post_id}",
+            content=ui.Stack(gap=2, children=body_children),
+        ))
+
+    return ui.Stack(gap=3, children=sections)
 
 
 async def _render_menus_block(ctx, site_id, base_url, username, pw, menu_sel, call):
@@ -1402,7 +1533,7 @@ async def _render_plugins_block(ctx, site_id, base_url, username, pw):
 async def _render_detail(ctx, site_id,
                          group_tab="standard",
                          std_tab="posts", act_tab="comments", commerce_tab="overview",
-                         cpt_tab="", tax_tab="", manage_tab="menus", menu_sel=""):
+                         cpt_tab="", tax_tab="", manage_tab="menus", menu_sel="", builder_sel=""):
     record = await storage.get_site_record(ctx, site_id) or {}
     if not record:
         return ui.Empty(message="Site not found — it may have been removed.")
@@ -1752,7 +1883,8 @@ async def _render_detail(ctx, site_id,
         kw = dict(view="", site_id=site_id,
                   group_tab=group_tab, std_tab=std_tab,
                   act_tab=act_tab, commerce_tab=commerce_tab,
-                  cpt_tab=cpt_tab, tax_tab=tax_tab, manage_tab=manage_tab, menu_sel=menu_sel)
+                  cpt_tab=cpt_tab, tax_tab=tax_tab, manage_tab=manage_tab, menu_sel=menu_sel,
+                  builder_sel=builder_sel)
         kw.update(override)
         return ui.Call("__panel__center", **kw)
 
@@ -1911,7 +2043,7 @@ async def _render_detail(ctx, site_id,
 
     if group_tab == "manage":
         active_content = await _render_manage_tab(
-            ctx, site_id, base_url, username, pw, manage_tab, menu_sel, _call)
+            ctx, site_id, base_url, username, pw, manage_tab, menu_sel, builder_sel, _call)
 
     # ── Assemble page ─────────────────────────────────
     page_children = [

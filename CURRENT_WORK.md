@@ -1515,6 +1515,59 @@ document — `docx_parser.py`, `parse_article`, `confirm_mapping`, and the headi
 
 ---
 
+## 2026-08-12 — Builder point-edit panel UI (v1.38.0) + WP-Hub-vs-future-app scope note
+
+**Trigger:** user asked to verify whether point-editing of existing builder content (Elementor/
+Bricks) inside WP Hub was "implemented as it should be," ahead of a separate future plan for a
+standalone page-builder-authoring app (tentatively "Bricks Studio").
+
+**Finding:** the backend was solid — 8 tested, priced chat functions (`get_builder_content`,
+`get_builder_element`, `update_builder_field`, `preview_bulk_builder_field`,
+`apply_bulk_builder_field`, `create_bricks_heading`, `check_builder_support`,
+`scan_builder_content`) plus the Bridge PHP SECTION 2 routes, all state_token-guarded. But
+`panels.py` had **zero UI wiring** for any of it — no tab, no card, no form — unlike every other
+domain (menus/redirects/SEO/settings/plugins all got a "Manage" sub-tab back in 2026-08-10). Users
+could only reach builder point-editing via chat, never a click path. `tests/test_panels.py` had
+zero builder coverage, confirming the gap.
+
+**Fix — added a "Builders" tab under Manage:**
+- `panels.py`: new `_render_builders_block()` (imports `BRIDGE_PATH`, `BRIDGE_STATUS_PATH`,
+  `_content_rows` from `handlers_builders` — reuses the exact same flattening logic as the chat
+  tools, no duplicated business logic). Shows Elementor/Bricks active-plugin status badges, a
+  slug/id lookup form (`builder_sel` panel state param, threaded through `center()` →
+  `_render_detail()` → `_render_manage_tab()` → `_call()`), the flattened element list per
+  builder/zone with a per-element "Edit field" form wired to `update_builder_field` (state_token
+  passed via `ui.Form(defaults=...)` so a stale write is still rejected by the Bridge, same
+  optimistic-concurrency guarantee as the chat tool), and the heading_outline text.
+- `tests/test_panels.py`: 4 new tests (`test_manage_tab_builders_shows_bridge_hint_on_404`,
+  `test_manage_tab_builders_shows_support_badges_and_lookup_form`,
+  `test_manage_tab_builders_loads_element_tree_with_edit_form`,
+  `test_manage_tab_builders_reports_item_not_found`).
+- No new chat functions, no pricing changes needed (pure UI wiring onto already-priced tools) —
+  consistent with the standing pricing policy (new prices only for new functions).
+- Version bump 1.37.0 → 1.38.0 (`app.py`, `pyproject.toml`, `imperal.json`).
+
+**Verified:** `uv run pytest -q` → **827 passed** (823 prior + 4 new), 0 failed.
+`uv run imperal validate` → **255 functions, 0 errors, 0 warnings, 1 pre-existing info**
+(`@ext.on_install` advisory, same as before).
+
+**Scope-split note (per user's stated future-app plan):** documented in
+`docs/2026-08-09-full-feature-roadmap.md` Layer 4.2 — WordPress Hub owns *point-editing of existing*
+builder content only (one field on one existing element, one guarded heading append); a future,
+separate, standalone app (tentatively "Bricks Studio") would own *full page-building authoring*
+(new sections/containers, layout composition, template libraries, advanced styling/dynamic data).
+That future app has not been started — no repo/notes for it existed before this entry, confirmed
+via `notes__search_notes` (no matches) and a filesystem check of `Apps/` (none found). See open
+questions logged for the user in this same session's chat reply — timeline, which builder(s) first
+(Bricks-only vs. Elementor too), and whether this WP-Hub UI should keep growing meanwhile.
+
+**Not done in this pass (deliberately out of scope):** no new backend functions, no bulk-builder-
+field UI (only single-field per-element edit — bulk preview/apply stay chat-only, matching how
+every OTHER bulk op in this app also has no bespoke panel UI), no template library, no builder
+duplication tooling (still explicitly declined per Layer 4.3).
+
+---
+
 ## 2026-08-03 — Elementor/Bricks builder point-editing (v1.4.0)
 
 **Status:** ✅ implemented and verified (246/246 tests pass, `imperal validate` clean: 0 errors, 0 warnings)

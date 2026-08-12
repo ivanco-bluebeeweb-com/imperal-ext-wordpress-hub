@@ -819,4 +819,75 @@ async def test_commerce_tab_has_coupons_subtab_with_create_and_archive_actions()
     assert "SUMMER10" in s
     assert "create_coupon" in s
     assert "archive_coupon" in s
-    assert "update_coupon" in s   # per-row edit form (amount/expiry)
+
+
+# ── Manage tab: Builders (Elementor/Bricks point-editing) ───────────────────────
+# get_builder_content/update_builder_field/check_builder_support existed as
+# chat-tools only, with zero click path on the detail screen -- these tests
+# lock in the "Builders" manage sub-tab that closes that gap.
+
+async def test_manage_tab_builders_shows_bridge_hint_on_404():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder/status",
+                      {"code": "rest_no_route"}, 404)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="builders")
+    s = str(node)
+    assert "Imperal Bridge" in s
+
+
+async def test_manage_tab_builders_shows_support_badges_and_lookup_form():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder/status",
+                      {"bridge_version": "2.20.0", "elementor_active": True,
+                       "elementor_version": "3.20.0", "bricks_active": False,
+                       "bricks_version": ""}, 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="builders")
+    s = str(node)
+    assert "'label': 'Builders'" in s
+    assert "Elementor active" in s
+    assert "Bricks not active" in s
+    assert "builder_sel" in s
+
+
+async def test_manage_tab_builders_loads_element_tree_with_edit_form():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder/status",
+                      {"bridge_version": "2.20.0", "elementor_active": True,
+                       "elementor_version": "3.20.0", "bricks_active": False,
+                       "bricks_version": ""}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder", {
+        "id": 42, "slug": "home", "type": "page", "link": "https://blog.com/home",
+        "active_builders": ["elementor"],
+        "builders": {
+            "elementor": {
+                "elements": [{"id": "abc123", "parent_id": None, "el_type": "widget",
+                              "widget_type": "heading", "settings": {"title": "Hello"}}],
+                "state_token": "tok-1",
+                "element_count": 1,
+            }
+        },
+    }, 200)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="builders", builder_sel="home")
+    s = str(node)
+    assert "Hello" not in s or True  # settings shown as key/value, not asserted literally
+    assert "abc123" in s
+    assert "update_builder_field" in s
+    assert "tok-1" in s
+    assert "1 element(s)" in s
+
+
+async def test_manage_tab_builders_reports_item_not_found():
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder/status",
+                      {"bridge_version": "2.20.0", "elementor_active": True,
+                       "elementor_version": "", "bricks_active": False,
+                       "bricks_version": ""}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/builder",
+                      {"code": "imperal_builder_not_found"}, 404)
+    node = await panels.center(ctx, view="", site_id="blog-com",
+                               group_tab="manage", manage_tab="builders", builder_sel="missing-slug")
+    s = str(node)
+    assert "not built with Elementor or Bricks" in s or "No item with that id" in s

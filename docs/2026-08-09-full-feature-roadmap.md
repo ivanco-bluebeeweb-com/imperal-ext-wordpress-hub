@@ -248,20 +248,50 @@ multi-store client asking to sync shipping rules).
 
 ## Layer 4 — Page Builders (Elementor / Bricks)
 
-### 4.1 Current coverage — ✅ guarded point-edits
-`check_builder_support`, `get_builder_content` (read the element tree),
-`update_builder_field` (point-edit one field by element id, guarded/confirmed). This is a
-deliberately narrow, safe surface — not a full visual editor.
+### 4.1 Current coverage — ✅ guarded point-edits, now with a panel UI (v1.38.0)
+Backend: `check_builder_support`, `get_builder_content`/`get_builder_element` (read the element
+tree + heading outline), `update_builder_field` (point-edit one field by element id,
+guarded/confirmed), `preview_bulk_builder_field`/`apply_bulk_builder_field` (guarded 1-100 field
+batch), `create_bricks_heading` (append one semantic heading, guarded), `scan_builder_content`
+(diagnostic scan for orphaned builder meta). This is a deliberately narrow, safe surface — not a
+full visual editor.
 
-### 4.2 Possible extensions — low priority, evaluate case by case
+Panel: **2026-08-12 — added the "Builders" sub-tab under Manage** (`_render_builders_block` in
+`panels.py`). Until this, all 8 builder chat-functions existed and were priced but had literally no
+click path anywhere on the detail screen — chat/tool-call only. The new tab shows Elementor/Bricks
+active-plugin status, a slug/id lookup form, the flattened element list with a per-element
+"Edit field" form (`update_builder_field`, state_token carried via form defaults so a stale write
+is still rejected by the Bridge), and the heading outline text. Covered by
+`tests/test_panels.py::test_manage_tab_builders_*` (4 new tests, 827/827 total passing).
+
+### 4.2 Scope split: WP Hub (this app) vs. a future standalone builder-authoring app
+User's stated plan (2026-08-11 conversation): build a **separate** app — tentatively named
+**"Bricks Studio"** — with the deepest full page-builder authoring functionality (build whole pages,
+use the complete Bricks/Elementor feature set: sections, containers, styling, templates, dynamic
+data, etc.). That app is not started yet — no repo, no notes existed for it before this entry.
+
+Until that app exists, this is the intended division of responsibility:
+- **WordPress Hub (here):** point-editing of *existing* builder content only — read one item's
+  element tree, change one field on one existing element, append one guarded heading. No tree
+  replacement, no new sections/containers, no template library, no layout composition. This
+  matches the existing `handlers_builders.py` module docstring's "POINT EDITING, NOT PAGE BUILDING"
+  design decision and stays in force.
+- **Future "Bricks Studio" (separate app, not built):** full page authoring — build new pages
+  from scratch, compose/reorder sections and containers, apply advanced Bricks styling and dynamic
+  data bindings, manage/apply saved templates. This is exactly the surface Layer 4.3 below
+  (`duplicate_builder_element`, `list_builder_templates`) explicitly declined to add *here* —
+  those and much more belong in the dedicated app, not bolted onto WP Hub's point-edit model.
+
+### 4.3 Possible extensions to THIS app — still low priority, evaluate case by case
 | Function | Status |
 |---|---|
-| **`duplicate_builder_element`** | ❌ not planned — real risk of corrupting a complex nested layout without a visual preview; would need strong guardrails first |
-| **`list_builder_templates`** (saved Elementor/Bricks templates library) | ❌ not planned — nice-to-have only |
+| **`duplicate_builder_element`** | ❌ not planned in WP Hub — real risk of corrupting a complex nested layout without a visual preview; belongs in the future authoring app instead |
+| **`list_builder_templates`** (saved Elementor/Bricks templates library) | ❌ not planned in WP Hub — belongs in the future authoring app instead |
 
-**Decision:** keep this layer narrow. A text-only agent editing a visual page builder's JSON tree
-is inherently risky; expanding it should wait for explicit user demand plus a stronger preview/undo
-story, not be built speculatively.
+**Decision:** keep this layer narrow in WP Hub. A text-only agent editing a visual page builder's
+JSON tree is inherently risky; expanding point-edit scope here should wait for explicit user demand
+plus a stronger preview/undo story. Full authoring ambitions go into the separate app instead of
+being built speculatively into this one.
 
 ---
 
