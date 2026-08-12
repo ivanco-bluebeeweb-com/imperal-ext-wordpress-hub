@@ -7,6 +7,8 @@ destructive confirmation gate; routine reversible writes remain audited writes.
 
 from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+import hashlib
+import json
 import re
 
 from imperal_sdk import ActionResult, sdl
@@ -18,7 +20,10 @@ from handlers_woocommerce import (
 )
 from models import (
     AddOrderNoteParams,
+    ApplyBulkCouponUpdateParams,
     ArchiveCouponParams,
+    BulkCouponUpdateParams,
+    BulkCouponUpdateResult,
     Coupon,
     CreateCouponParams,
     CreateCustomerParams,
@@ -492,6 +497,94 @@ async def list_customer_orders(ctx, params: CustomerOrdersParams) -> ActionResul
         return err
     items = [_order_entity(item) for item in data]
     return ActionResult.success(sdl.EntityList[Order](items=items), summary=f"{len(items)} order(s) for customer #{params.customer_id}")
+
+
+def _bulk_coupon_payload(params: BulkCouponUpdateParams):
+    payload, err = _coupon_payload(params)
+    if err:
+        return None, err
+    if not payload:
+        return None, _error("No coupon fields were supplied.", code="WOOCOMMERCE_NO_CHANGES")
+    return payload, None
+
+
+def _coupon_state_token(coupons: list[dict]) -> str:
+    fields = ("id", "code", "discount_type", "amount", "description", "date_expires",
+              "usage_limit", "usage_limit_per_user", "minimum_amount", "maximum_amount",
+              "individual_use", "free_shipping", "exclude_sale_items", "date_modified")
+    state = [{field: coupon.get(field) for field in fields}
+             for coupon in sorted(coupons, key=lambda value: int(value.get("id", 0)))]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_coupon_targets(ctx, params: BulkCouponUpdateParams):
+    payload, payload_err = _bulk_coupon_payload(params)
+    if payload_err:
+        return None, payload_err
+    if len(set(params.coupon_ids)) != len(params.coupon_ids):
+        return None, _error("Each coupon id may appear only once.", code="WOOCOMMERCE_DUPLICATE_IDS")
+    coupons = []
+    for coupon_id in params.coupon_ids:
+        coupon, err = await _request(ctx, params.site_id, f"/coupons/{coupon_id}", expected_type=dict)
+        if err:
+            return None, err
+        coupons.append(coupon)
+    return (payload, coupons), None
+
+
+@chat.function(
+    "preview_bulk_coupon_update",
+    description="Preview applying the same validated coupon fields to 1-100 explicit WooCommerce coupon ids. Makes no writes and returns the exact token required to apply.",
+    action_type="read", data_model=BulkCouponUpdateResult,
+)
+async def preview_bulk_coupon_update(ctx, params: BulkCouponUpdateParams) -> ActionResult:
+    """Return an exact no-write coupon batch diff and deterministic token."""
+    targets, err = await _bulk_coupon_targets(ctx, params)
+    if err:
+        return err
+    payload, coupons = targets
+    changes = []
+    for coupon in coupons:
+        changed = [f"{key}: {coupon.get(key)!r} → {value!r}" for key, value in payload.items()
+                   if coupon.get(key) != value]
+        changes.append(f"Coupon #{coupon.get('id')}: " + ("; ".join(changed) if changed else "no change"))
+    result = BulkCouponUpdateResult(id=f"bulk-coupons:{params.site_id}", requested=len(params.coupon_ids),
+                                    matched=len(coupons), state_token=_coupon_state_token(coupons), changes=changes)
+    return ActionResult.success(result, summary=f"Previewed {len(coupons)} coupon(s); no changes made.")
+
+
+@chat.function(
+    "apply_bulk_coupon_update",
+    description="Apply a previously previewed WooCommerce coupon batch to 1-100 explicit coupon ids. Rereads every coupon and stops before all writes if any changed.",
+    action_type="write", data_model=BulkCouponUpdateResult,
+    effects=["wc.coupon_bulk_update"], event="wordpress-hub.apply_bulk_coupon_update",
+)
+async def apply_bulk_coupon_update(ctx, params: ApplyBulkCouponUpdateParams) -> ActionResult:
+    """Recheck every coupon snapshot before making the reviewed writes."""
+    targets, err = await _bulk_coupon_targets(ctx, params)
+    if err:
+        return err
+    payload, coupons = targets
+    token = _coupon_state_token(coupons)
+    if token != params.expected_state_token:
+        return ActionResult.error("One or more coupons changed since preview; no updates were made. Preview again.",
+                                  retryable=False, code="WOOCOMMERCE_BULK_STATE_CHANGED")
+    updated_ids, failed_ids = [], []
+    for coupon in coupons:
+        coupon_id = int(coupon["id"])
+        data, write_err = await _write(ctx, params.site_id, f"/coupons/{coupon_id}", payload)
+        if write_err:
+            failed_ids.append(coupon_id)
+        else:
+            updated_ids.append(int(data["id"]))
+    result = BulkCouponUpdateResult(id=f"bulk-coupons:{params.site_id}", preview=False,
+                                    requested=len(params.coupon_ids), matched=len(coupons),
+                                    updated=len(updated_ids), failed=len(failed_ids),
+                                    state_token=token, updated_ids=updated_ids, failed_ids=failed_ids)
+    if failed_ids:
+        return ActionResult.error(f"Updated {len(updated_ids)} coupon(s); {len(failed_ids)} failed.",
+                                  retryable=True, code="WOOCOMMERCE_BULK_PARTIAL_FAILURE", data=result)
+    return ActionResult.success(result, summary=f"Updated {len(updated_ids)} coupon(s).", refresh_panels=["center"])
 
 
 @chat.function(

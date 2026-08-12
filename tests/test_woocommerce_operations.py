@@ -7,7 +7,9 @@ import handlers_woocommerce_operations as ho
 import storage
 from models import (
     AddOrderNoteParams,
+    ApplyBulkCouponUpdateParams,
     ArchiveCouponParams,
+    BulkCouponUpdateParams,
     CreateCouponParams,
     CreateCustomerParams,
     CreateOrderParams,
@@ -148,6 +150,33 @@ async def test_percent_coupon_refuses_amount_above_100():
     result = await ho.create_coupon(ctx, CreateCouponParams(
         site_id="shop-test", code="too-much", amount="101", discount_type="percent"))
     assert result.status == "error" and result.error_code == "WOOCOMMERCE_INVALID_OPERATION"
+
+
+async def test_preview_and_apply_bulk_coupon_update():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/coupons/14", _coupon(14), 200)
+    ctx.http.mock_get(f"{BASE}/coupons/15", _coupon(15), 200)
+    preview = await ho.preview_bulk_coupon_update(ctx, BulkCouponUpdateParams(
+        site_id="shop-test", coupon_ids=[14, 15], description="Seasonal"))
+    assert preview.status == "success" and preview.data.preview is True
+
+    ctx.http.mock_get(f"{BASE}/coupons/14", _coupon(14), 200)
+    ctx.http.mock_get(f"{BASE}/coupons/15", _coupon(15), 200)
+    ctx.http.mock_post(f"{BASE}/coupons/14", _coupon(14, description="Seasonal"), 200)
+    ctx.http.mock_post(f"{BASE}/coupons/15", _coupon(15, description="Seasonal"), 200)
+    result = await ho.apply_bulk_coupon_update(ctx, ApplyBulkCouponUpdateParams(
+        site_id="shop-test", coupon_ids=[14, 15], description="Seasonal",
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success"
+    assert result.data.updated == 2 and len(result.data.updated_ids) == 2
+
+
+async def test_apply_bulk_coupon_update_refuses_stale_token():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/coupons/14", _coupon(14), 200)
+    result = await ho.apply_bulk_coupon_update(ctx, ApplyBulkCouponUpdateParams(
+        site_id="shop-test", coupon_ids=[14], description="Seasonal", expected_state_token="0" * 64))
+    assert result.status == "error" and result.error_code == "WOOCOMMERCE_BULK_STATE_CHANGED"
 
 
 async def test_update_coupon_only_sends_explicit_fields():

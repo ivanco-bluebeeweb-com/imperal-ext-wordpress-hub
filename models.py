@@ -268,6 +268,41 @@ class ArchiveCouponParams(BaseModel):
     coupon_id: int = Field(gt=0, description="Numeric WooCommerce coupon id to move to Trash")
 
 
+class BulkCouponUpdateParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    coupon_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit WooCommerce coupon ids; 1-100, never inferred")
+    discount_type: str | None = Field(default=None, description="Same discount type for every coupon: percent, fixed_cart, or fixed_product")
+    amount: str | None = Field(default=None, description="Same non-negative discount amount for every coupon")
+    description: str | None = Field(default=None, max_length=1000, description="Same internal description; empty string clears it")
+    date_expires: str | None = Field(default=None, description="Same expiry date as YYYY-MM-DD; empty string clears it")
+    usage_limit: int | None = Field(default=None, ge=1, description="Same total usage limit")
+    usage_limit_per_user: int | None = Field(default=None, ge=1, description="Same usage limit per customer")
+    minimum_amount: str | None = Field(default=None, description="Same minimum basket amount; empty string clears it")
+    maximum_amount: str | None = Field(default=None, description="Same maximum basket amount; empty string clears it")
+    individual_use: bool | None = Field(default=None, description="Set same combination restriction")
+    free_shipping: bool | None = Field(default=None, description="Set same free-shipping setting")
+    exclude_sale_items: bool | None = Field(default=None, description="Set same sale-item exclusion")
+
+
+class ApplyBulkCouponUpdateParams(BulkCouponUpdateParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any coupon changed")
+
+
+class BulkCouponUpdateResult(sdl.Entity):
+    id: str = ""
+    title: str = "Coupon batch"
+    kind: str = "wc_coupon_batch"
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
+
+
 class CreateProductParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     name: str = Field(min_length=1, max_length=200, description="Product name")
