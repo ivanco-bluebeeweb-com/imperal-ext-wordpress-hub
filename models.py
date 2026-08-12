@@ -211,6 +211,32 @@ class UpdateCustomerParams(BaseModel):
     username: str | None = Field(default=None, min_length=1, max_length=100, description="New WordPress username")
 
 
+class BulkCustomerUpdateParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    customer_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit WooCommerce customer ids; 1-100, never inferred")
+    first_name: str | None = Field(default=None, max_length=100, description="Same first name for every customer; empty string clears it")
+    last_name: str | None = Field(default=None, max_length=100, description="Same last name for every customer; empty string clears it")
+
+
+class ApplyBulkCustomerUpdateParams(BulkCustomerUpdateParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any customer changed")
+
+
+class BulkCustomerUpdateResult(sdl.Entity):
+    id: str = ""
+    title: str = "Customer batch"
+    kind: str = "wc_customer_batch"
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
+
+
 class DeleteCustomerParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     customer_id: int = Field(gt=0, description="Numeric WooCommerce customer id to permanently delete")
@@ -650,6 +676,7 @@ class UpdateSeoMetaParams(BaseModel):
     robots: list[str] | None = Field(default=None, description="Optional robots directives, e.g. ['noindex','nofollow']. Allowed: index, noindex, nofollow, noarchive, noimageindex, nosnippet. Omit to leave unchanged.")
     focus_keyword: str | None = Field(default=None, description="Optional Rank Math focus keyword. Omit to leave unchanged.")
     rich_snippet: str | None = Field(default=None, description="Optional Rank Math schema/rich-snippet type, e.g. 'Article', 'Product', 'Recipe', or 'off' to disable schema for this item. Rank Math accepts an open-ended set of schema.org type names here (including PRO schema templates and custom schema), so this is free text, not a fixed list — pass exactly what should appear in Rank Math's Schema type dropdown. Omit to leave unchanged; empty string clears it.")
+    og_image_url: str | None = Field(default=None, description="HTTPS URL of the page's Rank Math Facebook/Open Graph image. Omit to leave unchanged; empty string clears the page-specific override so Rank Math can fall back to its global/default image.")
 
 
 class BulkSeoMetaParams(BaseModel):
@@ -1356,6 +1383,7 @@ class SeoMeta(sdl.Entity):
     canonical_url: str = ""
     robots: list[str] = Field(default_factory=list)
     rich_snippet: str = ""
+    og_image_url: str = ""
     seo_plugin: str = ""
     source: str = ""
     updated_fields: list[str] = Field(default_factory=list)

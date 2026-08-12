@@ -80,6 +80,7 @@ def _term_payload(**over):
         "post_title": "Sisteme",
         "meta_title": "Cum functioneaza ventilatia | G4S",
         "meta_description": "Articole tehnice despre sisteme inginerest.",
+        "og_image_url": "",
         "focus_keyword": "",
         "canonical_url": "",
         "robots": [],

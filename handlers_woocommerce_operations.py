@@ -21,9 +21,12 @@ from handlers_woocommerce import (
 from models import (
     AddOrderNoteParams,
     ApplyBulkCouponUpdateParams,
+    ApplyBulkCustomerUpdateParams,
     ArchiveCouponParams,
     BulkCouponUpdateParams,
     BulkCouponUpdateResult,
+    BulkCustomerUpdateParams,
+    BulkCustomerUpdateResult,
     Coupon,
     CreateCouponParams,
     CreateCustomerParams,
@@ -431,6 +434,84 @@ async def create_customer(ctx, params: CreateCustomerParams) -> ActionResult:
         return err
     entity = _customer_entity(data)
     return ActionResult.success(entity, summary=f"Created customer #{entity.id}", refresh_panels=["center"])
+
+
+def _customer_state_token(customers: list[dict]) -> str:
+    state = [{key: customer.get(key, "") for key in ("id", "email", "first_name", "last_name", "username", "date_modified")}
+             for customer in sorted(customers, key=lambda value: value.get("id", 0))]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_customer_targets(ctx, params: BulkCustomerUpdateParams):
+    ids = params.customer_ids
+    if len(set(ids)) != len(ids):
+        return None, _error("Each customer id may appear only once.", code="WOOCOMMERCE_DUPLICATE_IDS")
+    payload, err = _customer_payload(params)
+    if err:
+        return None, err
+    payload.pop("site_id", None)
+    payload.pop("customer_ids", None)
+    if not payload:
+        return None, _error("Provide at least first_name or last_name.", code="WOOCOMMERCE_EMPTY_UPDATE")
+    customers = []
+    for customer_id in ids:
+        customer, get_err = await _request(ctx, params.site_id, f"/customers/{customer_id}", expected_type=dict)
+        if get_err:
+            return None, get_err
+        customers.append(customer)
+    return (payload, customers), None
+
+
+@chat.function(
+    "preview_bulk_customer_update",
+    description="Preview setting the same first and/or last name on 1-100 explicit WooCommerce customers. Makes no writes and returns a state token.",
+    action_type="read", data_model=BulkCustomerUpdateResult)
+async def preview_bulk_customer_update(ctx, params: BulkCustomerUpdateParams) -> ActionResult:
+    """Read explicit customers and return the guarded batch diff without writing."""
+    target, err = await _bulk_customer_targets(ctx, params)
+    if err:
+        return err
+    payload, customers = target
+    changes = [f"#{customer['id']}: " + ", ".join(
+        f"{field} {customer.get(field, '')!r} → {value!r}" for field, value in payload.items())
+        for customer in customers]
+    result = BulkCustomerUpdateResult(id="customers", title="Customer update preview", preview=True,
+                                      requested=len(params.customer_ids), matched=len(customers),
+                                      state_token=_customer_state_token(customers), changes=changes)
+    return ActionResult.success(result, summary=f"Previewed {len(customers)} customer update(s)")
+
+
+@chat.function(
+    "apply_bulk_customer_update",
+    description="Apply a previewed WooCommerce customer batch to 1-100 explicit ids. Rechecks every customer first and stops before all writes if any changed.",
+    action_type="write", data_model=BulkCustomerUpdateResult,
+    effects=["wc.customer_bulk_update"], event="wordpress-hub.apply_bulk_customer_update")
+async def apply_bulk_customer_update(ctx, params: ApplyBulkCustomerUpdateParams) -> ActionResult:
+    """Re-read the customer snapshots, then apply the previewed shared name fields."""
+    target, err = await _bulk_customer_targets(ctx, params)
+    if err:
+        return err
+    payload, customers = target
+    current_token = _customer_state_token(customers)
+    if current_token != params.expected_state_token:
+        return _error("A selected customer changed since preview; no customers were updated. Preview again.",
+                      code="WOOCOMMERCE_BULK_STATE_CHANGED")
+    updated_ids, failed_ids = [], []
+    for customer in customers:
+        customer_id = customer["id"]
+        updated, write_err = await _write(ctx, params.site_id, f"/customers/{customer_id}", payload)
+        if write_err:
+            failed_ids.append(customer_id)
+        else:
+            updated_ids.append(updated.get("id", customer_id))
+    result = BulkCustomerUpdateResult(id="customers", title="Customer update batch", preview=False,
+                                      requested=len(params.customer_ids), matched=len(customers), updated=len(updated_ids),
+                                      failed=len(failed_ids), state_token=current_token, updated_ids=updated_ids,
+                                      failed_ids=failed_ids)
+    summary = f"Updated {len(updated_ids)} customer(s)"
+    if failed_ids:
+        summary += f"; {len(failed_ids)} failed"
+    return ActionResult.success(result, summary=summary, refresh_panels=["center"])
 
 
 @chat.function(

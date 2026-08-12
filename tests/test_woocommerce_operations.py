@@ -8,8 +8,10 @@ import storage
 from models import (
     AddOrderNoteParams,
     ApplyBulkCouponUpdateParams,
+    ApplyBulkCustomerUpdateParams,
     ArchiveCouponParams,
     BulkCouponUpdateParams,
+    BulkCustomerUpdateParams,
     CreateCouponParams,
     CreateCustomerParams,
     CreateOrderParams,
@@ -242,6 +244,36 @@ async def test_create_customer_normalises_privacy_safe_fields():
     assert seen[-1][1]["json"] == {
         "email": "new@example.com", "first_name": "New",
         "last_name": "User", "username": "new_user"}
+
+
+async def test_preview_and_apply_bulk_customer_update():
+    ctx = await _ctx()
+    customers = [
+        {"id": 3, "email": "one@example.com", "username": "one", "first_name": "Old", "last_name": "One", "date_modified": "2026-08-01T12:00:00"},
+        {"id": 4, "email": "two@example.com", "username": "two", "first_name": "Old", "last_name": "Two", "date_modified": "2026-08-01T12:00:00"},
+    ]
+    for customer in customers:
+        ctx.http.mock_get(f"{BASE}/customers/{customer['id']}", customer, 200)
+    preview = await ho.preview_bulk_customer_update(ctx, BulkCustomerUpdateParams(
+        site_id="shop-test", customer_ids=[3, 4], first_name="New"))
+    assert preview.status == "success" and preview.data.preview is True
+
+    for customer in customers:
+        ctx.http.mock_get(f"{BASE}/customers/{customer['id']}", customer, 200)
+        ctx.http.mock_post(f"{BASE}/customers/{customer['id']}", {**customer, "first_name": "New"}, 200)
+    result = await ho.apply_bulk_customer_update(ctx, ApplyBulkCustomerUpdateParams(
+        site_id="shop-test", customer_ids=[3, 4], first_name="New",
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success" and result.data.updated == 2
+
+
+async def test_apply_bulk_customer_update_refuses_stale_token():
+    ctx = await _ctx()
+    customer = {"id": 3, "email": "one@example.com", "username": "one", "first_name": "Old", "last_name": "One"}
+    ctx.http.mock_get(f"{BASE}/customers/3", customer, 200)
+    result = await ho.apply_bulk_customer_update(ctx, ApplyBulkCustomerUpdateParams(
+        site_id="shop-test", customer_ids=[3], first_name="New", expected_state_token="0" * 64))
+    assert result.status == "error" and result.error_code == "WOOCOMMERCE_BULK_STATE_CHANGED"
 
 
 async def test_update_customer_sends_only_explicit_fields():

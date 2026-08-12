@@ -182,6 +182,16 @@ async def test_get_reports_source_so_fidelity_is_never_guessed():
     assert r.data.source == "bridge"
 
 
+async def test_bridge_payload_maps_open_graph_image_url():
+    """A page-specific Rank Math Facebook image must survive a bridge read."""
+    ctx = await _ctx()
+    image_url = "https://x.com/wp-content/uploads/social-card.jpg"
+    ctx.http.mock_get(BRIDGE, _bridge_payload(og_image_url=image_url), 200)
+    r = await hs.get_seo_meta(ctx, GetSeoMetaParams(site_id="x-com", post_id=42))
+    assert r.status == "success"
+    assert r.data.og_image_url == image_url
+
+
 async def test_empty_meta_is_success_not_error():
     """Graceful fallback: no SEO value set is normal — Rank Math uses its
     template. It must not read as a failure."""

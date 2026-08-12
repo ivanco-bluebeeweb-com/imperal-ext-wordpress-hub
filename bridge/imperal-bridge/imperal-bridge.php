@@ -388,6 +388,7 @@ function imperal_seo_bridge_payload( $post ) {
 		'post_title'       => (string) get_the_title( $post ),
 		'meta_title'       => (string) get_post_meta( $post->ID, 'rank_math_title', true ),
 		'meta_description' => (string) get_post_meta( $post->ID, 'rank_math_description', true ),
+		'og_image_url'     => (string) get_post_meta( $post->ID, 'rank_math_facebook_image', true ),
 		'focus_keyword'    => (string) get_post_meta( $post->ID, 'rank_math_focus_keyword', true ),
 		'canonical_url'    => (string) get_post_meta( $post->ID, 'rank_math_canonical_url', true ),
 		'rich_snippet'     => (string) get_post_meta( $post->ID, 'rank_math_rich_snippet', true ),
@@ -484,6 +485,7 @@ function imperal_seo_bridge_term_payload( $term ) {
 		'post_title'       => (string) $term->name,
 		'meta_title'       => (string) get_term_meta( $term->term_id, 'rank_math_title', true ),
 		'meta_description' => (string) get_term_meta( $term->term_id, 'rank_math_description', true ),
+		'og_image_url'     => (string) get_term_meta( $term->term_id, 'rank_math_facebook_image', true ),
 		'focus_keyword'    => (string) get_term_meta( $term->term_id, 'rank_math_focus_keyword', true ),
 		'canonical_url'    => (string) get_term_meta( $term->term_id, 'rank_math_canonical_url', true ),
 		'rich_snippet'     => (string) get_term_meta( $term->term_id, 'rank_math_rich_snippet', true ),
@@ -774,6 +776,7 @@ function imperal_seo_bridge_update_meta( $request ) {
 		'focus_keyword'    => array( 'rank_math_focus_keyword', 'text' ),
 		'canonical_url'    => array( 'rank_math_canonical_url', 'url' ),
 		'rich_snippet'     => array( 'rank_math_rich_snippet', 'text' ),
+		'og_image_url'     => array( 'rank_math_facebook_image', 'url' ),
 	);
 
 	$changed = array();
