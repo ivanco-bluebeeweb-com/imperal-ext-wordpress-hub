@@ -12,7 +12,8 @@ from models import (_NoParams, Site, ListContentParams, ListMediaParams,
                     ListCustomPostsParams, Comment, WPUser, Plugin,
                     PurgeCacheParams, CacheActionResult, InstallPluginParams, PluginInstallResult,
                     ServerInfo, UpdateMediaAltParams, MediaAltResult,
-                    MediaAltItem, SetSingleMediaAltParams)
+                    MediaAltItem, BulkMediaAltParams, ApplyBulkMediaAltParams,
+                    BulkMediaAltResult, SetSingleMediaAltParams)
 import wp_cli
 from wp_client import wp_get, wp_post, wp_request, wp_error_message, wp_error_code, wp_title, now_iso
 import storage
@@ -333,6 +334,70 @@ async def update_media_alt(ctx, params: UpdateMediaAltParams) -> ActionResult:
             retryable=True, code="MEDIA_ALL_FAILED")
 
     return ActionResult.success(result, summary=", ".join(bits), refresh_panels=["center"])
+
+
+def _media_alt_state_token(media: list[dict]) -> str:
+    state = [{"id": int(item.get("id", 0)), "alt_text": item.get("alt_text", ""),
+              "modified": item.get("modified", "")} for item in sorted(media, key=lambda item: int(item.get("id", 0)))]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_media_alt_targets(ctx, params: BulkMediaAltParams):
+    if len({item.media_id for item in params.items}) != len(params.items):
+        return None, ActionResult.error("Each media id may appear only once.", retryable=False, code="MEDIA_DUPLICATE_IDS")
+    blank = [item.media_id for item in params.items if not item.alt_text.strip()]
+    if blank:
+        return None, ActionResult.error("Alt text must not be empty in guarded batch updates.", retryable=False, code="MEDIA_EMPTY_ALT")
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, ActionResult.error(err, retryable=False)
+    base_url, username, pw = auth
+    media = []
+    for item in params.items:
+        response = await wp_get(ctx, base_url, f"/wp-json/wp/v2/media/{item.media_id}",
+                                username=username, app_password=pw, params={"_fields": "id,alt_text,modified"})
+        if response.status_code != 200 or not isinstance(response.body, dict):
+            return None, ActionResult.error(f"Could not read media #{item.media_id}: {wp_error_message(response.status_code)}.",
+                                            retryable=response.status_code >= 500, code="MEDIA_TARGET_UNAVAILABLE")
+        media.append(response.body)
+    return (base_url, username, pw, media), None
+
+
+@chat.function("preview_bulk_media_alt", description="Preview replacing alt text for 1-100 explicit media items. Makes no writes and returns the exact token required to apply.", action_type="read", data_model=BulkMediaAltResult)
+async def preview_bulk_media_alt(ctx, params: BulkMediaAltParams) -> ActionResult:
+    """Return an exact no-write alt-text batch diff and deterministic state token."""
+    targets, err = await _bulk_media_alt_targets(ctx, params)
+    if err:
+        return err
+    _, _, _, media = targets
+    proposed = {item.media_id: item.alt_text.strip() for item in params.items}
+    changes = [f"#{item['id']}: {(item.get('alt_text') or '(empty)')} → {proposed[int(item['id'])]}" for item in media]
+    return ActionResult.success(BulkMediaAltResult(preview=True, requested=len(params.items), matched=len(media),
+        state_token=_media_alt_state_token(media), changes=changes), summary=f"Previewed {len(media)} media alt-text change(s); no changes made.")
+
+
+@chat.function("apply_bulk_media_alt", description="Apply a previously previewed alt-text change to 1-100 explicit media items. Rechecks every item before any write and stops if any changed.", action_type="write", data_model=BulkMediaAltResult, effects=["wp.media_bulk_update"], event="wordpress-hub.apply_bulk_media_alt")
+async def apply_bulk_media_alt(ctx, params: ApplyBulkMediaAltParams) -> ActionResult:
+    """Recheck every media item before applying the reviewed alt-text batch."""
+    targets, err = await _bulk_media_alt_targets(ctx, params)
+    if err:
+        return err
+    base_url, username, pw, media = targets
+    if _media_alt_state_token(media) != params.expected_state_token:
+        return ActionResult.error("One or more media items changed after preview; no alt text was written. Preview again.", retryable=False, code="MEDIA_BULK_STATE_CHANGED")
+    proposed = {item.media_id: item.alt_text.strip() for item in params.items}
+    updated, failed = [], []
+    for media_id in params.items:
+        response = await wp_post(ctx, base_url, f"/wp-json/wp/v2/media/{media_id.media_id}", username=username, app_password=pw,
+                                 json={"alt_text": proposed[media_id.media_id]})
+        if response.status_code == 200 and isinstance(response.body, dict) and (response.body.get("alt_text") or "").strip() == proposed[media_id.media_id]:
+            updated.append(media_id.media_id)
+        else:
+            failed.append(media_id.media_id)
+    result = BulkMediaAltResult(preview=False, requested=len(params.items), matched=len(media), updated=len(updated), failed=len(failed), updated_ids=updated, failed_ids=failed)
+    if failed and not updated:
+        return ActionResult.error("No media alt text was updated.", retryable=True, code="MEDIA_BULK_ALL_FAILED")
+    return ActionResult.success(result, summary=f"Updated alt text on {len(updated)} media item(s); {len(failed)} failed.", refresh_panels=["center"])
 
 
 @chat.function(

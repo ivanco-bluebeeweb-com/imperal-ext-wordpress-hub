@@ -9,8 +9,8 @@ from imperal_sdk.testing import MockContext
 import app  # noqa: F401
 import handlers_read as hr
 import storage
-from models import (ListMediaParams, ListOrdersParams, UpdateMediaAltParams, MediaAltItem,
-                    SetSingleMediaAltParams)
+from models import (ApplyBulkMediaAltParams, BulkMediaAltParams, ListMediaParams, ListOrdersParams,
+                    UpdateMediaAltParams, MediaAltItem, SetSingleMediaAltParams)
 
 
 async def _connected_ctx():
@@ -23,6 +23,35 @@ async def _connected_ctx():
 
 def _item(mid=9, alt="a kitchen"):
     return UpdateMediaAltParams(site_id="x-com", items=[MediaAltItem(media_id=mid, alt_text=alt)])
+
+
+async def test_preview_and_apply_bulk_media_alt():
+    ctx = await _connected_ctx()
+    for media_id, alt in ((9, "old one"), (10, "old two")):
+        ctx.http.mock_get(f"https://x.com/wp-json/wp/v2/media/{media_id}",
+                          {"id": media_id, "alt_text": alt, "modified": "2026-08-12T00:00:00"}, 200)
+    preview = await hr.preview_bulk_media_alt(ctx, BulkMediaAltParams(site_id="x-com", items=[
+        MediaAltItem(media_id=9, alt_text="new one"), MediaAltItem(media_id=10, alt_text="new two")]))
+    assert preview.status == "success" and preview.data.preview is True
+
+    for media_id, alt in ((9, "old one"), (10, "old two")):
+        ctx.http.mock_get(f"https://x.com/wp-json/wp/v2/media/{media_id}",
+                          {"id": media_id, "alt_text": alt, "modified": "2026-08-12T00:00:00"}, 200)
+    ctx.http.mock_post("https://x.com/wp-json/wp/v2/media/9", {"id": 9, "alt_text": "new one"}, 200)
+    ctx.http.mock_post("https://x.com/wp-json/wp/v2/media/10", {"id": 10, "alt_text": "new two"}, 200)
+    result = await hr.apply_bulk_media_alt(ctx, ApplyBulkMediaAltParams(site_id="x-com", items=[
+        MediaAltItem(media_id=9, alt_text="new one"), MediaAltItem(media_id=10, alt_text="new two")],
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success" and result.data.updated_ids == [9, 10]
+
+
+async def test_apply_bulk_media_alt_refuses_stale_token():
+    ctx = await _connected_ctx()
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/media/9",
+                      {"id": 9, "alt_text": "old", "modified": "2026-08-12T00:00:00"}, 200)
+    result = await hr.apply_bulk_media_alt(ctx, ApplyBulkMediaAltParams(site_id="x-com", items=[
+        MediaAltItem(media_id=9, alt_text="new")], expected_state_token="0" * 64))
+    assert result.status == "error" and result.error_code == "MEDIA_BULK_STATE_CHANGED"
 
 
 async def test_writes_alt_when_currently_empty():

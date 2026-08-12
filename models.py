@@ -436,6 +436,30 @@ class UpdateMediaAltParams(BaseModel):
                      "human's wording is never clobbered. Set true to replace existing alt too."))
 
 
+class BulkMediaAltParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    items: list[MediaAltItem] = Field(min_length=1, max_length=100, description="Explicit media id and alt-text assignments; 1-100, never inferred")
+
+
+class ApplyBulkMediaAltParams(BulkMediaAltParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any media alt changed")
+
+
+class BulkMediaAltResult(sdl.Entity):
+    id: str = ""
+    title: str = "Media alt-text batch"
+    kind: str = "wp_media_alt_batch"
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
+
+
 class SetSingleMediaAltParams(BaseModel):
     """Single-item convenience wrapper around update_media_alt — the panel UI can only submit a
     flat form per row, not a nested items[] list, so this feeds one {media_id, alt_text} through."""
