@@ -14,7 +14,13 @@ from imperal_sdk.testing import MockContext
 import app  # noqa: F401
 import handlers_seo as hs
 import storage
-from models import GetSeoMetaParams, UpdateSeoMetaParams, SiteIdParams
+from models import (
+    ApplyBulkSeoMetaParams,
+    BulkSeoMetaParams,
+    GetSeoMetaParams,
+    SiteIdParams,
+    UpdateSeoMetaParams,
+)
 
 BRIDGE = "https://x.com/wp-json/imperal/v1/seo"
 STATUS = "https://x.com/wp-json/imperal/v1/seo/status"
@@ -89,6 +95,39 @@ LIVE_STATUS_PAYLOAD = {
     "robots_choices": ["index", "noindex", "nofollow", "noarchive",
                        "noimageindex", "nosnippet"],
 }
+
+
+# ── guarded bulk writes via the bridge ───────────────────────────────────────
+
+
+async def test_preview_and_apply_bulk_seo_meta():
+    ctx = await _ctx()
+    ctx.http.mock_get(BRIDGE, _bridge_payload(id=42), 200)
+    ctx.http.mock_get(BRIDGE, _bridge_payload(id=43, slug="contact"), 200)
+    preview = await hs.preview_bulk_seo_meta(ctx, BulkSeoMetaParams(
+        site_id="x-com", post_ids=[42, 43], post_type="page", meta_title="Shared SEO title"))
+    assert preview.status == "success"
+    assert preview.data.preview is True
+
+    ctx.http.mock_get(BRIDGE, _bridge_payload(id=42), 200)
+    ctx.http.mock_get(BRIDGE, _bridge_payload(id=43, slug="contact"), 200)
+    ctx.http.mock_post(BRIDGE, _bridge_payload(id=42, meta_title="Shared SEO title"), 200)
+    ctx.http.mock_post(BRIDGE, _bridge_payload(id=43, meta_title="Shared SEO title"), 200)
+    result = await hs.apply_bulk_seo_meta(ctx, ApplyBulkSeoMetaParams(
+        site_id="x-com", post_ids=[42, 43], post_type="page", meta_title="Shared SEO title",
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success"
+    assert result.data.updated == 2
+    assert len(result.data.updated_ids) == 2
+
+
+async def test_apply_bulk_seo_meta_refuses_stale_token():
+    ctx = await _ctx()
+    ctx.http.mock_get(BRIDGE, _bridge_payload(id=42), 200)
+    result = await hs.apply_bulk_seo_meta(ctx, ApplyBulkSeoMetaParams(
+        site_id="x-com", post_ids=[42], meta_title="New", expected_state_token="0" * 64))
+    assert result.status == "error"
+    assert result.error_code == "SEO_BULK_STATE_CHANGED"
 
 
 # ── reading via the bridge ───────────────────────────────────────────────────

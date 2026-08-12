@@ -593,6 +593,34 @@ class UpdateSeoMetaParams(BaseModel):
     rich_snippet: str | None = Field(default=None, description="Optional Rank Math schema/rich-snippet type, e.g. 'Article', 'Product', 'Recipe', or 'off' to disable schema for this item. Rank Math accepts an open-ended set of schema.org type names here (including PRO schema templates and custom schema), so this is free text, not a fixed list — pass exactly what should appear in Rank Math's Schema type dropdown. Omit to leave unchanged; empty string clears it.")
 
 
+class BulkSeoMetaParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_ids: list[int] = Field(min_length=1, max_length=100, description="Explicit post/page/CPT ids; 1-100, never inferred")
+    post_type: str | None = Field(default=None, description="Optional common post type to disambiguate all ids")
+    meta_title: str | None = Field(default=None, description="Same Rank Math SEO title to set on every target; omit to leave unchanged")
+    meta_description: str | None = Field(default=None, description="Same Rank Math description to set on every target; omit to leave unchanged")
+    canonical_url: str | None = Field(default=None, description="Same canonical URL to set on every target; omit to leave unchanged")
+    robots: list[str] | None = Field(default=None, description="Same allowed robots directives to set on every target; omit to leave unchanged")
+    focus_keyword: str | None = Field(default=None, description="Same focus keyword to set on every target; omit to leave unchanged")
+    rich_snippet: str | None = Field(default=None, description="Same Rank Math schema type to set on every target; omit to leave unchanged")
+
+
+class ApplyBulkSeoMetaParams(BulkSeoMetaParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; execution stops before all writes if any SEO target changed")
+
+
+class BulkSeoMetaResult(sdl.Entity):
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
+
+
 class GetTermSeoMetaParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     term_id: int | None = Field(default=None, description="Numeric id of the category/tag term. Give this OR slug.")

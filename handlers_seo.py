@@ -25,12 +25,15 @@ Every result reports `source` ("bridge" or "core-meta") so the caller always
 knows which fidelity it got, and never has to guess why robots came back empty.
 """
 
+import hashlib
+import json
 import uuid
 
 from imperal_sdk import ActionResult, sdl
 
 from app import chat
-from models import (GetSeoMetaParams, UpdateSeoMetaParams, GetTermSeoMetaParams,
+from models import (ApplyBulkSeoMetaParams, BulkSeoMetaParams, BulkSeoMetaResult,
+                    GetSeoMetaParams, UpdateSeoMetaParams, GetTermSeoMetaParams,
                     UpdateTermSeoMetaParams, SeoMeta, SiteIdParams)
 from wp_client import wp_get, wp_post, wp_error_message, wp_error_code
 import storage
@@ -346,6 +349,118 @@ async def get_seo_meta(ctx, params: GetSeoMetaParams) -> ActionResult:
     entity = _entity_from_core(item, base_url)
     summary = _summarise(entity) + " (read via core meta — install the Imperal Bridge for robots/canonical)"
     return ActionResult.success(entity, summary=summary)
+
+
+def _bulk_seo_fields(params: BulkSeoMetaParams):
+    fields = {name: getattr(params, name) for name in (
+        "meta_title", "meta_description", "focus_keyword", "canonical_url", "robots", "rich_snippet")
+        if getattr(params, name) is not None}
+    if not fields:
+        return None, ActionResult.error("Provide at least one SEO field to change.", retryable=False,
+                                        code="SEO_INVALID_REQUEST")
+    if params.robots is not None:
+        invalid = [value for value in params.robots if value not in ROBOTS_CHOICES]
+        if invalid:
+            return None, ActionResult.error(
+                f"Unsupported robots value(s): {', '.join(invalid)}.", retryable=False,
+                code="SEO_INVALID_REQUEST")
+    return fields, None
+
+
+def _seo_state_token(items: list[SeoMeta]) -> str:
+    state = [{"id": item.post_id, "post_type": item.post_type, "meta_title": item.meta_title,
+              "meta_description": item.meta_description, "focus_keyword": item.focus_keyword,
+              "canonical_url": item.canonical_url, "robots": sorted(item.robots),
+              "rich_snippet": item.rich_snippet}
+             for item in sorted(items, key=lambda value: value.post_id)]
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+async def _bulk_seo_targets(ctx, params: BulkSeoMetaParams):
+    fields, field_err = _bulk_seo_fields(params)
+    if field_err:
+        return None, field_err
+    if len(set(params.post_ids)) != len(params.post_ids):
+        return None, ActionResult.error("Each post id may appear only once.", retryable=False,
+                                        code="SEO_DUPLICATE_IDS")
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, err
+    base_url, username, pw = auth
+    items = []
+    for post_id in params.post_ids:
+        query = {"id": post_id}
+        if params.post_type:
+            query["type"] = params.post_type.strip()
+        try:
+            response = await wp_get(ctx, base_url, BRIDGE_PATH, username=username,
+                                    app_password=pw, params=_cache_busted(query))
+        except Exception as exc:
+            await ctx.log(f"bulk SEO read #{post_id} failed: {exc}", level="error")
+            return None, ActionResult.error("Could not reach the site — try again.", retryable=True,
+                                            code="WP_UNREACHABLE")
+        if response.status_code != 200 or not isinstance(response.body, dict):
+            return None, _http_failure(response.status_code, response.body)
+        item = _entity_from_bridge(response.body, base_url)
+        if item.seo_plugin == "none":
+            return None, ActionResult.error("Rank Math is not active on this site.", retryable=False,
+                                            code="SEO_PLUGIN_MISSING")
+        items.append(item)
+    return (base_url, username, pw, fields, items), None
+
+
+@chat.function(
+    "preview_bulk_seo_meta",
+    description="Preview setting the same Rank Math SEO fields on 1-100 explicit posts/pages/CPT items. Makes no writes and returns the exact token required to apply.",
+    action_type="read", data_model=BulkSeoMetaResult,
+)
+async def preview_bulk_seo_meta(ctx, params: BulkSeoMetaParams) -> ActionResult:
+    """Return a no-write reviewed SEO batch diff and its state token."""
+    targets, err = await _bulk_seo_targets(ctx, params)
+    if err:
+        return err
+    _, _, _, fields, items = targets
+    return ActionResult.success(BulkSeoMetaResult(
+        id=params.site_id, title="Bulk SEO preview", kind="wp_bulk_seo", preview=True,
+        requested=len(params.post_ids), matched=len(items), state_token=_seo_state_token(items),
+        changes=[f"#{item.post_id}: set {', '.join(sorted(fields))}" for item in items]),
+        summary=f"Preview: {len(items)} SEO item(s) would be updated; no changes made.")
+
+
+@chat.function(
+    "apply_bulk_seo_meta",
+    description="Apply a previously previewed Rank Math SEO meta change to 1-100 explicit posts/pages/CPT items. Re-reads every target and stops before all writes if any state changed.",
+    action_type="write", data_model=BulkSeoMetaResult, effects=["wp.seo_bulk_update"],
+    event="wordpress-hub.apply_bulk_seo_meta",
+)
+async def apply_bulk_seo_meta(ctx, params: ApplyBulkSeoMetaParams) -> ActionResult:
+    """Recheck the SEO batch snapshot, then apply the reviewed changes."""
+    targets, err = await _bulk_seo_targets(ctx, params)
+    if err:
+        return err
+    base_url, username, pw, fields, items = targets
+    if _seo_state_token(items) != params.expected_state_token:
+        return ActionResult.error("One or more SEO targets changed since preview; preview again before applying.",
+                                  retryable=False, code="SEO_BULK_STATE_CHANGED")
+    updated_ids, failed_ids = [], []
+    for item in items:
+        payload = {"id": item.post_id, **fields}
+        if params.post_type:
+            payload["type"] = params.post_type.strip()
+        response = await wp_post(ctx, base_url, BRIDGE_PATH, username=username,
+                                 app_password=pw, json=payload)
+        if 200 <= response.status_code < 300:
+            updated_ids.append(item.post_id)
+        else:
+            failed_ids.append(item.post_id)
+    result = BulkSeoMetaResult(id=params.site_id, title="Bulk SEO result", kind="wp_bulk_seo",
+                               preview=False, requested=len(params.post_ids), matched=len(items),
+                               updated=len(updated_ids), failed=len(failed_ids), updated_ids=updated_ids,
+                               failed_ids=failed_ids)
+    if not updated_ids:
+        return ActionResult.error("No SEO items were updated.", retryable=False, code="SEO_BULK_ALL_FAILED")
+    return ActionResult.success(result, summary=f"Updated SEO meta for {len(updated_ids)} item(s); {len(failed_ids)} failed.",
+                                refresh_panels=["center"])
 
 
 @chat.function(
