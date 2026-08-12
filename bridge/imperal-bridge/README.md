@@ -32,7 +32,7 @@ that runs *inside* WordPress, with real capability checks, is the only fix.
 | Section | Endpoints | Exposes |
 |---|---|---|
 | SEO | `GET/POST /wp-json/imperal/v1/seo`, `.../seo/term`, `GET .../seo/status` | Rank Math SEO fields — title, description, focus keyword, robots, canonical, schema/rich-snippet type — for posts, pages, CPTs and taxonomy terms (categories, tags) |
-| Builder | `GET /wp-json/imperal/v1/builder`, `POST .../builder/field`, `GET .../builder/status`, `GET .../builder/scan` | Elementor and Bricks page-builder element trees, with guarded single-field point edits (never a whole-tree replace) |
+| Builder | `GET /wp-json/imperal/v1/builder`, `POST .../builder/field`, `GET .../builder/status`, `GET .../builder/scan`, `POST .../builder/heading` | Elementor and Bricks page-builder element trees, with guarded single-field point edits (never a whole-tree replace) and a guarded append-one-semantic-heading helper for Bricks zones |
 | Media | `POST /wp-json/imperal/v1/media/sideload`, `GET .../media/status` | Sideloads a public HTTPS image URL into the media library, optionally as a post's featured image, via WordPress's own `media_sideload_image()` |
 | Server | `GET /wp-json/imperal/v1/server/info` | WP-CLI-equivalent server diagnostics without a shell: core/PHP version, plugin/theme/core update lists, cron job count, database size in MB |
 | Redirects | `GET/POST /wp-json/imperal/v1/redirects`, `DELETE .../redirects/{id}`, `POST .../redirects/{id}/status` | Rank Math's URL Redirections module — list/create/delete a redirect, activate/deactivate/trash one — read/written directly against Rank Math's own `{prefix}rank_math_redirections` table, since Rank Math itself never exposes this over REST |
