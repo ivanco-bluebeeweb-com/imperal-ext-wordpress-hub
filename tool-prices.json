@@ -13,6 +13,7 @@
   "archive_product": 16,
   "bulk_update_post_status": 60,
   "cancel_scheduled_action": 16,
+  "check_backup_restorability": 40,
   "check_builder_support": 8,
   "check_database_repair": 40,
   "check_debug_mode": 8,

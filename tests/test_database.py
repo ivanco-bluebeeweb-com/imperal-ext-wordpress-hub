@@ -13,6 +13,7 @@ import handlers_database as hdb
 import storage
 from models import (
     ApplySearchReplaceParams,
+    CheckBackupRestorabilityParams,
     CheckDatabaseParams,
     CountPostTypeRowsParams,
     ExportDatabaseDumpParams,
@@ -344,3 +345,72 @@ async def test_wp_cli_count_post_type_rows_rejects_unsafe_post_type():
     result, error = await hdb.wp_cli.count_post_type_rows(cred, "post; rm -rf /")
     assert result is None
     assert error is not None
+
+
+# ─────────── check_backup_restorability ───────────
+
+_CORE_DUMP_SQL = (
+    "CREATE TABLE `wp_options` (id INT);\n"
+    "INSERT INTO `wp_options` VALUES (1);\n"
+    "CREATE TABLE `wp_posts` (id INT);\n"
+    "INSERT INTO `wp_posts` VALUES (1);\n"
+)
+
+
+async def test_check_backup_restorability_reports_restorable_for_a_sound_dump():
+    ctx = await _ctx()
+    ctx.http.mock_get(TABLES, {"tables": [
+        {"name": "wp_options", "size": "1KB"}, {"name": "wp_posts", "size": "1KB"},
+    ]}, 200)
+    ctx.http.mock_get(EXPORT, {"sql": _CORE_DUMP_SQL, "size_bytes": len(_CORE_DUMP_SQL)}, 200)
+    result = await hdb.check_backup_restorability(ctx, CheckBackupRestorabilityParams(site_id="x-com"))
+    assert result.status == "success"
+    assert result.data.restorable is True
+    assert result.data.missing_tables == []
+    assert result.data.truncated is False
+
+
+async def test_check_backup_restorability_flags_missing_core_table():
+    ctx = await _ctx()
+    ctx.http.mock_get(TABLES, {"tables": [
+        {"name": "wp_options", "size": "1KB"}, {"name": "wp_posts", "size": "1KB"},
+    ]}, 200)
+    # Dump is missing wp_posts entirely.
+    sql = "CREATE TABLE `wp_options` (id INT);\nINSERT INTO `wp_options` VALUES (1);\n"
+    ctx.http.mock_get(EXPORT, {"sql": sql, "size_bytes": len(sql)}, 200)
+    result = await hdb.check_backup_restorability(ctx, CheckBackupRestorabilityParams(site_id="x-com"))
+    assert result.status == "success"
+    assert result.data.restorable is False
+    assert "wp_posts" in result.data.missing_tables
+
+
+async def test_check_backup_restorability_flags_truncated_dump():
+    ctx = await _ctx()
+    ctx.http.mock_get(TABLES, {"tables": [{"name": "wp_options", "size": "1KB"}]}, 200)
+    # No trailing semicolon -- looks cut off mid-statement.
+    sql = "CREATE TABLE `wp_options` (id INT)\nINSERT INTO `wp_options` VALUES (1"
+    ctx.http.mock_get(EXPORT, {"sql": sql, "size_bytes": len(sql)}, 200)
+    result = await hdb.check_backup_restorability(ctx, CheckBackupRestorabilityParams(site_id="x-com"))
+    assert result.status == "success"
+    assert result.data.truncated is True
+    assert result.data.restorable is False
+
+
+async def test_check_backup_restorability_flags_empty_table():
+    ctx = await _ctx()
+    ctx.http.mock_get(TABLES, {"tables": [{"name": "wp_options", "size": "1KB"}]}, 200)
+    sql = "CREATE TABLE `wp_options` (id INT);\n"
+    ctx.http.mock_get(EXPORT, {"sql": sql, "size_bytes": len(sql)}, 200)
+    result = await hdb.check_backup_restorability(ctx, CheckBackupRestorabilityParams(site_id="x-com"))
+    assert result.status == "success"
+    assert "wp_options" in result.data.empty_tables
+
+
+async def test_check_backup_restorability_surfaces_export_failure():
+    ctx = await _ctx()
+    ctx.http.mock_get(TABLES, {"tables": [{"name": "wp_options", "size": "1KB"}]}, 200)
+    ctx.http.mock_get(EXPORT, {"code": "rest_no_route"}, 404)
+    # No SSH configured either -> export_database_dump itself errors.
+    result = await hdb.check_backup_restorability(ctx, CheckBackupRestorabilityParams(site_id="x-com"))
+    assert result.status == "error"
+    assert result.error_code == "SSH_NOT_CONFIGURED"

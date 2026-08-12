@@ -2536,6 +2536,30 @@ class OrphanedPostmetaResult(sdl.Entity):
     orphaned_rows: int = 0
 
 
+class CheckBackupRestorabilityParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    tables: list[str] | None = Field(
+        default=None,
+        description="Explicit table names/wildcards from list_database_tables to scope the check to; omit to check the full export")
+
+
+class BackupRestorabilityResult(sdl.Entity):
+    """Structural integrity verdict for one export_database_dump SQL text --
+    NOT a real test-restore (that needs a separate sandbox DB this app does
+    not provision). Catches the failure modes that make a backup silently
+    useless: a truncated/cut-off dump, a missing core table, or a table with
+    a CREATE statement but zero rows of data."""
+    site_id: str = ""
+    size_bytes: int = 0
+    tables_expected: int = 0
+    tables_found_in_dump: int = 0
+    missing_tables: list[str] = Field(default_factory=list)
+    empty_tables: list[str] = Field(default_factory=list)  # has CREATE TABLE but no INSERT
+    truncated: bool = False  # dump does not end in a complete, terminated SQL statement
+    restorable: bool = False
+    issues: list[str] = Field(default_factory=list)
+
+
 class ListRestRoutesParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     namespace: str | None = Field(

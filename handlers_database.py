@@ -25,6 +25,8 @@ from imperal_sdk import ActionResult, sdl
 from app import chat
 from models import (
     ApplySearchReplaceParams,
+    BackupRestorabilityResult,
+    CheckBackupRestorabilityParams,
     CheckDatabaseParams,
     CountPostTypeRowsParams,
     DatabaseDumpResult,
@@ -581,4 +583,115 @@ async def count_orphaned_postmeta(ctx, params: SiteIdParams) -> ActionResult:
             site_id=params.site_id, orphaned_rows=count or 0,
         ),
         summary=f"{count} orphaned postmeta row(s).",
+    )
+
+
+_CORE_TABLE_SUFFIXES = (
+    "options", "posts", "postmeta", "users", "usermeta", "terms", "termmeta",
+    "term_taxonomy", "term_relationships", "comments", "commentmeta", "links",
+)
+
+
+def _table_names_from_dump(sql: str) -> set[str]:
+    """Every table named in a CREATE TABLE statement in this dump."""
+    import re
+    return {m.group(1) for m in re.finditer(r"CREATE TABLE[^`]*`([^`]+)`", sql, re.IGNORECASE)}
+
+
+def _dump_is_truncated(sql: str) -> bool:
+    """A well-formed `wp db export`/Bridge dump ends with a terminated
+    statement (`;`) or a trailing comment/blank line after one -- a dump cut
+    off mid-INSERT (network drop, size cap) ends on an unterminated value
+    list instead. This is a structural heuristic, not a SQL parser."""
+    tail = sql.rstrip()
+    if not tail:
+        return True
+    return not tail.endswith(";")
+
+
+@chat.function(
+    "check_backup_restorability",
+    description=(
+        "Check whether this site's own database backup is structurally sound enough to "
+        "trust for a restore -- NOT a real test-restore (that needs a separate sandbox "
+        "database this app does not provision). Exports the current dump via "
+        "export_database_dump's same Bridge/SSH path, compares it against "
+        "list_database_tables, and flags: a truncated/cut-off export, any WordPress core "
+        "table missing entirely, and any table whose CREATE statement has zero data rows. "
+        "Run this after every real backup job to catch a silently broken backup before you "
+        "actually need it."
+    ),
+    action_type="read",
+    data_model=BackupRestorabilityResult,
+)
+async def check_backup_restorability(ctx, params: CheckBackupRestorabilityParams) -> ActionResult:
+    """Structural integrity check over one export_database_dump SQL text."""
+    auth, err = await _site_auth(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+
+    # Reuse export_database_dump's own Bridge-first/SSH-fallback path so this
+    # never duplicates -- and can drift from -- how a real dump is produced.
+    dump_result = await export_database_dump(
+        ctx, ExportDatabaseDumpParams(site_id=params.site_id, tables=params.tables)
+    )
+    if dump_result.status != "success":
+        return dump_result
+    sql = dump_result.data.sql
+    size_bytes = dump_result.data.size_bytes
+
+    tables_result = await list_database_tables(ctx, SiteIdParams(site_id=params.site_id))
+    if tables_result.status != "success":
+        return tables_result
+    all_table_items = tables_result.data if isinstance(tables_result.data, list) else []
+    expected_names = {item.name for item in all_table_items}
+    if params.tables:
+        # Scoped export: only judge the tables actually asked for.
+        expected_names = {t for t in expected_names if any(
+            t == want or t.endswith(want) for want in params.tables
+        )} or expected_names
+
+    found_names = _table_names_from_dump(sql)
+    missing = sorted(
+        t for t in expected_names
+        if t not in found_names
+        and any(t.endswith(f"_{suffix}") for suffix in _CORE_TABLE_SUFFIXES)
+    )
+
+    empty_tables = []
+    for t in found_names:
+        # A table with a CREATE statement but no matching INSERT INTO for
+        # that exact table name has zero rows in this dump.
+        if f"INSERT INTO `{t}`" not in sql and f"INSERT INTO {t} " not in sql:
+            empty_tables.append(t)
+    empty_tables.sort()
+
+    truncated = _dump_is_truncated(sql)
+
+    issues: list[str] = []
+    if truncated:
+        issues.append("Dump does not end in a terminated SQL statement -- likely cut off mid-export.")
+    if missing:
+        issues.append(f"{len(missing)} core table(s) missing from the dump entirely: {', '.join(missing[:10])}")
+    if empty_tables:
+        issues.append(f"{len(empty_tables)} table(s) have a CREATE statement but no data rows: {', '.join(empty_tables[:10])}")
+    if size_bytes == 0 or not sql.strip():
+        issues.append("Dump is empty.")
+        truncated = True
+
+    restorable = not truncated and not missing and bool(sql.strip())
+
+    return ActionResult.success(
+        BackupRestorabilityResult(
+            id=params.site_id, title="backup restorability", kind="wp_backup_restorability",
+            site_id=params.site_id, size_bytes=size_bytes,
+            tables_expected=len(expected_names), tables_found_in_dump=len(found_names),
+            missing_tables=missing, empty_tables=empty_tables, truncated=truncated,
+            restorable=restorable, issues=issues,
+        ),
+        summary=(
+            "Backup looks structurally restorable." if restorable
+            else f"Backup has {len(issues)} integrity issue(s) -- do not trust it for a restore yet."
+        ),
     )
