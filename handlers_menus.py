@@ -6,10 +6,15 @@ since 5.9 (part of the block-editor/FSE infrastructure, but present on
 classic themes too) -- no Bridge or SSH needed. This closes the natural
 next step after create_post: "the page exists, now put it in the menu."
 """
+import hashlib
+import json
+
 from imperal_sdk import ActionResult, sdl
 
 from app import chat
 from models import (
+    ApplyBulkMenuOrderParams,
+    BulkMenuOrderResult,
     CreateMenuItemParams,
     DeleteMenuItemParams,
     ListMenuItemsParams,
@@ -197,6 +202,81 @@ async def delete_menu_item(ctx, params: DeleteMenuItemParams) -> ActionResult:
         return _failure(response.status_code, response.body)
     return ActionResult.success(MenuItemDeleteResult(id=str(params.menu_item_id), title="", kind="wp_menu_item", deleted=True),
                                  summary="Menu item deleted", refresh_panels=["center"])
+
+
+async def _menu_order_targets(ctx, params):
+    if len(set(params.ordered_item_ids)) != len(params.ordered_item_ids):
+        return None, ActionResult.error("Each menu item id may appear only once.", retryable=False,
+                                        code="WP_MENU_DUPLICATE_IDS")
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return None, err
+    base_url, username, password = auth
+    response = await wp_get(ctx, base_url, "/wp-json/wp/v2/menu-items",
+                            username=username, app_password=password,
+                            params={"menus": params.menu_id, "per_page": 100,
+                                    "orderby": "menu_order", "order": "asc"})
+    if not 200 <= response.status_code < 300:
+        return None, _failure(response.status_code, response.body)
+    items = response.body if isinstance(response.body, list) else []
+    top_level = [item for item in items if int(item.get("parent", 0) or 0) == 0]
+    actual_ids = [int(item.get("id", 0)) for item in top_level]
+    if set(actual_ids) != set(params.ordered_item_ids):
+        return None, ActionResult.error("Pass every current top-level menu item exactly once; submenu items are unchanged.",
+                                        retryable=False, code="WP_MENU_INCOMPLETE_ORDER")
+    state = [{"id": item["id"], "parent": item.get("parent", 0), "menu_order": item.get("menu_order", 0),
+              "modified": item.get("modified", "")} for item in top_level]
+    token = hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return (top_level, token), None
+
+
+@chat.function(
+    "preview_bulk_menu_order",
+    description="Preview reordering all explicit top-level items in one WordPress menu. Makes no writes, requires the complete current top-level list, and returns a state token.",
+    action_type="read", data_model=BulkMenuOrderResult)
+async def preview_bulk_menu_order(ctx, params: ReorderMenuItemsParams) -> ActionResult:
+    """Read complete top-level menu order and show its guarded replacement."""
+    target, err = await _menu_order_targets(ctx, params)
+    if err:
+        return err
+    items, token = target
+    by_id = {int(item["id"]): item for item in items}
+    changes = [f"#{item_id}: position {by_id[item_id].get('menu_order', 0)} → {position}"
+               for position, item_id in enumerate(params.ordered_item_ids, start=1)]
+    result = BulkMenuOrderResult(id=str(params.menu_id), title=f"Menu {params.menu_id} order", preview=True,
+                                 requested=len(params.ordered_item_ids), matched=len(items), state_token=token,
+                                 changes=changes)
+    return ActionResult.success(result, summary=f"Previewed {len(items)} top-level menu item(s)")
+
+
+@chat.function(
+    "apply_bulk_menu_order",
+    description="Apply a previewed complete top-level WordPress menu order. Re-reads the exact menu first and performs no writes if it changed.",
+    action_type="write", data_model=BulkMenuOrderResult,
+    effects=["wp.menu_item_bulk_reorder"], event="wordpress-hub.apply_bulk_menu_order")
+async def apply_bulk_menu_order(ctx, params: ApplyBulkMenuOrderParams) -> ActionResult:
+    """Verify the complete menu snapshot, then update each explicit order position."""
+    target, err = await _menu_order_targets(ctx, params)
+    if err:
+        return err
+    items, token = target
+    if token != params.expected_state_token:
+        return ActionResult.error("Menu items changed since preview; no order was changed. Preview again.",
+                                  retryable=False, code="WP_MENU_BULK_STATE_CHANGED")
+    auth, _ = await _authed(ctx, params.site_id)
+    base_url, username, password = auth
+    updated_ids, failed_ids = [], []
+    for position, item_id in enumerate(params.ordered_item_ids, start=1):
+        response = await wp_request(ctx, "post", base_url, f"/wp-json/wp/v2/menu-items/{item_id}",
+                                    username=username, app_password=password, json={"menu_order": position})
+        if 200 <= response.status_code < 300:
+            updated_ids.append(item_id)
+        else:
+            failed_ids.append(item_id)
+    result = BulkMenuOrderResult(id=str(params.menu_id), title=f"Menu {params.menu_id} order", preview=False,
+                                 requested=len(params.ordered_item_ids), matched=len(items), updated=len(updated_ids),
+                                 failed=len(failed_ids), state_token=token, updated_ids=updated_ids, failed_ids=failed_ids)
+    return ActionResult.success(result, summary=f"Reordered {len(updated_ids)} menu item(s)", refresh_panels=["center"])
 
 
 @chat.function(

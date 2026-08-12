@@ -926,6 +926,25 @@ class ReorderMenuItemsParams(BaseModel):
         description="ALL top-level menu item ids for this menu, in the desired top-to-bottom order")
 
 
+class ApplyBulkMenuOrderParams(ReorderMenuItemsParams):
+    expected_state_token: str = Field(min_length=64, max_length=64, description="Exact token from preview; no item is reordered if menu items changed")
+
+
+class BulkMenuOrderResult(sdl.Entity):
+    id: str = ""
+    title: str = "Menu order batch"
+    kind: str = "wp_menu_order_batch"
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
+
+
 class MenuItemDeleteResult(sdl.Entity):
     deleted: bool = False
 

@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.35.0",
+  "version": "1.36.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -25082,6 +25082,348 @@
       "owner_chat_tool": "wordpress-hub"
     },
     {
+      "name": "preview_bulk_menu_order",
+      "description": "Preview reordering all explicit top-level items in one WordPress menu. Makes no writes, requires the complete current top-level list, and returns a state token.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "menu_id": {
+            "description": "Numeric menu id whose items are being reordered",
+            "exclusiveMinimum": 0,
+            "title": "Menu Id",
+            "type": "integer"
+          },
+          "ordered_item_ids": {
+            "description": "ALL top-level menu item ids for this menu, in the desired top-to-bottom order",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Ordered Item Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "site_id",
+          "menu_id",
+          "ordered_item_ids"
+        ],
+        "title": "ReorderMenuItemsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "default": "",
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "default": "Menu order batch",
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "wp_menu_order_batch",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "failed_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Failed Ids",
+            "type": "array"
+          }
+        },
+        "title": "BulkMenuOrderResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "apply_bulk_menu_order",
+      "description": "Apply a previewed complete top-level WordPress menu order. Re-reads the exact menu first and performs no writes if it changed.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.menu_item_bulk_reorder"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "menu_id": {
+            "description": "Numeric menu id whose items are being reordered",
+            "exclusiveMinimum": 0,
+            "title": "Menu Id",
+            "type": "integer"
+          },
+          "ordered_item_ids": {
+            "description": "ALL top-level menu item ids for this menu, in the desired top-to-bottom order",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Ordered Item Ids",
+            "type": "array"
+          },
+          "expected_state_token": {
+            "description": "Exact token from preview; no item is reordered if menu items changed",
+            "maxLength": 64,
+            "minLength": 64,
+            "title": "Expected State Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "menu_id",
+          "ordered_item_ids",
+          "expected_state_token"
+        ],
+        "title": "ApplyBulkMenuOrderParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "default": "",
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "default": "Menu order batch",
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "wp_menu_order_batch",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "failed_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Failed Ids",
+            "type": "array"
+          }
+        },
+        "title": "BulkMenuOrderResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.apply_bulk_menu_order",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
       "name": "reorder_menu_items",
       "description": "Reorder the top-level items of a menu by giving their ids in the desired top-to-bottom order. Pass ALL top-level item ids for this menu, not a subset.",
       "action_type": "write",
@@ -42891,7 +43233,9 @@
       "preview_bulk_customer_update": 40,
       "apply_bulk_customer_update": 60,
       "preview_bulk_order_status": 40,
-      "apply_bulk_order_status": 60
+      "apply_bulk_order_status": 60,
+      "preview_bulk_menu_order": 40,
+      "apply_bulk_menu_order": 60
     },
     "free_tools": [
       "add_ssh",

@@ -6,6 +6,8 @@ import app  # noqa: F401
 import handlers_menus as hm
 import storage
 from models import (
+    ApplyBulkMenuOrderParams,
+    BulkMenuOrderResult,
     CreateMenuItemParams,
     DeleteMenuItemParams,
     ListMenuItemsParams,
@@ -101,6 +103,31 @@ async def test_delete_menu_item_forces_permanent_removal():
     result = await hm.delete_menu_item(ctx, DeleteMenuItemParams(site_id="blog-test", menu_item_id=10))
     assert result.status == "success"
     assert result.data.deleted is True
+
+
+async def test_preview_and_apply_bulk_menu_order():
+    ctx = await _ctx()
+    items = [_menu_item(10, menu_order=1), _menu_item(11, menu_order=2, title={"rendered": "About"})]
+    ctx.http.mock_get(f"{BASE}/menu-items", items)
+    preview = await hm.preview_bulk_menu_order(ctx, ReorderMenuItemsParams(
+        site_id="blog-test", menu_id=3, ordered_item_ids=[11, 10]))
+    assert preview.status == "success" and preview.data.preview is True
+
+    ctx.http.mock_get(f"{BASE}/menu-items", items)
+    ctx.http.mock_post(f"{BASE}/menu-items/11", _menu_item(11, menu_order=1, title={"rendered": "About"}))
+    ctx.http.mock_post(f"{BASE}/menu-items/10", _menu_item(10, menu_order=2))
+    result = await hm.apply_bulk_menu_order(ctx, ApplyBulkMenuOrderParams(
+        site_id="blog-test", menu_id=3, ordered_item_ids=[11, 10],
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success" and result.data.updated == 2
+
+
+async def test_apply_bulk_menu_order_refuses_stale_token():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/menu-items", [_menu_item(10)])
+    result = await hm.apply_bulk_menu_order(ctx, ApplyBulkMenuOrderParams(
+        site_id="blog-test", menu_id=3, ordered_item_ids=[10], expected_state_token="0" * 64))
+    assert result.status == "error" and result.error_code == "WP_MENU_BULK_STATE_CHANGED"
 
 
 async def test_reorder_menu_items_sets_sequential_menu_order():
