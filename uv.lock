@@ -432,7 +432,7 @@ wheels = [
 
 [[package]]
 name = "wordpress-hub"
-version = "1.32.0"
+version = "1.33.0"
 source = { virtual = "." }
 dependencies = [
     { name = "imperal-sdk" },

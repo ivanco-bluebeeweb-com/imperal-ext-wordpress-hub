@@ -232,5 +232,7 @@
   "preview_bulk_coupon_update": 40,
   "apply_bulk_coupon_update": 60,
   "preview_bulk_plugin_status": 40,
-  "apply_bulk_plugin_status": 60
+  "apply_bulk_plugin_status": 60,
+  "preview_bulk_builder_field": 40,
+  "apply_bulk_builder_field": 60
 }

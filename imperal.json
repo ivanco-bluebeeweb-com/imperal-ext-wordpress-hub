@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.13",
   "app_id": "wordpress-hub",
-  "version": "1.32.0",
+  "version": "1.33.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -18378,6 +18378,557 @@
         "x-sdl": "entity"
       },
       "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "preview_bulk_builder_field",
+      "description": "Preview 1-100 explicit field changes across existing Elementor or one Bricks zone. Makes no writes and returns the exact token required to apply.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "$defs": {
+          "BuilderFieldAssignment": {
+            "properties": {
+              "element_id": {
+                "description": "Builder-native element id from get_builder_content",
+                "minLength": 1,
+                "title": "Element Id",
+                "type": "string"
+              },
+              "field": {
+                "description": "Exact existing builder settings field to replace",
+                "minLength": 1,
+                "title": "Field",
+                "type": "string"
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "items": {},
+                    "type": "array"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Replacement value for this one field",
+                "title": "Value"
+              }
+            },
+            "required": [
+              "element_id",
+              "field",
+              "value"
+            ],
+            "title": "BuilderFieldAssignment",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Numeric post/page id; give this or slug",
+            "title": "Post Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Slug of the target item; give this or post_id",
+            "title": "Slug"
+          },
+          "post_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional post type when using slug",
+            "title": "Post Type"
+          },
+          "builder": {
+            "description": "Exact active builder: elementor or bricks",
+            "title": "Builder",
+            "type": "string"
+          },
+          "zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Bricks only: header, content, or footer",
+            "title": "Zone"
+          },
+          "changes": {
+            "description": "Explicit element-field assignments; 1-100",
+            "items": {
+              "$ref": "#/$defs/BuilderFieldAssignment"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Changes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "site_id",
+          "builder",
+          "changes"
+        ],
+        "title": "BulkBuilderFieldParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "default": "",
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "default": "Builder field batch",
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "wp_builder_field_batch",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "failed_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failed Ids",
+            "type": "array"
+          }
+        },
+        "title": "BulkBuilderFieldResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "apply_bulk_builder_field",
+      "description": "Apply a previewed 1-100 explicit Elementor/Bricks field batch. Re-reads the exact builder tree and refuses all writes if its token changed.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.builder_field_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "$defs": {
+          "BuilderFieldAssignment": {
+            "properties": {
+              "element_id": {
+                "description": "Builder-native element id from get_builder_content",
+                "minLength": 1,
+                "title": "Element Id",
+                "type": "string"
+              },
+              "field": {
+                "description": "Exact existing builder settings field to replace",
+                "minLength": 1,
+                "title": "Field",
+                "type": "string"
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "items": {},
+                    "type": "array"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Replacement value for this one field",
+                "title": "Value"
+              }
+            },
+            "required": [
+              "element_id",
+              "field",
+              "value"
+            ],
+            "title": "BuilderFieldAssignment",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Numeric post/page id; give this or slug",
+            "title": "Post Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Slug of the target item; give this or post_id",
+            "title": "Slug"
+          },
+          "post_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional post type when using slug",
+            "title": "Post Type"
+          },
+          "builder": {
+            "description": "Exact active builder: elementor or bricks",
+            "title": "Builder",
+            "type": "string"
+          },
+          "zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Bricks only: header, content, or footer",
+            "title": "Zone"
+          },
+          "changes": {
+            "description": "Explicit element-field assignments; 1-100",
+            "items": {
+              "$ref": "#/$defs/BuilderFieldAssignment"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Changes",
+            "type": "array"
+          },
+          "expected_state_token": {
+            "description": "Exact state token from preview; no writes begin if document changed",
+            "minLength": 1,
+            "title": "Expected State Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "builder",
+          "changes",
+          "expected_state_token"
+        ],
+        "title": "ApplyBulkBuilderFieldParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "default": "",
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "default": "Builder field batch",
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "wp_builder_field_batch",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "preview": {
+            "default": true,
+            "title": "Preview",
+            "type": "boolean"
+          },
+          "requested": {
+            "default": 0,
+            "title": "Requested",
+            "type": "integer"
+          },
+          "matched": {
+            "default": 0,
+            "title": "Matched",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "state_token": {
+            "default": "",
+            "title": "State Token",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          },
+          "failed_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failed Ids",
+            "type": "array"
+          }
+        },
+        "title": "BulkBuilderFieldResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.apply_bulk_builder_field",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -41572,7 +42123,9 @@
       "preview_bulk_coupon_update": 40,
       "apply_bulk_coupon_update": 60,
       "preview_bulk_plugin_status": 40,
-      "apply_bulk_plugin_status": 60
+      "apply_bulk_plugin_status": 60,
+      "preview_bulk_builder_field": 40,
+      "apply_bulk_builder_field": 60
     },
     "free_tools": [
       "add_ssh",

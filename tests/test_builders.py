@@ -10,7 +10,8 @@ from imperal_sdk.testing import MockContext
 import app  # noqa: F401
 import handlers_builders as hb
 import storage
-from models import GetBuilderContentParams, UpdateBuilderFieldParams, SiteIdParams
+from models import (ApplyBulkBuilderFieldParams, BuilderFieldAssignment, BulkBuilderFieldParams,
+                    GetBuilderContentParams, UpdateBuilderFieldParams, SiteIdParams)
 
 TREE = "https://x.com/wp-json/imperal/v1/builder"
 FIELD = "https://x.com/wp-json/imperal/v1/builder/field"
@@ -409,6 +410,35 @@ async def test_update_without_post_id_or_slug_is_refused_locally():
         site_id="x-com", element_id="abc123", field="title", value="X", state_token="tok-1"))
     assert r.status == "error"
     assert r.error_code == "BUILDER_TARGET_MISSING"
+
+
+async def test_preview_and_apply_bulk_builder_fields():
+    ctx = await _ctx()
+    payload = _tree_payload()
+    ctx.http.mock_get(TREE, payload, 200)
+    preview = await hb.preview_bulk_builder_field(ctx, BulkBuilderFieldParams(
+        site_id="x-com", post_id=42, builder="elementor", changes=[
+            BuilderFieldAssignment(element_id="abc123", field="title", value="New title")]))
+    assert preview.status == "success" and preview.data.preview is True
+
+    ctx.http.mock_get(TREE, payload, 200)
+    ctx.http.mock_post(FIELD, {"id": 42, "state_token": "tok-2", "element_id": "abc123",
+                               "field": "title", "value": "New title"}, 200)
+    result = await hb.apply_bulk_builder_field(ctx, ApplyBulkBuilderFieldParams(
+        site_id="x-com", post_id=42, builder="elementor", changes=[
+            BuilderFieldAssignment(element_id="abc123", field="title", value="New title")],
+        expected_state_token=preview.data.state_token))
+    assert result.status == "success" and result.data.updated == 1
+
+
+async def test_apply_bulk_builder_fields_refuses_stale_token():
+    ctx = await _ctx()
+    ctx.http.mock_get(TREE, _tree_payload(), 200)
+    result = await hb.apply_bulk_builder_field(ctx, ApplyBulkBuilderFieldParams(
+        site_id="x-com", post_id=42, builder="elementor", changes=[
+            BuilderFieldAssignment(element_id="abc123", field="title", value="New title")],
+        expected_state_token="wrong"))
+    assert result.status == "error" and result.error_code == "BUILDER_BULK_STATE_CHANGED"
 
 
 # ── support check ────────────────────────────────────────────────────────────

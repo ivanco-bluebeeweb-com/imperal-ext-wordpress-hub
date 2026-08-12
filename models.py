@@ -1235,6 +1235,41 @@ class UpdateBuilderFieldParams(BaseModel):
     zone: str | None = Field(default=None, description="Bricks only: 'header', 'content', or 'footer' — which template area the element lives in")
 
 
+class BuilderFieldAssignment(BaseModel):
+    element_id: str = Field(min_length=1, description="Builder-native element id from get_builder_content")
+    field: str = Field(min_length=1, description="Exact existing builder settings field to replace")
+    value: JsonValue = Field(description="Replacement value for this one field")
+
+
+class BulkBuilderFieldParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int | None = Field(default=None, description="Numeric post/page id; give this or slug")
+    slug: str | None = Field(default=None, description="Slug of the target item; give this or post_id")
+    post_type: str | None = Field(default=None, description="Optional post type when using slug")
+    builder: str = Field(description="Exact active builder: elementor or bricks")
+    zone: str | None = Field(default=None, description="Bricks only: header, content, or footer")
+    changes: list[BuilderFieldAssignment] = Field(min_length=1, max_length=100, description="Explicit element-field assignments; 1-100")
+
+
+class ApplyBulkBuilderFieldParams(BulkBuilderFieldParams):
+    expected_state_token: str = Field(min_length=1, description="Exact state token from preview; no writes begin if document changed")
+
+
+class BulkBuilderFieldResult(sdl.Entity):
+    id: str = ""
+    title: str = "Builder field batch"
+    kind: str = "wp_builder_field_batch"
+    preview: bool = True
+    requested: int = 0
+    matched: int = 0
+    updated: int = 0
+    failed: int = 0
+    state_token: str = ""
+    changes: list[str] = Field(default_factory=list)
+    updated_ids: list[str] = Field(default_factory=list)
+    failed_ids: list[str] = Field(default_factory=list)
+
+
 class BuilderElement(BaseModel):
     """One flattened builder element row: a widget, section, column or container.
 

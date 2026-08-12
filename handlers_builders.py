@@ -33,6 +33,7 @@ from imperal_sdk import ActionResult, sdl
 
 from app import chat
 from models import (GetBuilderContentParams, UpdateBuilderFieldParams,
+                    BulkBuilderFieldParams, ApplyBulkBuilderFieldParams, BulkBuilderFieldResult,
                     BuilderContent, BuilderElement, BuilderFieldUpdateResult,
                     BuilderScanItem, BuilderSupport, SiteIdParams)
 from wp_client import wp_get, wp_post, wp_error_message, wp_error_code
@@ -319,6 +320,100 @@ async def get_builder_element(ctx, params: GetBuilderContentParams) -> ActionRes
             retryable=False, code="BUILDER_AMBIGUOUS_TARGET")
     row = rows[0]
     return ActionResult.success(row, summary=_summarise_content(rows))
+
+
+def _bulk_builder_key(change) -> str:
+    return f"{change.element_id}:{change.field}"
+
+
+async def _bulk_builder_targets(ctx, params: BulkBuilderFieldParams):
+    if params.builder.strip().lower() not in {"elementor", "bricks"}:
+        return None, ActionResult.error("builder must be elementor or bricks.", retryable=False,
+                                        code="BUILDER_INVALID_REQUEST")
+    if params.builder.strip().lower() == "bricks" and (params.zone or "").strip().lower() not in {"header", "content", "footer"}:
+        return None, ActionResult.error("Bricks bulk edits require zone: header, content, or footer.", retryable=False,
+                                        code="BUILDER_INVALID_REQUEST")
+    keys = [_bulk_builder_key(change) for change in params.changes]
+    if len(set(keys)) != len(keys):
+        return None, ActionResult.error("Each element and field pair may appear only once.", retryable=False,
+                                        code="BUILDER_DUPLICATE_CHANGES")
+    rows, error = await _fetch_content_rows(ctx, params)
+    if error:
+        return None, error
+    wanted_builder = params.builder.strip().lower()
+    wanted_zone = (params.zone or "").strip().lower()
+    rows = [row for row in rows if row.builder == wanted_builder and row.zone.lower() == wanted_zone]
+    if len(rows) != 1:
+        return None, ActionResult.error("The selected builder or zone was not found on this item.", retryable=False,
+                                        code="BUILDER_NOT_ACTIVE")
+    row = rows[0]
+    elements = {element.element_id: element for element in row.elements}
+    missing = [change.element_id for change in params.changes if change.element_id not in elements]
+    if missing:
+        return None, ActionResult.error("Unknown element id(s): " + ", ".join(sorted(set(missing))) + ".",
+                                        retryable=False, code="BUILDER_ELEMENT_NOT_FOUND")
+    fields = [f"{change.element_id}:{change.field}" for change in params.changes
+              if change.field not in elements[change.element_id].settings]
+    if fields:
+        return None, ActionResult.error("Only existing builder settings may be changed; missing: " + ", ".join(fields) + ".",
+                                        retryable=False, code="BUILDER_FIELD_NOT_FOUND")
+    return row, None
+
+
+@chat.function(
+    "preview_bulk_builder_field",
+    description="Preview 1-100 explicit field changes across existing Elementor or one Bricks zone. Makes no writes and returns the exact token required to apply.",
+    action_type="read", data_model=BulkBuilderFieldResult,
+)
+async def preview_bulk_builder_field(ctx, params: BulkBuilderFieldParams) -> ActionResult:
+    """Return an exact no-write builder field diff and current document token."""
+    row, error = await _bulk_builder_targets(ctx, params)
+    if error:
+        return error
+    current = {element.element_id: element for element in row.elements}
+    changes = [f"{change.element_id}.{change.field}: {current[change.element_id].settings[change.field]!r} → {change.value!r}"
+               for change in params.changes]
+    result = BulkBuilderFieldResult(id=row.id, title=f"{row.title} bulk edit", preview=True,
+                                    requested=len(params.changes), matched=len(params.changes),
+                                    state_token=row.state_token, changes=changes)
+    return ActionResult.success(result, summary=f"Previewed {len(changes)} builder field change(s); no writes made.")
+
+
+@chat.function(
+    "apply_bulk_builder_field",
+    description="Apply a previewed 1-100 explicit Elementor/Bricks field batch. Re-reads the exact builder tree and refuses all writes if its token changed.",
+    action_type="write", data_model=BulkBuilderFieldResult,
+    effects=["wp.builder_field_update"], event="wordpress-hub.apply_bulk_builder_field",
+)
+async def apply_bulk_builder_field(ctx, params: ApplyBulkBuilderFieldParams) -> ActionResult:
+    """Recheck a builder tree then apply the explicit reviewed point edits."""
+    row, error = await _bulk_builder_targets(ctx, params)
+    if error:
+        return error
+    if row.state_token != params.expected_state_token:
+        return ActionResult.error("This builder content changed since preview; no fields were written. Read and preview it again.",
+                                  retryable=False, code="BUILDER_BULK_STATE_CHANGED")
+    updated_ids, failed_ids = [], []
+    state_token = row.state_token
+    for change in params.changes:
+        result = await update_builder_field(ctx, UpdateBuilderFieldParams(
+            site_id=params.site_id, post_id=params.post_id, slug=params.slug, post_type=params.post_type,
+            builder=params.builder, zone=params.zone, element_id=change.element_id, field=change.field,
+            value=change.value, state_token=state_token))
+        key = _bulk_builder_key(change)
+        if result.status == "success":
+            updated_ids.append(key)
+            state_token = result.data.state_token or state_token
+        else:
+            failed_ids.append(key)
+    result = BulkBuilderFieldResult(id=row.id, title=f"{row.title} bulk edit", preview=False,
+                                    requested=len(params.changes), matched=len(params.changes),
+                                    updated=len(updated_ids), failed=len(failed_ids), state_token=state_token,
+                                    updated_ids=updated_ids, failed_ids=failed_ids)
+    summary = f"Updated {len(updated_ids)} builder field(s)"
+    if failed_ids:
+        summary += f"; {len(failed_ids)} failed"
+    return ActionResult.success(result, summary=summary)
 
 
 @chat.function(
