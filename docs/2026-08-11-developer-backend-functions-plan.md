@@ -226,12 +226,12 @@ suite 657→667, all green. `imperal validate`: 0 errors/0 warnings, 186 functio
 complete 186-key map (1 credit each — single core REST GET), resubmitted — `pending_review`, all 4
 checks passed. Deployed at `a0152c0d`.
 
-## Group K — Blocks / Patterns / Templates (block-theme era, read-only diagnostics only)
+## Group K — Blocks / Patterns / Templates (block-theme era, read-only diagnostics only) — ✅ SHIPPED
 
-48. `list_reusable_blocks` — `wp_block` post type listing (Gutenberg reusable blocks / "synced
+48. `list_reusable_blocks` — ✅ `wp_block` post type listing (Gutenberg reusable blocks / "synced
     patterns") — a real, common editorial-meets-dev question ("which pages use this reusable
     block")
-49. `list_block_patterns` — registered block patterns (theme + plugin supplied)
+49. `list_block_patterns` — ✅ registered block patterns (theme + plugin supplied)
 - **Deliberately excluded:** full Site Editor template editing — matches existing Widgets/FSE
   exclusion decision in the main roadmap (1.6), same reasoning.
 
