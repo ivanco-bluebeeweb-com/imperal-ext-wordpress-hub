@@ -167,43 +167,34 @@ checks passed.
 624→632, all green. `imperal validate`: 0 errors/0 warnings, 177 functions. Repriced the complete
 177-key map, resubmitted — `pending_review`, all 4 checks passed. Deployed at `5282eed9`.
 
-## Group G — Multisite (only if real demand — currently unverified whether any connected site is multisite)
+## Group G — Multisite — ✅ SHIPPED 2026-08-12 (Bridge 2.18.0, Hub 1.26.0)
 
-35. `list_network_sites` — `wp site list` equivalent, only meaningful on a multisite install
-36. `create_network_site` — add a new site to a multisite network
-37. `list_network_plugins` — network-activated plugins
-38. **Gate — assessed 2026-08-12:** Group G remains deliberately unbuilt. The three connected
-    sites (`ksrenovationgroup.com`, `g4s.md`, `climtec.md`) all report no Imperal Bridge 2.7.0+
-    deploy-hygiene route, so Multisite cannot be verified without inventing an answer. Revisit only
-    after the current Bridge ZIP is installed on a known Multisite site.
+35. `list_network_sites` — ✅ `wp site list` equivalent, only meaningful on a multisite install
+36. `create_network_site` — ✅ add a new site to a multisite network
+37. `list_network_plugins` — ✅ network-activated plugins
+38. **Superseded gate note (was: "deliberately unbuilt, revisit after Bridge on a known Multisite
+    site"; see the full "2026-08-12 — Group G / Multisite — shipped" entry near the end of this
+    file for the actual implementation, which shipped the same day through a deliberately narrow
+    Bridge network section — every route rejects non-Multisite installs and requires
+    `manage_network_options`.)
 
 ## Group H — Deploy / Environment Hygiene — ✅ ALREADY SHIPPED
 
-39–42 are already implemented as `get_wp_config_constants`, `list_must_use_plugins`,
-`list_drop_ins`, and `get_environment_type`. No duplicate work is required.
-
-### Tomorrow — genuine site-owner prerequisites
-
-1. Install or update `bridge/imperal-bridge.zip` on each connected production site; the currently
-   connected three sites do not expose even Bridge 2.7.0+ routes, so their existing features cannot
-   use the newly deployed mail, Site Health, session, or other Bridge capabilities.
-2. If Multisite support is desired, connect or identify one confirmed WordPress Multisite network
-   after its Bridge update. Only then can Group G be designed and tested against real network data.
-3. In Imperal, open the **Developer → WordPress Hub → Deploy** details to inspect the recurring
-   `18/21` deployment warning. The API returns the count but not the three underlying checks, so a
-   cause would be speculation until those details are visible.
-
-## Group H — Deploy / Environment Hygiene
-
-39. `get_wp_config_constants` — read the SAFE subset of wp-config.php constants (WP_ENV,
+39. `get_wp_config_constants` — ✅ read the SAFE subset of wp-config.php constants (WP_ENV,
     WP_DEBUG, WP_CACHE, table prefix, WP version pin) — never the DB credentials or auth keys/salts
-40. `list_must_use_plugins` — mu-plugins are invisible to `list_plugins`/`list_native_plugins`
+40. `list_must_use_plugins` — ✅ mu-plugins are invisible to `list_plugins`/`list_native_plugins`
     (they can't be deactivated, so WP core deliberately excludes them from the plugins list) — a
     real backend-dev blind spot today
-41. `list_drop_ins` — WP core drop-in files (`object-cache.php`, `advanced-cache.php`,
+41. `list_drop_ins` — ✅ WP core drop-in files (`object-cache.php`, `advanced-cache.php`,
     `db.php`) — which caching/DB layer is actually in play
-42. `get_environment_type` — WordPress 5.5+'s own `wp_get_environment_type()` (production / staging
-    / development / local) if the site declares it
+42. `get_environment_type` — ✅ WordPress 5.5+'s own `wp_get_environment_type()` (production /
+    staging / development / local) if the site declares it
+
+**Note (2026-08-12):** the earlier "Tomorrow" prerequisites here (install/update the Bridge plugin
+on connected sites before Group G could be verified) are resolved — the user updated the Bridge
+plugin and Group G/Multisite shipped the same day (see the dedicated entry near the end of this
+file). The recurring `18/21` deployment-warning investigation remains open; see CURRENT_WORK.md
+open items.
 
 ## Group I — Logs — ✅ SHIPPED 2026-08-11 (Bridge-first, SSH-fallback — no shell required)
 
