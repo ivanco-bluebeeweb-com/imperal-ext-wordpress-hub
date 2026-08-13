@@ -12,7 +12,7 @@ to introduce a brand-new category or tag for a piece of content.
 
 from imperal_sdk import ActionResult, sdl
 
-from app import chat
+from app import chat, ext
 from models import (
     CreatePostCategoryParams,
     CreatePostTagParams,
@@ -110,6 +110,49 @@ async def list_post_categories(ctx, params: ListPostCategoriesParams) -> ActionR
     return ActionResult.success(
         sdl.EntityList[PostTerm](items=entities),
         summary=f"{len(entities)} categor{'y' if len(entities) == 1 else 'ies'}")
+
+
+@ext.expose("list_post_categories_full", action_type="read")
+async def expose_list_post_categories_full(ctx, site_id: str = "", lang: str = "", **kwargs):
+    """Inter-extension IPC surface for Content Strategy Hub's mandatory
+    category-resolution gate (create_brief): a downstream pipeline choosing
+    or creating a WordPress category for a new article must see the site's
+    REAL existing category tree first, not guess a generic name like
+    "Blog" that may not even exist there. Paginates through every page
+    (WordPress caps per_page at 100) so a site with a large taxonomy still
+    gets its full tree, not just the first 100 terms.
+
+    Returns plain dicts (never surfaced to the LLM/user directly):
+    [{"id", "name", "slug", "parent_id", "count"}, ...]
+    """
+    auth, err = await _authed(ctx, site_id)
+    if err:
+        return []
+    base_url, username, password = auth
+    out = []
+    page_num = 1
+    while page_num <= 20:  # hard cap: 20 * 100 = 2000 terms, well beyond any real category tree
+        response = await list_terms(
+            ctx, base_url, username, password, _CATEGORY_BASE,
+            per_page=100, page=page_num,
+        )
+        if not 200 <= response.status_code < 300:
+            break
+        items = response.body if isinstance(response.body, list) else []
+        if not items:
+            break
+        for item in items:
+            out.append({
+                "id": item.get("id"),
+                "name": item.get("name", ""),
+                "slug": item.get("slug", ""),
+                "parent_id": item.get("parent", 0),
+                "count": item.get("count", 0),
+            })
+        if len(items) < 100:
+            break
+        page_num += 1
+    return out
 
 
 @chat.function(
