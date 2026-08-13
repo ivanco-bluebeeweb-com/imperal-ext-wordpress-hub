@@ -2624,6 +2624,8 @@ class PhpInfo(sdl.Entity):
     db_version: str = ""
     db_server_info: str = ""
     db_size_mb: str = ""
+    apache_enabled: bool = False
+    apache_modules: list[str] = Field(default_factory=list)
     source: str = ""  # "bridge" or "ssh"
 
 

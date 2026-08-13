@@ -285,10 +285,11 @@ async def _store_panel_ctx(woocommerce=True):
     return ctx
 
 
-async def test_center_detail_shows_server_section_without_ssh_when_bridge_data_present():
-    """Server info gathered via the Bridge (no SSH ever configured) must still
-    render in the detail page — the Server section isn't gated on has_ssh, and
-    there is no Add SSH button anywhere on this screen anymore."""
+async def test_center_detail_shows_divider_separated_sections_without_ssh_button():
+    """Main screen must be General / Environment / PHP Limits / Extensions /
+    Database / Apache / Plugin updates / Content, each separated by its own
+    ui.Divider, sourced from get_php_info — and there is no Add SSH button
+    anywhere on this screen anymore."""
     ctx = MockContext()
     await storage.save_site_record(ctx, {
         "id": "x-com", "name": "X", "url": "https://x.com", "username": "admin",
@@ -305,11 +306,21 @@ async def test_center_detail_shows_server_section_without_ssh_when_bridge_data_p
         "php_version": "8.2.10", "extensions": ["curl"], "memory_limit": "256M",
         "max_execution_time": "300", "upload_max_filesize": "64M", "post_max_size": "64M",
         "wp_version": "6.5.2", "server_software": "nginx",
+        "db_version": "8.0.35", "db_size_mb": 12.5,
+        "apache_enabled": False,
     }, 200)
     node = await panels.center(ctx, view="", site_id="x-com")
     s = str(node)
-    assert "6.5.2" in s
+    assert "'label': 'General'" in s
+    assert "'label': 'Environment'" in s
+    assert "'label': 'PHP Limits'" in s
+    assert "'label': 'Extensions'" in s
+    assert "'label': 'Database'" in s
+    assert "'label': 'Apache'" in s
+    assert "'label': 'Plugin updates'" in s
+    assert "'label': 'Content'" in s
     assert "8.2.10" in s
+    assert "nginx" in s
     assert "Add SSH" not in s
 
 

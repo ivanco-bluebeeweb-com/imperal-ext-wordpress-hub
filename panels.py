@@ -1566,80 +1566,83 @@ async def _render_plugins_block(ctx, site_id, base_url, username, pw):
     return ui.List(items=rows_ui)
 
 
-async def _render_environment_cards(ctx, site_id, base_url, username, pw, cron_count=None):
-    """Environment / PHP limits / Opcache / Extensions / Database cards for the
-    site's MAIN screen — reads get_php_info's live Bridge data (PHP version,
-    server software, extensions as tags, ini limits, opcache, database
-    engine/version). Returns a list of ui nodes: cards on success, a single
-    Alert on failure/unavailability (never fabricated data).
-
-    cron_count (from get_server_info's cached record) folds into the
-    Environment card as a fourth stat — the one server fact developers had
-    on this screen before that php-info doesn't itself return.
+async def _fetch_environment_body(ctx, base_url, username, pw):
+    """Single fetch of get_php_info's Bridge payload, shared by every card in
+    Environment/PHP Limits/Extensions/Database/Apache. Returns (body, None) on
+    success or (None, alert_ui_node) on failure/absence — never fabricates
+    data for a section it couldn't reach.
     """
     try:
         r = await wp_get(ctx, base_url, BRIDGE_PHP_INFO_PATH, username=username, app_password=pw)
     except Exception:
         r = None
     if r is None:
-        return [ui.Alert(message="Could not reach the site for environment info — try refreshing.",
-                         type="error")]
+        return None, ui.Alert(message="Could not reach the site for environment info — try refreshing.",
+                              type="error")
     if r.status_code == 404:
-        return [ui.Alert(
+        return None, ui.Alert(
             message="Install/update the Imperal Bridge plugin (2.6.0+) on this site to see "
                     "environment, PHP limits, extensions and database info here.",
-            type="info")]
+            type="info")
     if r.status_code in (401, 403):
-        return [ui.Alert(message="The connected user cannot read environment info.", type="error")]
+        return None, ui.Alert(message="The connected user cannot read environment info.", type="error")
     if r.status_code != 200 or not isinstance(r.body, dict):
-        return [ui.Alert(message="Could not load environment info — check the connection.", type="error")]
-    body = r.body
+        return None, ui.Alert(message="Could not load environment info — check the connection.", type="error")
+    return r.body, None
 
-    env_stats = [
-        ui.Stat(label="WordPress", value=str(body.get("wp_version", "")) or "—"),
+
+def _environment_card(body, cron_count=None):
+    """Environment section: PHP, Server, Cron Jobs."""
+    stats = [
         ui.Stat(label="PHP", value=str(body.get("php_version", "")) or "—"),
         ui.Stat(label="Server", value=str(body.get("server_software", "")) or "—"),
     ]
     if cron_count is not None:
-        env_stats.append(ui.Stat(label="Cron jobs", value=str(cron_count)))
-    environment_card = ui.Card(title="Environment",
-                               content=ui.Stats(columns=len(env_stats), children=env_stats))
+        stats.append(ui.Stat(label="Cron Jobs", value=str(cron_count)))
+    return ui.Card(title="Environment", content=ui.Stats(columns=len(stats), children=stats))
 
-    limits_card = ui.Card(title="PHP limits", content=ui.Stats(columns=5, children=[
-        ui.Stat(label="Memory limit", value=str(body.get("memory_limit", "")) or "—"),
-        ui.Stat(label="Max execution", value=str(body.get("max_execution_time", "")) or "—"),
-        ui.Stat(label="Upload max", value=str(body.get("upload_max_filesize", "")) or "—"),
-        ui.Stat(label="Post max", value=str(body.get("post_max_size", "")) or "—"),
-        ui.Stat(label="Max input vars", value=str(body.get("max_input_vars", "")) or "—"),
+
+def _php_limits_card(body):
+    return ui.Card(title="PHP Limits", content=ui.Stats(columns=5, children=[
+        ui.Stat(label="Memory Limit", value=str(body.get("memory_limit", "")) or "—"),
+        ui.Stat(label="Max Execution", value=str(body.get("max_execution_time", "")) or "—"),
+        ui.Stat(label="Upload Max", value=str(body.get("upload_max_filesize", "")) or "—"),
+        ui.Stat(label="Post Max", value=str(body.get("post_max_size", "")) or "—"),
+        ui.Stat(label="Max Input Vars", value=str(body.get("max_input_vars", "")) or "—"),
     ]))
 
-    opcache_enabled = bool(body.get("opcache_enabled"))
-    opcache_card = ui.Card(title="Opcache", content=ui.Stack(direction="h", gap=3, align="center", children=[
-        ui.Badge(label="Enabled" if opcache_enabled else "Disabled",
-                color="green" if opcache_enabled else "yellow"),
-        ui.Text(f"Hit rate: {body.get('opcache_hit_rate')}", variant="caption")
-              if opcache_enabled and body.get("opcache_hit_rate") else ui.Empty(),
-    ]))
 
+def _extensions_card(body):
     extensions = [str(e) for e in (body.get("extensions") or [])]
-    extensions_card = ui.Card(
+    return ui.Card(
         title=f"Extensions ({len(extensions)})",
         content=ui.Stack(direction="h", gap=1, wrap=True, children=[
             ui.Badge(label=ext, color="gray") for ext in sorted(extensions)
         ]) if extensions else ui.Empty(message="No extensions reported."),
     )
 
+
+def _database_card(body):
     db_version = str(body.get("db_version", ""))
-    db_server_info = str(body.get("db_server_info", ""))
     db_size = body.get("db_size_mb")
-    database_card = ui.Card(title="Database", content=ui.Stats(columns=3, children=[
+    return ui.Card(title="Database", content=ui.Stats(columns=2, children=[
         ui.Stat(label="Version", value=db_version or "—"),
-        ui.Stat(label="Server", value=db_server_info or "—"),
-        ui.Stat(label="Size",
+        ui.Stat(label="Server size",
                 value=(f"{db_size} MB" if db_size not in (None, "") else "—")),
     ]))
 
-    return [environment_card, limits_card, opcache_card, extensions_card, database_card]
+
+def _apache_section(body):
+    """Apache: if disabled (PHP isn't running as an Apache SAPI), say so as
+    plain text -- no card, no fabricated detail. If enabled, a small card
+    with its module count."""
+    if not body.get("apache_enabled"):
+        return ui.Text("Apache is disabled.")
+    modules = body.get("apache_modules") or []
+    return ui.Card(title="Apache", content=ui.Stats(columns=2, children=[
+        ui.Stat(label="Status", value="Enabled", color="green"),
+        ui.Stat(label="Modules", value=str(len(modules))),
+    ]))
 
 
 # ── Site detail ───────────────────────────────────────────────────────────────
@@ -1663,23 +1666,53 @@ async def _render_detail(ctx, site_id,
     reachable = record.get("status") == "connected"
     ssl_valid = base_url.startswith("https://")
 
-    # ── Zone 1: Health row ────────────────────────────
-    health_row = ui.Stats(columns=3, children=[
-        ui.Stat(label="Reachable", value="Yes" if reachable else "No",
-                color="green" if reachable else "red"),
-        ui.Stat(label="Auth",      value="OK" if reachable else "Failed",
-                color="green" if reachable else "red"),
-        ui.Stat(label="SSL",       value="HTTPS" if ssl_valid else "HTTP",
-                color="green" if ssl_valid else "red"),
-    ])
+    has_ssh = bool(record.get("ssh_host"))
+    if not has_ssh:
+        ssh_cred = await storage.get_ssh_cred(ctx, site_id)
+        if ssh_cred:
+            has_ssh = True
+            await storage.save_site_record(
+                ctx, {**record, "ssh_host": ssh_cred.get("host", "legacy")}
+            )
 
-    # ── Zone 2: Environment + PHP limits + extensions + database (live via
-    # Bridge php-info) plus developer-relevant plugin/theme/core update
-    # actions (from get_server_info's cached record) ──────────────────────
-    env_cards = await _render_environment_cards(
-        ctx, site_id, base_url, username, pw, cron_count=record.get("cron_count"))
-    server_section_children = [ui.Divider(label="Server"), *env_cards]
+    # ── General: Authentication, SSL, SSH (status only — no Add SSH button) ─
+    general_section = [
+        ui.Divider(label="General"),
+        ui.Card(title="General", content=ui.Stats(columns=3, children=[
+            ui.Stat(label="Authentication", value="OK" if reachable else "Failed",
+                    color="green" if reachable else "red"),
+            ui.Stat(label="SSL", value="HTTPS" if ssl_valid else "HTTP",
+                    color="green" if ssl_valid else "red"),
+            ui.Stat(label="SSH", value="Configured" if has_ssh else "Not configured",
+                    color="green" if has_ssh else "gray"),
+        ])),
+    ]
 
+    # ── Environment / PHP Limits / Extensions / Database / Apache — all from
+    # a single get_php_info Bridge fetch, each its own divider-separated block ─
+    env_body, env_error = await _fetch_environment_body(ctx, base_url, username, pw)
+    if env_error:
+        env_sections = [
+            ui.Divider(label="Environment"),
+            env_error,
+        ]
+    else:
+        env_sections = [
+            ui.Divider(label="Environment"),
+            _environment_card(env_body, cron_count=record.get("cron_count")),
+            ui.Divider(label="PHP Limits"),
+            _php_limits_card(env_body),
+            ui.Divider(label="Extensions"),
+            _extensions_card(env_body),
+            ui.Divider(label="Database"),
+            _database_card(env_body),
+            ui.Divider(label="Apache"),
+            _apache_section(env_body),
+        ]
+
+    # ── Plugin updates: nothing at all when everything is current — no card,
+    # no button, no text. Only appears when there is something to show,
+    # rendered the same way it already was ─────────────────────────────────
     wp_ver    = record.get("wp_version")
     n_updates = record.get("pending_updates", 0)
     plug_list = record.get("plugin_updates_list") or []
@@ -1692,11 +1725,12 @@ async def _render_detail(ctx, site_id,
         on_click=ui.Call("get_server_info", site_id=site_id),
     )
 
+    update_section_children = []
     ssh_error = record.get("ssh_error", "")
     bridge_outdated = record.get("bridge_outdated", "")
     if not wp_ver:
         if bridge_outdated:
-            server_section_children += [
+            update_section_children += [
                 ui.Alert(
                     message=(
                         f"Imperal Bridge on this site is version {bridge_outdated} — too old for "
@@ -1715,86 +1749,85 @@ async def _render_detail(ctx, site_id,
             msg = ssh_error if ssh_error else (
                 "No update data yet — reads through the Imperal Bridge plugin if it's installed."
             )
-            server_section_children += [
+            update_section_children += [
                 ui.Stack(direction="h", align="center", gap=3, children=[
                     ui.Text(msg),
                     refresh_server_btn,
                 ]),
             ]
-    else:
+    elif n_updates:
         update_items = []
-        if n_updates == 0:
-            update_items.append(
-                ui.Alert(message="All plugins, themes and core are up to date.", type="success")
-            )
-        else:
-            if plug_list:
-                update_items += [
-                    ui.Text("Plugin updates", variant="heading"),
-                    ui.List(items=[
-                        ui.ListItem(
-                            id=str(p.get("name", "")),
-                            title=p.get("title") or p.get("name", ""),
-                            subtitle=f"{p.get('version', '')} → {p.get('update_version', '')}",
-                            actions=[{
-                                "icon": "Download",
-                                "on_click": ui.Call("update_plugin", site_id=site_id,
-                                                    slug=p.get("name", "")),
-                                "confirm": f"Update '{p.get('title') or p.get('name', '')}' now?",
-                            }],
-                        )
-                        for p in plug_list
-                    ]),
-                ]
-            if theme_list:
-                update_items += [
-                    ui.Text("Theme updates", variant="heading"),
-                    ui.DataTable(
-                        columns=[
-                            ui.DataColumn("title",          "Theme",     sortable=True),
-                            ui.DataColumn("version",        "Current",   sortable=False),
-                            ui.DataColumn("update_version", "Available", sortable=False),
-                        ],
-                        rows=[{"title": t.get("title") or t.get("name", ""),
-                               "version": t.get("version", ""),
-                               "update_version": t.get("update_version", "")}
-                              for t in theme_list],
-                    ),
-                ]
-            if record.get("core_update") or n_updates:
-                update_items.append(ui.List(items=[
+        if plug_list:
+            update_items += [
+                ui.Text("Plugin updates", variant="heading"),
+                ui.List(items=[
                     ui.ListItem(
-                        id="update-core", title="Update WordPress core",
-                        subtitle="Updates core to the latest version",
-                        icon="ArrowUpCircle",
+                        id=str(p.get("name", "")),
+                        title=p.get("title") or p.get("name", ""),
+                        subtitle=f"{p.get('version', '')} → {p.get('update_version', '')}",
                         actions=[{
-                            "icon": "ArrowUpCircle",
-                            "on_click": ui.Call("update_core", site_id=site_id),
-                            "confirm": "Update WordPress core to the latest version now?",
+                            "icon": "Download",
+                            "on_click": ui.Call("update_plugin", site_id=site_id,
+                                                slug=p.get("name", "")),
+                            "confirm": f"Update '{p.get('title') or p.get('name', '')}' now?",
                         }],
-                    ),
-                    ui.ListItem(
-                        id="run-cron", title="Run due cron events",
-                        subtitle="Forces WP-Cron to fire any events that are overdue",
-                        icon="Clock",
-                        actions=[{
-                            "icon": "Clock",
-                            "on_click": ui.Call("run_wp_cron", site_id=site_id),
-                        }],
-                    ),
-                ]))
+                    )
+                    for p in plug_list
+                ]),
+            ]
+        if theme_list:
+            update_items += [
+                ui.Text("Theme updates", variant="heading"),
+                ui.DataTable(
+                    columns=[
+                        ui.DataColumn("title",          "Theme",     sortable=True),
+                        ui.DataColumn("version",        "Current",   sortable=False),
+                        ui.DataColumn("update_version", "Available", sortable=False),
+                    ],
+                    rows=[{"title": t.get("title") or t.get("name", ""),
+                           "version": t.get("version", ""),
+                           "update_version": t.get("update_version", "")}
+                          for t in theme_list],
+                ),
+            ]
+        if record.get("core_update") or n_updates:
+            update_items.append(ui.List(items=[
+                ui.ListItem(
+                    id="update-core", title="Update WordPress core",
+                    subtitle="Updates core to the latest version",
+                    icon="ArrowUpCircle",
+                    actions=[{
+                        "icon": "ArrowUpCircle",
+                        "on_click": ui.Call("update_core", site_id=site_id),
+                        "confirm": "Update WordPress core to the latest version now?",
+                    }],
+                ),
+                ui.ListItem(
+                    id="run-cron", title="Run due cron events",
+                    subtitle="Forces WP-Cron to fire any events that are overdue",
+                    icon="Clock",
+                    actions=[{
+                        "icon": "Clock",
+                        "on_click": ui.Call("run_wp_cron", site_id=site_id),
+                    }],
+                ),
+            ]))
 
         checked_text = f"Last checked: {last_check[:16].replace('T', ' ')}" if last_check else ""
         if server_source:
             via = "Imperal Bridge" if server_source == "bridge" else "SSH"
             checked_text = f"{checked_text} · via {via}" if checked_text else f"via {via}"
-        server_section_children += [
+        update_section_children = [
             *update_items,
             ui.Stack(direction="h", justify="between", align="center", children=[
                 ui.Text(checked_text, variant="caption"),
                 refresh_server_btn,
             ]),
         ]
+    # else: n_updates == 0 and data is fresh — genuinely nothing to show,
+    # not even a success message: no card, no button, no text.
+
+    plugin_updates_section = [ui.Divider(label="Plugin updates"), *update_section_children]
 
     # ── Content cache + fetch ──────────────────────────
     async def _list(path, params=None):
@@ -2125,10 +2158,13 @@ async def _render_detail(ctx, site_id,
         active_content = await _render_manage_tab(
             ctx, site_id, base_url, username, pw, manage_tab, menu_sel, builder_sel, _call)
 
-    # ── Assemble page ─────────────────────────────────
+    # ── Assemble page: General / Environment / PHP Limits / Extensions /
+    # Database / Apache / Plugin updates / Content — each its own
+    # Divider-separated block ─────────────────────────────
     page_children = [
-        health_row,
-        *server_section_children,
+        *general_section,
+        *env_sections,
+        *plugin_updates_section,
         ui.Divider(label="Content"),
         group_nav,
         active_content,

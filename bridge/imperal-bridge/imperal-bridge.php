@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.22.0
+ * Version:           2.23.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.22.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.23.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -4032,6 +4032,13 @@ function imperal_security_bridge_php_info() {
 		$db_size_mb = round( ( (float) $row->bytes ) / 1048576, 2 );
 	}
 
+	// Apache: apache_get_modules() only exists when PHP is actually running as
+	// an Apache SAPI (mod_php); it is simply absent under php-fpm/nginx, LiteSpeed,
+	// CLI, etc. Its presence/absence is itself the honest "enabled/disabled" fact,
+	// not an inference from SERVER_SOFTWARE text.
+	$apache_enabled = function_exists( 'apache_get_modules' );
+	$apache_modules = $apache_enabled ? @apache_get_modules() : array(); // phpcs:ignore
+
 	return rest_ensure_response(
 		array(
 			'php_version'         => PHP_VERSION,
@@ -4048,6 +4055,8 @@ function imperal_security_bridge_php_info() {
 			'db_version'          => method_exists( $wpdb, 'db_version' ) ? (string) $wpdb->db_version() : '',
 			'db_server_info'      => method_exists( $wpdb, 'db_server_info' ) ? (string) $wpdb->db_server_info() : '',
 			'db_size_mb'          => $db_size_mb,
+			'apache_enabled'      => $apache_enabled,
+			'apache_modules'      => is_array( $apache_modules ) ? $apache_modules : array(),
 		)
 	);
 }

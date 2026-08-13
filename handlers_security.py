@@ -112,6 +112,8 @@ async def get_php_info(ctx, params: SiteIdParams) -> ActionResult:
             db_version=str(body.get("db_version", "")),
             db_server_info=str(body.get("db_server_info", "")),
             db_size_mb=(str(db_size) if db_size not in (None, "") else ""),
+            apache_enabled=bool(body.get("apache_enabled")),
+            apache_modules=[str(m) for m in (body.get("apache_modules") or [])],
             source="bridge",
         ),
         summary=f"PHP {body.get('php_version', '?')}, {len(body.get('extensions') or [])} extension(s) loaded")
