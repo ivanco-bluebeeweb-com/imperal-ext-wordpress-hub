@@ -982,7 +982,6 @@ async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, m
         _manage_btn("Redirects", "redirects"),
         _manage_btn("SEO", "seo"),
         _manage_btn("Builders", "builders"),
-        _manage_btn("Server", "server"),
         _manage_btn("Settings", "settings"),
         _manage_btn("Plugins", "plugins"),
     ]
@@ -993,8 +992,6 @@ async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, m
         body = await _render_rankmath_block(ctx, site_id, base_url, username, pw)
     elif manage_tab == "builders":
         body = await _render_builders_block(ctx, site_id, base_url, username, pw, builder_sel, call)
-    elif manage_tab == "server":
-        body = await _render_server_block(ctx, site_id, base_url, username, pw)
     elif manage_tab == "settings":
         body = await _render_settings_block(ctx, site_id, base_url, username, pw)
     elif manage_tab == "plugins":
@@ -1569,37 +1566,44 @@ async def _render_plugins_block(ctx, site_id, base_url, username, pw):
     return ui.List(items=rows_ui)
 
 
-async def _render_server_block(ctx, site_id, base_url, username, pw):
-    """Server/PHP environment: reads get_php_info's live Bridge data (PHP version,
-    extensions as tags, ini limits, opcache, database engine/version) and lays it
-    out as Environment / PHP limits / Extensions / Database cards — same shape
-    as the WHM-style server-info screen this mirrors, point-in-time, no SSH.
+async def _render_environment_cards(ctx, site_id, base_url, username, pw, cron_count=None):
+    """Environment / PHP limits / Opcache / Extensions / Database cards for the
+    site's MAIN screen — reads get_php_info's live Bridge data (PHP version,
+    server software, extensions as tags, ini limits, opcache, database
+    engine/version). Returns a list of ui nodes: cards on success, a single
+    Alert on failure/unavailability (never fabricated data).
+
+    cron_count (from get_server_info's cached record) folds into the
+    Environment card as a fourth stat — the one server fact developers had
+    on this screen before that php-info doesn't itself return.
     """
     try:
         r = await wp_get(ctx, base_url, BRIDGE_PHP_INFO_PATH, username=username, app_password=pw)
     except Exception:
         r = None
     if r is None:
-        return ui.Alert(message="Could not reach the site — try again.", type="error")
+        return [ui.Alert(message="Could not reach the site for environment info — try refreshing.",
+                         type="error")]
     if r.status_code == 404:
-        return ui.Alert(
-            message="The Imperal Bridge plugin (2.6.0+) is not installed on this site, or is on "
-                    "an older version that predates this. Update/install Imperal Bridge on the site.",
-            type="info")
+        return [ui.Alert(
+            message="Install/update the Imperal Bridge plugin (2.6.0+) on this site to see "
+                    "environment, PHP limits, extensions and database info here.",
+            type="info")]
     if r.status_code in (401, 403):
-        return ui.Alert(message="The connected user cannot read server info.", type="error")
+        return [ui.Alert(message="The connected user cannot read environment info.", type="error")]
     if r.status_code != 200 or not isinstance(r.body, dict):
-        return ui.Alert(message="Could not load server info — check the connection.", type="error")
+        return [ui.Alert(message="Could not load environment info — check the connection.", type="error")]
     body = r.body
 
-    refresh_btn = ui.Button("Refresh", icon="RefreshCw", variant="ghost", size="sm",
-                            on_click=ui.Call("get_php_info", site_id=site_id))
-
-    environment_card = ui.Card(title="Environment", content=ui.Stats(columns=3, children=[
+    env_stats = [
         ui.Stat(label="WordPress", value=str(body.get("wp_version", "")) or "—"),
         ui.Stat(label="PHP", value=str(body.get("php_version", "")) or "—"),
         ui.Stat(label="Server", value=str(body.get("server_software", "")) or "—"),
-    ]))
+    ]
+    if cron_count is not None:
+        env_stats.append(ui.Stat(label="Cron jobs", value=str(cron_count)))
+    environment_card = ui.Card(title="Environment",
+                               content=ui.Stats(columns=len(env_stats), children=env_stats))
 
     limits_card = ui.Card(title="PHP limits", content=ui.Stats(columns=5, children=[
         ui.Stat(label="Memory limit", value=str(body.get("memory_limit", "")) or "—"),
@@ -1635,14 +1639,7 @@ async def _render_server_block(ctx, site_id, base_url, username, pw):
                 value=(f"{db_size} MB" if db_size not in (None, "") else "—")),
     ]))
 
-    return ui.Stack(gap=3, children=[
-        ui.Stack(direction="h", justify="end", children=[refresh_btn]),
-        environment_card,
-        limits_card,
-        opcache_card,
-        extensions_card,
-        database_card,
-    ])
+    return [environment_card, limits_card, opcache_card, extensions_card, database_card]
 
 
 # ── Site detail ───────────────────────────────────────────────────────────────
@@ -1666,42 +1663,24 @@ async def _render_detail(ctx, site_id,
     reachable = record.get("status") == "connected"
     ssl_valid = base_url.startswith("https://")
 
-    # has_ssh: prefer site record (fast), fall back to creds collection (backward compat)
-    has_ssh = bool(record.get("ssh_host"))
-    if not has_ssh:
-        ssh_cred = await storage.get_ssh_cred(ctx, site_id)
-        if ssh_cred:
-            has_ssh = True
-            # Migrate: write ssh_host into record so future renders are fast
-            await storage.save_site_record(
-                ctx, {**record, "ssh_host": ssh_cred.get("host", "legacy")}
-            )
-
     # ── Zone 1: Health row ────────────────────────────
-    ssh_btn = ui.Button(
-        "Remove SSH" if has_ssh else "Add SSH",
-        icon="Terminal", variant="ghost", size="sm",
-        on_click=ui.Call("remove_ssh", site_id=site_id) if has_ssh
-                 else ui.Call("__panel__center", view="add_ssh", site_id=site_id),
-    )
-    health_row = ui.Stack(direction="h", justify="between", align="center", children=[
-        ui.Stats(columns=3, children=[
-            ui.Stat(label="Reachable", value="Yes" if reachable else "No",
-                    color="green" if reachable else "red"),
-            ui.Stat(label="Auth",      value="OK" if reachable else "Failed",
-                    color="green" if reachable else "red"),
-            ui.Stat(label="SSL",       value="HTTPS" if ssl_valid else "HTTP",
-                    color="green" if ssl_valid else "red"),
-        ]),
-        ssh_btn,
+    health_row = ui.Stats(columns=3, children=[
+        ui.Stat(label="Reachable", value="Yes" if reachable else "No",
+                color="green" if reachable else "red"),
+        ui.Stat(label="Auth",      value="OK" if reachable else "Failed",
+                color="green" if reachable else "red"),
+        ui.Stat(label="SSL",       value="HTTPS" if ssl_valid else "HTTP",
+                color="green" if ssl_valid else "red"),
     ])
 
-    # ── Zone 2: Server info (from record; refresh works via Bridge or SSH) ─
-    server_section_children = []
+    # ── Zone 2: Environment + PHP limits + extensions + database (live via
+    # Bridge php-info) plus developer-relevant plugin/theme/core update
+    # actions (from get_server_info's cached record) ──────────────────────
+    env_cards = await _render_environment_cards(
+        ctx, site_id, base_url, username, pw, cron_count=record.get("cron_count"))
+    server_section_children = [ui.Divider(label="Server"), *env_cards]
+
     wp_ver    = record.get("wp_version")
-    php_ver   = record.get("php_version")
-    db_size   = record.get("db_size_mb")
-    cron_cnt  = record.get("cron_count")
     n_updates = record.get("pending_updates", 0)
     plug_list = record.get("plugin_updates_list") or []
     theme_list = record.get("theme_updates_list") or []
@@ -1709,7 +1688,7 @@ async def _render_detail(ctx, site_id,
     server_source = record.get("server_source", "")
 
     refresh_server_btn = ui.Button(
-        "Refresh server info", icon="RefreshCw", variant="ghost", size="sm",
+        "Refresh updates", icon="RefreshCw", variant="ghost", size="sm",
         on_click=ui.Call("get_server_info", site_id=site_id),
     )
 
@@ -1717,14 +1696,12 @@ async def _render_detail(ctx, site_id,
     bridge_outdated = record.get("bridge_outdated", "")
     if not wp_ver:
         if bridge_outdated:
-            server_section_children = [
-                ui.Divider(label="Server"),
+            server_section_children += [
                 ui.Alert(
                     message=(
                         f"Imperal Bridge on this site is version {bridge_outdated} — too old for "
-                        "server info (added in 2.1.0). Update the plugin on the site (Plugins → "
-                        "Imperal Bridge → update, or reinstall from the zip below); SSH is not "
-                        "needed once it's updated."
+                        "update checks (added in 2.1.0). Update the plugin on the site (Plugins → "
+                        "Imperal Bridge → update, or reinstall from the zip below)."
                     ),
                     type="warning",
                 ),
@@ -1736,26 +1713,15 @@ async def _render_detail(ctx, site_id,
             ]
         else:
             msg = ssh_error if ssh_error else (
-                "No server data yet — reads through the Imperal Bridge plugin if it's installed, "
-                "or falls back to SSH."
+                "No update data yet — reads through the Imperal Bridge plugin if it's installed."
             )
-            server_section_children = [
-                ui.Divider(label="Server"),
+            server_section_children += [
                 ui.Stack(direction="h", align="center", gap=3, children=[
                     ui.Text(msg),
                     refresh_server_btn,
                 ]),
             ]
     else:
-        stat_items = [
-            ui.Stat(label="WordPress", value=wp_ver, color="blue"),
-            ui.Stat(label="PHP",       value=php_ver or "—", color="blue"),
-        ]
-        if db_size:
-            stat_items.append(ui.Stat(label="Database", value=f"{db_size} MB", color="blue"))
-        if cron_cnt is not None:
-            stat_items.append(ui.Stat(label="Cron jobs", value=str(cron_cnt), color="blue"))
-
         update_items = []
         if n_updates == 0:
             update_items.append(
@@ -1770,13 +1736,12 @@ async def _render_detail(ctx, site_id,
                             id=str(p.get("name", "")),
                             title=p.get("title") or p.get("name", ""),
                             subtitle=f"{p.get('version', '')} → {p.get('update_version', '')}",
-                            actions=([{
+                            actions=[{
                                 "icon": "Download",
                                 "on_click": ui.Call("update_plugin", site_id=site_id,
                                                     slug=p.get("name", "")),
-                                "confirm": f"Update '{p.get('title') or p.get('name', '')}' "
-                                          f"now over SSH?",
-                            }] if has_ssh else None),
+                                "confirm": f"Update '{p.get('title') or p.get('name', '')}' now?",
+                            }],
                         )
                         for p in plug_list
                     ]),
@@ -1796,16 +1761,16 @@ async def _render_detail(ctx, site_id,
                               for t in theme_list],
                     ),
                 ]
-            if has_ssh and (record.get("core_update") or n_updates):
+            if record.get("core_update") or n_updates:
                 update_items.append(ui.List(items=[
                     ui.ListItem(
                         id="update-core", title="Update WordPress core",
-                        subtitle="Updates core to the latest version over SSH",
+                        subtitle="Updates core to the latest version",
                         icon="ArrowUpCircle",
                         actions=[{
                             "icon": "ArrowUpCircle",
                             "on_click": ui.Call("update_core", site_id=site_id),
-                            "confirm": "Update WordPress core to the latest version now over SSH?",
+                            "confirm": "Update WordPress core to the latest version now?",
                         }],
                     ),
                     ui.ListItem(
@@ -1823,9 +1788,7 @@ async def _render_detail(ctx, site_id,
         if server_source:
             via = "Imperal Bridge" if server_source == "bridge" else "SSH"
             checked_text = f"{checked_text} · via {via}" if checked_text else f"via {via}"
-        server_section_children = [
-            ui.Divider(label="Server"),
-            ui.Stats(columns=len(stat_items), children=stat_items),
+        server_section_children += [
             *update_items,
             ui.Stack(direction="h", justify="between", align="center", children=[
                 ui.Text(checked_text, variant="caption"),

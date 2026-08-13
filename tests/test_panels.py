@@ -287,7 +287,8 @@ async def _store_panel_ctx(woocommerce=True):
 
 async def test_center_detail_shows_server_section_without_ssh_when_bridge_data_present():
     """Server info gathered via the Bridge (no SSH ever configured) must still
-    render in the detail page — the Server section isn't gated on has_ssh."""
+    render in the detail page — the Server section isn't gated on has_ssh, and
+    there is no Add SSH button anywhere on this screen anymore."""
     ctx = MockContext()
     await storage.save_site_record(ctx, {
         "id": "x-com", "name": "X", "url": "https://x.com", "username": "admin",
@@ -300,18 +301,22 @@ async def test_center_detail_shows_server_section_without_ssh_when_bridge_data_p
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/posts", [], 200)
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/pages", [], 200)
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/media", [], 200)
+    ctx.http.mock_get("https://x.com/wp-json/imperal/v1/security/php-info", {
+        "php_version": "8.2.10", "extensions": ["curl"], "memory_limit": "256M",
+        "max_execution_time": "300", "upload_max_filesize": "64M", "post_max_size": "64M",
+        "wp_version": "6.5.2", "server_software": "nginx",
+    }, 200)
     node = await panels.center(ctx, view="", site_id="x-com")
     s = str(node)
     assert "6.5.2" in s
     assert "8.2.10" in s
-    assert "Add SSH" in s  # SSH button still offered, but not required for this data
+    assert "Add SSH" not in s
 
 
 async def test_center_detail_shows_bridge_outdated_warning_instead_of_no_data():
     """When get_server_info recorded bridge_outdated (plugin present but too
     old for /server/info), the detail page must say so with an update
-    prompt -- not the generic 'No server data yet' message, which sends the
-    user hunting for SSH on a site that already has the Bridge."""
+    prompt -- not the generic 'No update data yet' message."""
     ctx = MockContext()
     await storage.save_site_record(ctx, {
         "id": "x-com", "name": "X", "url": "https://x.com", "username": "admin",
@@ -322,22 +327,24 @@ async def test_center_detail_shows_bridge_outdated_warning_instead_of_no_data():
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/posts", [], 200)
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/pages", [], 200)
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/media", [], 200)
+    ctx.http.mock_get("https://x.com/wp-json/imperal/v1/security/php-info",
+                      {"code": "rest_no_route"}, 404)
     node = await panels.center(ctx, view="", site_id="x-com")
     s = str(node)
     assert "2.0.0" in s
     assert "update" in s.lower()
-    assert "No server data yet" not in s
+    assert "No update data yet" not in s
 
 
-async def test_center_detail_server_section_offers_update_plugin_with_ssh():
+async def test_center_detail_server_section_offers_update_plugin_action():
     """Plugin updates listed under Server must offer an update_plugin action
-    per row when SSH is configured -- and must send the WP-CLI slug (the
-    'name' field), never the human-readable title, since update_plugin's own
-    slug validation would reject anything with spaces."""
+    per row (bridge-first, no SSH required) -- and must send the WP-CLI slug
+    (the 'name' field), never the human-readable title, since update_plugin's
+    own slug validation would reject anything with spaces."""
     ctx = MockContext()
     await storage.save_site_record(ctx, {
         "id": "x-com", "name": "X", "url": "https://x.com", "username": "admin",
-        "status": "connected", "ssh_host": "ssh.x.com",
+        "status": "connected",
         "wp_version": "6.5.2", "php_version": "8.2.10",
         "pending_updates": 1, "server_source": "bridge",
         "plugin_updates_list": [
@@ -349,6 +356,11 @@ async def test_center_detail_server_section_offers_update_plugin_with_ssh():
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/posts", [], 200)
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/pages", [], 200)
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/media", [], 200)
+    ctx.http.mock_get("https://x.com/wp-json/imperal/v1/security/php-info", {
+        "php_version": "8.2.10", "extensions": ["curl"], "memory_limit": "256M",
+        "max_execution_time": "300", "upload_max_filesize": "64M", "post_max_size": "64M",
+        "wp_version": "6.5.2", "server_software": "nginx",
+    }, 200)
     node = await panels.center(ctx, view="", site_id="x-com")
     s = str(node)
     assert "Akismet Anti-Spam" in s
@@ -726,46 +738,6 @@ async def test_manage_tab_plugins_lists_with_activate_action():
     s = str(node)
     assert "Hello Dolly" in s
     assert "activate_plugin" in s
-
-
-async def test_manage_tab_server_shows_environment_limits_extensions_database():
-    ctx = await _base_panel_ctx()
-    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/security/php-info", {
-        "php_version": "8.2.10",
-        "extensions": ["curl", "mbstring", "gd"],
-        "memory_limit": "256M",
-        "max_execution_time": "300",
-        "upload_max_filesize": "64M",
-        "post_max_size": "64M",
-        "max_input_vars": "3000",
-        "server_software": "nginx/1.24.0",
-        "wp_version": "6.7",
-        "opcache_enabled": True,
-        "opcache_hit_rate": "98.4%",
-        "db_version": "8.0.35",
-        "db_server_info": "8.0.35-0ubuntu0.22.04.1",
-        "db_size_mb": 42.7,
-    }, 200)
-    node = await panels.center(ctx, view="", site_id="blog-com",
-                               group_tab="manage", manage_tab="server")
-    s = str(node)
-    assert "8.2.10" in s
-    assert "nginx/1.24.0" in s
-    assert "256M" in s
-    assert "mbstring" in s
-    assert "gd" in s
-    assert "8.0.35" in s
-    assert "get_php_info" in s
-
-
-async def test_manage_tab_server_shows_bridge_hint_on_404():
-    ctx = await _base_panel_ctx()
-    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/security/php-info",
-                      {"code": "rest_no_route"}, 404)
-    node = await panels.center(ctx, view="", site_id="blog-com",
-                               group_tab="manage", manage_tab="server")
-    s = str(node)
-    assert "Imperal Bridge" in s
 
 
 # ── Activity tab rework: Comments moderation + Users management ───────────────
