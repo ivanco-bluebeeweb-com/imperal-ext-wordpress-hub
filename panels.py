@@ -1727,13 +1727,6 @@ async def _render_detail(ctx, site_id,
     n_updates = record.get("pending_updates", 0)
     plug_list = record.get("plugin_updates_list") or []
     theme_list = record.get("theme_updates_list") or []
-    last_check = record.get("server_last_checked", "")
-    server_source = record.get("server_source", "")
-
-    refresh_server_btn = ui.Button(
-        "Refresh updates", icon="RefreshCw", variant="ghost", size="sm",
-        on_click=ui.Call("get_server_info", site_id=site_id),
-    )
 
     update_section_children = []
     ssh_error = record.get("ssh_error", "")
@@ -1752,7 +1745,6 @@ async def _render_detail(ctx, site_id,
                 ui.Stack(direction="h", align="center", gap=3, children=[
                     ui.Button("Download latest Imperal Bridge", icon="Download",
                               variant="ghost", size="sm", on_click=ui.Open(BRIDGE_DOWNLOAD_URL)),
-                    refresh_server_btn,
                 ]),
             ]
         else:
@@ -1760,54 +1752,49 @@ async def _render_detail(ctx, site_id,
                 "No update data yet — reads through the Imperal Bridge plugin if it's installed."
             )
             update_section_children += [
-                ui.Stack(direction="h", align="center", gap=3, children=[
-                    ui.Text(msg),
-                    refresh_server_btn,
-                ]),
+                ui.Text(msg),
             ]
     elif n_updates:
         update_items = []
         if plug_list:
-            update_items += [
-                ui.Text("Plugin updates", variant="heading"),
-                ui.List(items=[
-                    ui.ListItem(
-                        id=str(p.get("name", "")),
-                        title=p.get("title") or p.get("name", ""),
-                        subtitle=f"{p.get('version', '')} → {p.get('update_version', '')}",
-                        actions=[{
-                            "icon": "Download",
-                            "on_click": ui.Call("update_plugin", site_id=site_id,
-                                                slug=p.get("name", "")),
-                            "confirm": f"Update '{p.get('title') or p.get('name', '')}' now?",
-                        }],
-                    )
-                    for p in plug_list
-                ]),
-            ]
+            update_items.append(ui.List(items=[
+                ui.ListItem(
+                    id=str(p.get("name", "")),
+                    title=p.get("title") or p.get("name", ""),
+                    subtitle=f"{p.get('version', '')} → {p.get('update_version', '')}",
+                    actions=[{
+                        "label": "Update",
+                        "on_click": ui.Call("update_plugin", site_id=site_id,
+                                            slug=p.get("name", "")),
+                        "confirm": f"Update '{p.get('title') or p.get('name', '')}' now?",
+                    }],
+                )
+                for p in plug_list
+            ]))
         if theme_list:
-            update_items += [
-                ui.Text("Theme updates", variant="heading"),
-                ui.DataTable(
-                    columns=[
-                        ui.DataColumn("title",          "Theme",     sortable=True),
-                        ui.DataColumn("version",        "Current",   sortable=False),
-                        ui.DataColumn("update_version", "Available", sortable=False),
-                    ],
-                    rows=[{"title": t.get("title") or t.get("name", ""),
-                           "version": t.get("version", ""),
-                           "update_version": t.get("update_version", "")}
-                          for t in theme_list],
-                ),
-            ]
+            if update_items:
+                update_items.append(ui.Divider())
+            update_items.append(ui.DataTable(
+                columns=[
+                    ui.DataColumn("title",          "Theme",     sortable=True),
+                    ui.DataColumn("version",        "Current",   sortable=False),
+                    ui.DataColumn("update_version", "Available", sortable=False),
+                ],
+                rows=[{"title": t.get("title") or t.get("name", ""),
+                       "version": t.get("version", ""),
+                       "update_version": t.get("update_version", "")}
+                      for t in theme_list],
+            ))
         if record.get("core_update") or n_updates:
+            if update_items:
+                update_items.append(ui.Divider())
             update_items.append(ui.List(items=[
                 ui.ListItem(
                     id="update-core", title="Update WordPress core",
                     subtitle="Updates core to the latest version",
                     icon="ArrowUpCircle",
                     actions=[{
-                        "icon": "ArrowUpCircle",
+                        "label": "Update",
                         "on_click": ui.Call("update_core", site_id=site_id),
                         "confirm": "Update WordPress core to the latest version now?",
                     }],
@@ -1817,23 +1804,13 @@ async def _render_detail(ctx, site_id,
                     subtitle="Forces WP-Cron to fire any events that are overdue",
                     icon="Clock",
                     actions=[{
-                        "icon": "Clock",
+                        "label": "Run",
                         "on_click": ui.Call("run_wp_cron", site_id=site_id),
                     }],
                 ),
             ]))
 
-        checked_text = f"Last checked: {last_check[:16].replace('T', ' ')}" if last_check else ""
-        if server_source:
-            via = "Imperal Bridge" if server_source == "bridge" else "SSH"
-            checked_text = f"{checked_text} · via {via}" if checked_text else f"via {via}"
-        update_section_children = [
-            *update_items,
-            ui.Stack(direction="h", justify="between", align="center", children=[
-                ui.Text(checked_text, variant="caption"),
-                refresh_server_btn,
-            ]),
-        ]
+        update_section_children = [*update_items, ui.Divider()]
     # else: n_updates == 0 and data is fresh — genuinely nothing to show,
     # not even a success message: no card, no button, no text.
 

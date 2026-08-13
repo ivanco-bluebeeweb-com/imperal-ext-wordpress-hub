@@ -354,6 +354,8 @@ async def test_center_detail_shows_bridge_outdated_warning_instead_of_no_data():
     assert "update" in s.lower()
     assert "No update data yet" not in s
     assert "'label': 'Plugin updates'" in s
+    assert "Refresh updates" not in s
+    assert "Last checked" not in s
 
 
 async def test_center_detail_server_section_offers_update_plugin_action():
@@ -384,6 +386,12 @@ async def test_center_detail_server_section_offers_update_plugin_action():
     assert "update_core" in s
     assert "run_wp_cron" in s
     assert "'label': 'Plugin updates'" in s
+    # Row actions are plain text links ("Update"/"Run"), not icon-only buttons
+    assert "'label': 'Update'" in s
+    assert "'label': 'Run'" in s
+    # No leftover heading text, refresh button, or last-checked caption
+    assert "Refresh updates" not in s
+    assert "Last checked" not in s
 
 
 async def test_center_store_has_separate_commerce_group():
