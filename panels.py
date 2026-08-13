@@ -1592,57 +1592,61 @@ async def _fetch_environment_body(ctx, base_url, username, pw):
 
 
 def _environment_card(body, cron_count=None):
-    """Environment section: PHP, Server, Cron Jobs."""
+    """Environment block: PHP, Server, Cron Jobs -- a bare grid of stat cards
+    right after the 'Environment' Divider, no nested title, no extra padding.
+    """
     stats = [
         ui.Stat(label="PHP", value=str(body.get("php_version", "")) or "—"),
         ui.Stat(label="Server", value=str(body.get("server_software", "")) or "—"),
     ]
     if cron_count is not None:
         stats.append(ui.Stat(label="Cron Jobs", value=str(cron_count)))
-    return ui.Card(title="Environment", content=ui.Stats(columns=len(stats), children=stats))
+    return ui.Stats(columns=len(stats), children=stats)
 
 
 def _php_limits_card(body):
-    return ui.Card(title="PHP Limits", content=ui.Stats(columns=5, children=[
+    """PHP Limits block: bare grid of stat cards, no nested title/padding."""
+    return ui.Stats(columns=5, children=[
         ui.Stat(label="Memory Limit", value=str(body.get("memory_limit", "")) or "—"),
         ui.Stat(label="Max Execution", value=str(body.get("max_execution_time", "")) or "—"),
         ui.Stat(label="Upload Max", value=str(body.get("upload_max_filesize", "")) or "—"),
         ui.Stat(label="Post Max", value=str(body.get("post_max_size", "")) or "—"),
         ui.Stat(label="Max Input Vars", value=str(body.get("max_input_vars", "")) or "—"),
-    ]))
+    ])
 
 
 def _extensions_card(body):
+    """Extensions block: bare flex-wrap of tag badges, no nested title/padding."""
     extensions = [str(e) for e in (body.get("extensions") or [])]
-    return ui.Card(
-        title=f"Extensions ({len(extensions)})",
-        content=ui.Stack(direction="h", gap=1, wrap=True, children=[
-            ui.Badge(label=ext, color="gray") for ext in sorted(extensions)
-        ]) if extensions else ui.Empty(message="No extensions reported."),
-    )
+    if not extensions:
+        return ui.Empty(message="No extensions reported.")
+    return ui.Stack(direction="h", gap=1, wrap=True, children=[
+        ui.Badge(label=ext, color="gray") for ext in sorted(extensions)
+    ])
 
 
 def _database_card(body):
+    """Database block: bare grid of stat cards, no nested title/padding."""
     db_version = str(body.get("db_version", ""))
     db_size = body.get("db_size_mb")
-    return ui.Card(title="Database", content=ui.Stats(columns=2, children=[
+    return ui.Stats(columns=2, children=[
         ui.Stat(label="Version", value=db_version or "—"),
         ui.Stat(label="Server size",
                 value=(f"{db_size} MB" if db_size not in (None, "") else "—")),
-    ]))
+    ])
 
 
 def _apache_section(body):
     """Apache: if disabled (PHP isn't running as an Apache SAPI), say so as
-    plain text -- no card, no fabricated detail. If enabled, a small card
-    with its module count."""
+    plain text -- no card, no fabricated detail. If enabled, a bare grid of
+    stat cards, no nested title/padding."""
     if not body.get("apache_enabled"):
         return ui.Text("Apache is disabled.")
     modules = body.get("apache_modules") or []
-    return ui.Card(title="Apache", content=ui.Stats(columns=2, children=[
+    return ui.Stats(columns=2, children=[
         ui.Stat(label="Status", value="Enabled", color="green"),
         ui.Stat(label="Modules", value=str(len(modules))),
-    ]))
+    ])
 
 
 # ── Site detail ───────────────────────────────────────────────────────────────
@@ -1675,17 +1679,19 @@ async def _render_detail(ctx, site_id,
                 ctx, {**record, "ssh_host": ssh_cred.get("host", "legacy")}
             )
 
-    # ── General: Authentication, SSL, SSH (status only — no Add SSH button) ─
+    # ── General: Authentication, SSL, SSH (status only — no Add SSH button).
+    # Bare grid of stat cards right after the Divider: no nested title, no
+    # extra padding, no styling beyond the grid itself. ────────────────────
     general_section = [
         ui.Divider(label="General"),
-        ui.Card(title="General", content=ui.Stats(columns=3, children=[
+        ui.Stats(columns=3, children=[
             ui.Stat(label="Authentication", value="OK" if reachable else "Failed",
                     color="green" if reachable else "red"),
             ui.Stat(label="SSL", value="HTTPS" if ssl_valid else "HTTP",
                     color="green" if ssl_valid else "red"),
             ui.Stat(label="SSH", value="Configured" if has_ssh else "Not configured",
                     color="green" if has_ssh else "gray"),
-        ])),
+        ]),
     ]
 
     # ── Environment / PHP Limits / Extensions / Database / Apache — all from
