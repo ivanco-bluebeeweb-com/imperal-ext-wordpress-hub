@@ -335,8 +335,9 @@ async def test_center_detail_shows_divider_separated_sections_without_ssh_button
 
 async def test_center_detail_shows_bridge_outdated_warning_instead_of_no_data():
     """When get_server_info recorded bridge_outdated (plugin present but too
-    old for /server/info), Manage → Plugins must say so with an update
-    prompt -- not the generic 'No update data yet' message."""
+    old for /server/info), the plugin-updates block above the tab bar must
+    say so with an update prompt -- not the generic 'No update data yet'
+    message."""
     ctx = MockContext()
     await storage.save_site_record(ctx, {
         "id": "x-com", "name": "X", "url": "https://x.com", "username": "admin",
@@ -347,15 +348,12 @@ async def test_center_detail_shows_bridge_outdated_warning_instead_of_no_data():
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/posts", [], 200)
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/pages", [], 200)
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/media", [], 200)
-    ctx.http.mock_get("https://x.com/wp-json/imperal/v1/security/php-info",
-                      {"code": "rest_no_route"}, 404)
-    ctx.http.mock_get("https://x.com/wp-json/wp/v2/plugins", [], 200)
-    node = await panels.center(ctx, view="", site_id="x-com",
-                               group_tab="manage", manage_tab="plugins")
+    node = await panels.center(ctx, view="", site_id="x-com")
     s = str(node)
     assert "2.0.0" in s
     assert "update" in s.lower()
     assert "No update data yet" not in s
+    assert "'label': 'Plugin updates'" in s
 
 
 async def test_center_detail_server_section_offers_update_plugin_action():
@@ -378,20 +376,14 @@ async def test_center_detail_server_section_offers_update_plugin_action():
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/posts", [], 200)
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/pages", [], 200)
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/media", [], 200)
-    ctx.http.mock_get("https://x.com/wp-json/imperal/v1/security/php-info", {
-        "php_version": "8.2.10", "extensions": ["curl"], "memory_limit": "256M",
-        "max_execution_time": "300", "upload_max_filesize": "64M", "post_max_size": "64M",
-        "wp_version": "6.5.2", "server_software": "nginx",
-    }, 200)
-    ctx.http.mock_get("https://x.com/wp-json/wp/v2/plugins", [], 200)
-    node = await panels.center(ctx, view="", site_id="x-com",
-                               group_tab="manage", manage_tab="plugins")
+    node = await panels.center(ctx, view="", site_id="x-com")
     s = str(node)
     assert "Akismet Anti-Spam" in s
     assert "update_plugin" in s
     assert "'slug': 'akismet'" in s
     assert "update_core" in s
     assert "run_wp_cron" in s
+    assert "'label': 'Plugin updates'" in s
 
 
 async def test_center_store_has_separate_commerce_group():

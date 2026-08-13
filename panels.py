@@ -957,8 +957,7 @@ def _taxonomy_manage_block(items: list, site_id: str, tax_slug: str):
 
 # ── Manage tab (menus / redirects / settings / plugins) ────────────────────────
 
-async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, menu_sel, builder_sel, call,
-                             plugin_updates_children=None):
+async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, menu_sel, builder_sel, call):
     """Site management: nav menus, Rank Math redirects, native settings, plugins,
     Elementor/Bricks builder point-editing.
 
@@ -996,8 +995,7 @@ async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, m
     elif manage_tab == "settings":
         body = await _render_settings_block(ctx, site_id, base_url, username, pw)
     elif manage_tab == "plugins":
-        body = await _render_plugins_block(ctx, site_id, base_url, username, pw,
-                                           updates_children=plugin_updates_children)
+        body = await _render_plugins_block(ctx, site_id, base_url, username, pw)
     else:
         body = await _render_menus_block(ctx, site_id, base_url, username, pw, menu_sel, call)
 
@@ -1533,46 +1531,39 @@ async def _render_settings_block(ctx, site_id, base_url, username, pw):
     return ui.Card(title="Site settings", content=form)
 
 
-async def _render_plugins_block(ctx, site_id, base_url, username, pw, updates_children=None):
-    """Plugins list, with any pending plugin/theme/core updates (built by
-    _render_detail from get_server_info's own record fields) shown first."""
+async def _render_plugins_block(ctx, site_id, base_url, username, pw):
     r = await wp_get(ctx, base_url, "/wp-json/wp/v2/plugins", username=username, app_password=pw,
                      params={"per_page": 100})
     if r is None or r.status_code == 404:
-        list_node = ui.Alert(message="This site's WordPress version doesn't expose /wp/v2/plugins "
+        return ui.Alert(message="This site's WordPress version doesn't expose /wp/v2/plugins "
                                 "(needs WordPress 5.5+).", type="info")
-    elif r.status_code in (401, 403):
-        list_node = ui.Alert(message="The connected user cannot manage plugins — "
+    if r.status_code in (401, 403):
+        return ui.Alert(message="The connected user cannot manage plugins — "
                                 "reconnect with an administrator Application Password.", type="error")
-    elif r.status_code != 200 or not isinstance(r.body, list):
-        list_node = ui.Alert(message="Could not load plugins — check the connection.", type="error")
-    else:
-        plugins = r.body
-        if not plugins:
-            list_node = ui.Empty(message="No plugins found.")
-        else:
-            rows_ui = []
-            for p in plugins:
-                plugin_id = p.get("plugin", "")
-                name = p.get("name", plugin_id)
-                if isinstance(name, dict):
-                    name = name.get("rendered", plugin_id)
-                status = p.get("status", "inactive")
-                rows_ui.append(ui.ListItem(
-                    id=plugin_id, title=name or plugin_id,
-                    subtitle=f"v{p.get('version', '')}", meta=status,
-                    actions=[
-                        {"icon": "Power" if status != "active" else "PowerOff",
-                         "label": "Activate" if status != "active" else "Deactivate",
-                         "on_click": ui.Call("deactivate_plugin" if status == "active" else "activate_plugin",
-                                             site_id=site_id, plugin=plugin_id)},
-                    ],
-                ))
-            list_node = ui.List(items=rows_ui)
+    if r.status_code != 200 or not isinstance(r.body, list):
+        return ui.Alert(message="Could not load plugins — check the connection.", type="error")
+    plugins = r.body
+    if not plugins:
+        return ui.Empty(message="No plugins found.")
 
-    if updates_children:
-        return ui.Stack(gap=3, children=[*updates_children, ui.Divider(), list_node])
-    return list_node
+    rows_ui = []
+    for p in plugins:
+        plugin_id = p.get("plugin", "")
+        name = p.get("name", plugin_id)
+        if isinstance(name, dict):
+            name = name.get("rendered", plugin_id)
+        status = p.get("status", "inactive")
+        rows_ui.append(ui.ListItem(
+            id=plugin_id, title=name or plugin_id,
+            subtitle=f"v{p.get('version', '')}", meta=status,
+            actions=[
+                {"icon": "Power" if status != "active" else "PowerOff",
+                 "label": "Activate" if status != "active" else "Deactivate",
+                 "on_click": ui.Call("deactivate_plugin" if status == "active" else "activate_plugin",
+                                     site_id=site_id, plugin=plugin_id)},
+            ],
+        ))
+    return ui.List(items=rows_ui)
 
 
 async def _fetch_environment_body(ctx, base_url, username, pw):
@@ -1727,9 +1718,10 @@ async def _render_detail(ctx, site_id,
             ]
         setup_section = [*general_block, *env_block]
 
-    # ── Plugin updates: now folded into Manage → Plugins instead of its own
-    # top-level block. Nothing at all when everything is current — no card,
-    # no button, no text. Cheap (record fields only, no fetch) so it's built
+    # ── Plugin updates: rendered above the tab bar, right under the site
+    # name/subtitle — visible on every tab, not just one. Nothing at all
+    # (no divider, no card, no button, no text) when there's genuinely
+    # nothing to report. Cheap (record fields only, no fetch) so it's built
     # unconditionally regardless of the active tab ──────────────────────────
     wp_ver    = record.get("wp_version")
     n_updates = record.get("pending_updates", 0)
@@ -1844,8 +1836,15 @@ async def _render_detail(ctx, site_id,
         ]
     # else: n_updates == 0 and data is fresh — genuinely nothing to show,
     # not even a success message: no card, no button, no text.
-    # (update_section_children is folded into Manage → Plugins below, not
-    # rendered as its own top-level tab/section anymore.)
+
+    # Only render the block (with its Divider) when there is something to
+    # show -- an actual update, a bridge-outdated warning, or a no-data
+    # prompt. When update_section_children is empty, this is an empty list
+    # and nothing at all appears above the tabs.
+    plugin_updates_section = (
+        [ui.Divider(label="Plugin updates"), *update_section_children]
+        if update_section_children else []
+    )
 
     # ── Content cache + fetch ──────────────────────────
     async def _list(path, params=None):
@@ -2163,29 +2162,31 @@ async def _render_detail(ctx, site_id,
 
     else:  # content (default)
         if std_tab in ("posts", "pages"):
-            std_body = _posts_management_block(content_map.get(std_tab), std_tab, site_id)
+            content_body = _posts_management_block(content_map.get(std_tab), std_tab, site_id)
         elif std_tab == "media":
-            std_body = _media_management_block(content_map.get("media"), site_id)
+            content_body = _media_management_block(content_map.get("media"), site_id)
         else:
-            std_body = _render_content_table(content_map.get(std_tab), std_tab)
+            content_body = _render_content_table(content_map.get(std_tab), std_tab)
         active_content = ui.Stack(gap=3, children=[
             ui.Stack(direction="h", gap=1, children=[
                 _item_btn("Posts", "posts", std_tab, "std_tab"),
                 _item_btn("Pages", "pages", std_tab, "std_tab"),
                 _item_btn("Media", "media", std_tab, "std_tab"),
             ]),
-            std_body,
+            content_body,
         ])
 
     if group_tab == "manage":
         active_content = await _render_manage_tab(
-            ctx, site_id, base_url, username, pw, manage_tab, menu_sel, builder_sel, _call,
-            plugin_updates_children=update_section_children)
+            ctx, site_id, base_url, username, pw, manage_tab, menu_sel, builder_sel, _call)
 
-    # ── Assemble page: just the tab bar + active tab's content. Setup now
-    # holds General/Environment/PHP Limits/Extensions/Database/Apache;
-    # Content/Activity/Taxonomies/Manage/Custom Types are unchanged ───────
+    # ── Assemble page: Plugin updates (only if there is any) above the tab
+    # bar, right under the site name/subtitle, then the tab bar + active
+    # tab's content. Setup now holds General/Environment/PHP Limits/
+    # Extensions/Database/Apache; Content/Activity/Taxonomies/Manage/
+    # Custom Types are unchanged ───────────────────────────────────────────
     page_children = [
+        *plugin_updates_section,
         group_nav,
         active_content,
     ]
