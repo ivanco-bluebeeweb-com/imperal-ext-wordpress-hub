@@ -266,12 +266,11 @@ async def test_center_shows_detail_when_site_id():
                         "date": "2026-06-01T00:00:00"}], 200)
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/pages", [], 200)
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/media", [], 200)
-    node = await panels.center(ctx, view="", site_id="x-com")
+    node = await panels.center(ctx, view="", site_id="x-com", group_tab="content")
     s = str(node)
     assert "x.com" in s
-    assert "Stats" in s
     assert "Hello" in s
-    assert "Standard" in s and "Activity" in s  # group tab buttons
+    assert "Setup" in s and "Content" in s and "Activity" in s  # group tab buttons
 
 
 async def _store_panel_ctx(woocommerce=True):
@@ -299,10 +298,9 @@ async def _store_panel_ctx(woocommerce=True):
 
 
 async def test_center_detail_shows_divider_separated_sections_without_ssh_button():
-    """Main screen must be General / Environment / PHP Limits / Extensions /
-    Database / Apache / Plugin updates / Content, each separated by its own
-    ui.Divider, sourced from get_php_info — and there is no Add SSH button
-    anywhere on this screen anymore."""
+    """Setup tab must be General / Environment / PHP Limits / Extensions /
+    Database / Apache, each separated by its own ui.Divider, sourced from
+    get_php_info — and there is no Add SSH button anywhere on this screen."""
     ctx = MockContext()
     await storage.save_site_record(ctx, {
         "id": "x-com", "name": "X", "url": "https://x.com", "username": "admin",
@@ -322,7 +320,7 @@ async def test_center_detail_shows_divider_separated_sections_without_ssh_button
         "db_version": "8.0.35", "db_size_mb": 12.5,
         "apache_enabled": False,
     }, 200)
-    node = await panels.center(ctx, view="", site_id="x-com")
+    node = await panels.center(ctx, view="", site_id="x-com")  # defaults to group_tab="setup"
     s = str(node)
     assert "'label': 'General'" in s
     assert "'label': 'Environment'" in s
@@ -330,8 +328,6 @@ async def test_center_detail_shows_divider_separated_sections_without_ssh_button
     assert "'label': 'Extensions'" in s
     assert "'label': 'Database'" in s
     assert "'label': 'Apache'" in s
-    assert "'label': 'Plugin updates'" in s
-    assert "'label': 'Content'" in s
     assert "8.2.10" in s
     assert "nginx" in s
     assert "Add SSH" not in s
@@ -339,7 +335,7 @@ async def test_center_detail_shows_divider_separated_sections_without_ssh_button
 
 async def test_center_detail_shows_bridge_outdated_warning_instead_of_no_data():
     """When get_server_info recorded bridge_outdated (plugin present but too
-    old for /server/info), the detail page must say so with an update
+    old for /server/info), Manage → Plugins must say so with an update
     prompt -- not the generic 'No update data yet' message."""
     ctx = MockContext()
     await storage.save_site_record(ctx, {
@@ -353,7 +349,9 @@ async def test_center_detail_shows_bridge_outdated_warning_instead_of_no_data():
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/media", [], 200)
     ctx.http.mock_get("https://x.com/wp-json/imperal/v1/security/php-info",
                       {"code": "rest_no_route"}, 404)
-    node = await panels.center(ctx, view="", site_id="x-com")
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/plugins", [], 200)
+    node = await panels.center(ctx, view="", site_id="x-com",
+                               group_tab="manage", manage_tab="plugins")
     s = str(node)
     assert "2.0.0" in s
     assert "update" in s.lower()
@@ -385,7 +383,9 @@ async def test_center_detail_server_section_offers_update_plugin_action():
         "max_execution_time": "300", "upload_max_filesize": "64M", "post_max_size": "64M",
         "wp_version": "6.5.2", "server_software": "nginx",
     }, 200)
-    node = await panels.center(ctx, view="", site_id="x-com")
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/plugins", [], 200)
+    node = await panels.center(ctx, view="", site_id="x-com",
+                               group_tab="manage", manage_tab="plugins")
     s = str(node)
     assert "Akismet Anti-Spam" in s
     assert "update_plugin" in s
@@ -581,6 +581,28 @@ async def test_group_tab_bar_includes_manage():
     node = await panels.center(ctx, view="", site_id="blog-com")
     s = str(node)
     assert "'label': 'Manage'" in s
+
+
+async def test_group_tab_bar_order_and_setup_default():
+    """Tab bar under the site URL must read, left to right: Setup, Content,
+    Activity, Taxonomies, Manage, Custom Types (Commerce inserted after
+    Content only when WooCommerce is present; Custom Types last only when
+    the site actually has custom post types). Setup is the default tab --
+    no group_tab passed at all still renders it, with General/Environment/
+    etc. inside, not the old Standard (Posts/Pages/Media) tab.
+    """
+    ctx = await _base_panel_ctx()
+    ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/security/php-info",
+                      {"code": "rest_no_route"}, 404)
+    node = await panels.center(ctx, view="", site_id="blog-com")
+    s = str(node)
+    i_setup = s.index("'label': 'Setup'")
+    i_content = s.index("'label': 'Content'")
+    i_activity = s.index("'label': 'Activity'")
+    i_manage = s.index("'label': 'Manage'")
+    assert i_setup < i_content < i_activity < i_manage
+    assert "'label': 'Standard'" not in s
+    assert "General" in s or "Environment" in s or "Bridge" in s  # Setup content, not Posts/Pages
 
 
 async def test_manage_tab_menus_lists_menu_and_add_item_form():
@@ -810,7 +832,7 @@ async def test_posts_tab_has_publish_duplicate_delete_actions():
     ctx.http.mock_get("https://blog.com/wp-json/wp/v2/media", [], 200)
     ctx.http.mock_get("https://blog.com/wp-json/wc/v3/orders", {"code": "rest_no_route"}, 404)
     node = await panels.center(ctx, view="", site_id="blog-com",
-                               group_tab="standard", std_tab="posts")
+                               group_tab="content", std_tab="posts")
     s = str(node)
     assert "Draft post" in s
     assert "update_post" in s   # Publish/Draft toggle
@@ -838,7 +860,7 @@ async def test_media_tab_has_upload_form_and_alt_text_editing():
                         "alt_text": ""}], 200)
     ctx.http.mock_get("https://blog.com/wp-json/wc/v3/orders", {"code": "rest_no_route"}, 404)
     node = await panels.center(ctx, view="", site_id="blog-com",
-                               group_tab="standard", std_tab="media")
+                               group_tab="content", std_tab="media")
     s = str(node)
     assert "logo.png" in s
     assert "duplicate_post" not in s   # media has no post lifecycle, unlike posts/pages
@@ -860,7 +882,7 @@ async def test_media_tab_shows_error_alert_when_load_fails():
     ctx.http.mock_get("https://blog.com/wp-json/wp/v2/media", {}, 500)
     ctx.http.mock_get("https://blog.com/wp-json/wc/v3/orders", {"code": "rest_no_route"}, 404)
     node = await panels.center(ctx, view="", site_id="blog-com",
-                               group_tab="standard", std_tab="media")
+                               group_tab="content", std_tab="media")
     s = str(node)
     assert "Could not load media library" in s
     assert "upload_media" in s   # the upload form still offers a way forward

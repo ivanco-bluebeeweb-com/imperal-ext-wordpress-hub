@@ -171,7 +171,7 @@ async def sidebar(ctx, active_site_id="", **kwargs):
 
 @ext.panel("center", slot="center", center_overlay=True, title="WordPress Hub")
 async def center(ctx, view="", site_id="",
-                 group_tab="standard",
+                 group_tab="setup",
                  std_tab="posts", act_tab="comments", commerce_tab="overview",
                  cpt_tab="", tax_tab="", manage_tab="menus", menu_sel="", builder_sel="",
                  **kwargs):
@@ -957,7 +957,8 @@ def _taxonomy_manage_block(items: list, site_id: str, tax_slug: str):
 
 # ── Manage tab (menus / redirects / settings / plugins) ────────────────────────
 
-async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, menu_sel, builder_sel, call):
+async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, menu_sel, builder_sel, call,
+                             plugin_updates_children=None):
     """Site management: nav menus, Rank Math redirects, native settings, plugins,
     Elementor/Bricks builder point-editing.
 
@@ -995,7 +996,8 @@ async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, m
     elif manage_tab == "settings":
         body = await _render_settings_block(ctx, site_id, base_url, username, pw)
     elif manage_tab == "plugins":
-        body = await _render_plugins_block(ctx, site_id, base_url, username, pw)
+        body = await _render_plugins_block(ctx, site_id, base_url, username, pw,
+                                           updates_children=plugin_updates_children)
     else:
         body = await _render_menus_block(ctx, site_id, base_url, username, pw, menu_sel, call)
 
@@ -1531,39 +1533,46 @@ async def _render_settings_block(ctx, site_id, base_url, username, pw):
     return ui.Card(title="Site settings", content=form)
 
 
-async def _render_plugins_block(ctx, site_id, base_url, username, pw):
+async def _render_plugins_block(ctx, site_id, base_url, username, pw, updates_children=None):
+    """Plugins list, with any pending plugin/theme/core updates (built by
+    _render_detail from get_server_info's own record fields) shown first."""
     r = await wp_get(ctx, base_url, "/wp-json/wp/v2/plugins", username=username, app_password=pw,
                      params={"per_page": 100})
     if r is None or r.status_code == 404:
-        return ui.Alert(message="This site's WordPress version doesn't expose /wp/v2/plugins "
+        list_node = ui.Alert(message="This site's WordPress version doesn't expose /wp/v2/plugins "
                                 "(needs WordPress 5.5+).", type="info")
-    if r.status_code in (401, 403):
-        return ui.Alert(message="The connected user cannot manage plugins — "
+    elif r.status_code in (401, 403):
+        list_node = ui.Alert(message="The connected user cannot manage plugins — "
                                 "reconnect with an administrator Application Password.", type="error")
-    if r.status_code != 200 or not isinstance(r.body, list):
-        return ui.Alert(message="Could not load plugins — check the connection.", type="error")
-    plugins = r.body
-    if not plugins:
-        return ui.Empty(message="No plugins found.")
+    elif r.status_code != 200 or not isinstance(r.body, list):
+        list_node = ui.Alert(message="Could not load plugins — check the connection.", type="error")
+    else:
+        plugins = r.body
+        if not plugins:
+            list_node = ui.Empty(message="No plugins found.")
+        else:
+            rows_ui = []
+            for p in plugins:
+                plugin_id = p.get("plugin", "")
+                name = p.get("name", plugin_id)
+                if isinstance(name, dict):
+                    name = name.get("rendered", plugin_id)
+                status = p.get("status", "inactive")
+                rows_ui.append(ui.ListItem(
+                    id=plugin_id, title=name or plugin_id,
+                    subtitle=f"v{p.get('version', '')}", meta=status,
+                    actions=[
+                        {"icon": "Power" if status != "active" else "PowerOff",
+                         "label": "Activate" if status != "active" else "Deactivate",
+                         "on_click": ui.Call("deactivate_plugin" if status == "active" else "activate_plugin",
+                                             site_id=site_id, plugin=plugin_id)},
+                    ],
+                ))
+            list_node = ui.List(items=rows_ui)
 
-    rows_ui = []
-    for p in plugins:
-        plugin_id = p.get("plugin", "")
-        name = p.get("name", plugin_id)
-        if isinstance(name, dict):
-            name = name.get("rendered", plugin_id)
-        status = p.get("status", "inactive")
-        rows_ui.append(ui.ListItem(
-            id=plugin_id, title=name or plugin_id,
-            subtitle=f"v{p.get('version', '')}", meta=status,
-            actions=[
-                {"icon": "Power" if status != "active" else "PowerOff",
-                 "label": "Activate" if status != "active" else "Deactivate",
-                 "on_click": ui.Call("deactivate_plugin" if status == "active" else "activate_plugin",
-                                     site_id=site_id, plugin=plugin_id)},
-            ],
-        ))
-    return ui.List(items=rows_ui)
+    if updates_children:
+        return ui.Stack(gap=3, children=[*updates_children, ui.Divider(), list_node])
+    return list_node
 
 
 async def _fetch_environment_body(ctx, base_url, username, pw):
@@ -1652,7 +1661,7 @@ def _apache_section(body):
 # ── Site detail ───────────────────────────────────────────────────────────────
 
 async def _render_detail(ctx, site_id,
-                         group_tab="standard",
+                         group_tab="setup",
                          std_tab="posts", act_tab="comments", commerce_tab="overview",
                          cpt_tab="", tax_tab="", manage_tab="menus", menu_sel="", builder_sel=""):
     record = await storage.get_site_record(ctx, site_id) or {}
@@ -1679,46 +1688,49 @@ async def _render_detail(ctx, site_id,
                 ctx, {**record, "ssh_host": ssh_cred.get("host", "legacy")}
             )
 
-    # ── General: Authentication, SSL, SSH (status only — no Add SSH button).
-    # Bare grid of stat cards right after the Divider: no nested title, no
-    # extra padding, no styling beyond the grid itself. ────────────────────
-    general_section = [
-        ui.Divider(label="General"),
-        ui.Stats(columns=3, children=[
-            ui.Stat(label="Authentication", value="OK" if reachable else "Failed",
-                    color="green" if reachable else "red"),
-            ui.Stat(label="SSL", value="HTTPS" if ssl_valid else "HTTP",
-                    color="green" if ssl_valid else "red"),
-            ui.Stat(label="SSH", value="Configured" if has_ssh else "Not configured",
-                    color="green" if has_ssh else "gray"),
-        ]),
-    ]
-
-    # ── Environment / PHP Limits / Extensions / Database / Apache — all from
-    # a single get_php_info Bridge fetch, each its own divider-separated block ─
-    env_body, env_error = await _fetch_environment_body(ctx, base_url, username, pw)
-    if env_error:
-        env_sections = [
-            ui.Divider(label="Environment"),
-            env_error,
-        ]
-    else:
-        env_sections = [
-            ui.Divider(label="Environment"),
-            _environment_card(env_body, cron_count=record.get("cron_count")),
-            ui.Divider(label="PHP Limits"),
-            _php_limits_card(env_body),
-            ui.Divider(label="Extensions"),
-            _extensions_card(env_body),
-            ui.Divider(label="Database"),
-            _database_card(env_body),
-            ui.Divider(label="Apache"),
-            _apache_section(env_body),
+    # ── Setup tab content: General / Environment / PHP Limits / Extensions /
+    # Database / Apache — each its own Divider-separated block. Only built
+    # when Setup is the active tab, so other tabs don't pay for the Bridge
+    # round-trip. ────────────────────────────────────────────────────────────
+    setup_section = None
+    if group_tab == "setup":
+        general_block = [
+            ui.Divider(label="General"),
+            ui.Stats(columns=3, children=[
+                ui.Stat(label="Authentication", value="OK" if reachable else "Failed",
+                        color="green" if reachable else "red"),
+                ui.Stat(label="SSL", value="HTTPS" if ssl_valid else "HTTP",
+                        color="green" if ssl_valid else "red"),
+                ui.Stat(label="SSH", value="Configured" if has_ssh else "Not configured",
+                        color="green" if has_ssh else "gray"),
+            ]),
         ]
 
-    # ── Plugin updates: nothing at all when everything is current — no card,
-    # no button, no text. Only appears when there is something to show,
-    # rendered the same way it already was ─────────────────────────────────
+        env_body, env_error = await _fetch_environment_body(ctx, base_url, username, pw)
+        if env_error:
+            env_block = [
+                ui.Divider(label="Environment"),
+                env_error,
+            ]
+        else:
+            env_block = [
+                ui.Divider(label="Environment"),
+                _environment_card(env_body, cron_count=record.get("cron_count")),
+                ui.Divider(label="PHP Limits"),
+                _php_limits_card(env_body),
+                ui.Divider(label="Extensions"),
+                _extensions_card(env_body),
+                ui.Divider(label="Database"),
+                _database_card(env_body),
+                ui.Divider(label="Apache"),
+                _apache_section(env_body),
+            ]
+        setup_section = [*general_block, *env_block]
+
+    # ── Plugin updates: now folded into Manage → Plugins instead of its own
+    # top-level block. Nothing at all when everything is current — no card,
+    # no button, no text. Cheap (record fields only, no fetch) so it's built
+    # unconditionally regardless of the active tab ──────────────────────────
     wp_ver    = record.get("wp_version")
     n_updates = record.get("pending_updates", 0)
     plug_list = record.get("plugin_updates_list") or []
@@ -1832,8 +1844,8 @@ async def _render_detail(ctx, site_id,
         ]
     # else: n_updates == 0 and data is fresh — genuinely nothing to show,
     # not even a success message: no card, no button, no text.
-
-    plugin_updates_section = [ui.Divider(label="Plugin updates"), *update_section_children]
+    # (update_section_children is folded into Manage → Plugins below, not
+    # rendered as its own top-level tab/section anymore.)
 
     # ── Content cache + fetch ──────────────────────────
     async def _list(path, params=None):
@@ -2019,23 +2031,28 @@ async def _render_detail(ctx, site_id,
                          size="sm",
                          on_click=_call(**{param: key}))
 
-    # Group-level tab bar
+    # Group-level tab bar: Setup, Content, Commerce (if WooCommerce), Activity,
+    # Taxonomies, Manage, Custom Types — in that order.
     group_btns = [
-        _group_btn("Standard", "standard"),
-        _group_btn("Activity", "activity"),
+        _group_btn("Setup", "setup"),
+        _group_btn("Content", "content"),
     ]
     if orders_data is not None:
         group_btns.append(_group_btn("Commerce", "commerce"))
-    if cpt_meta:
-        group_btns.append(_group_btn("Custom Types", "cpt"))
+    group_btns.append(_group_btn("Activity", "activity"))
     if tax_meta:
         group_btns.append(_group_btn("Taxonomies", "tax"))
     group_btns.append(_group_btn("Manage", "manage"))
+    if cpt_meta:
+        group_btns.append(_group_btn("Custom Types", "cpt"))
 
     group_nav = ui.Stack(direction="h", gap=1, sticky=True, children=group_btns)
 
     # Active section content
-    if group_tab == "activity":
+    if group_tab == "setup":
+        active_content = ui.Stack(gap=3, children=setup_section)
+
+    elif group_tab == "activity":
         act_btns = [
             _item_btn("Comments",  "comments",  act_tab, "act_tab"),
             _item_btn("Scheduled", "scheduled", act_tab, "act_tab"),
@@ -2144,7 +2161,7 @@ async def _render_detail(ctx, site_id,
                 _taxonomy_manage_block(content_map.get(tax_active) or [], site_id, tax_slug),
             ])
 
-    else:  # standard (default)
+    else:  # content (default)
         if std_tab in ("posts", "pages"):
             std_body = _posts_management_block(content_map.get(std_tab), std_tab, site_id)
         elif std_tab == "media":
@@ -2162,16 +2179,13 @@ async def _render_detail(ctx, site_id,
 
     if group_tab == "manage":
         active_content = await _render_manage_tab(
-            ctx, site_id, base_url, username, pw, manage_tab, menu_sel, builder_sel, _call)
+            ctx, site_id, base_url, username, pw, manage_tab, menu_sel, builder_sel, _call,
+            plugin_updates_children=update_section_children)
 
-    # ── Assemble page: General / Environment / PHP Limits / Extensions /
-    # Database / Apache / Plugin updates / Content — each its own
-    # Divider-separated block ─────────────────────────────
+    # ── Assemble page: just the tab bar + active tab's content. Setup now
+    # holds General/Environment/PHP Limits/Extensions/Database/Apache;
+    # Content/Activity/Taxonomies/Manage/Custom Types are unchanged ───────
     page_children = [
-        *general_section,
-        *env_sections,
-        *plugin_updates_section,
-        ui.Divider(label="Content"),
         group_nav,
         active_content,
     ]
