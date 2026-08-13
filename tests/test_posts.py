@@ -131,6 +131,42 @@ async def test_create_post_creates_category_when_not_found():
     assert "created it" in result.summary
 
 
+async def test_create_post_forwards_lang_when_auto_creating_category():
+    # Regression test: on a Polylang site, a category auto-created while
+    # writing a post in language X must be created IN language X too --
+    # otherwise Polylang silently files it under the site's default
+    # language, and the next post written in language X can never find it
+    # again via find_category_id(..., lang=X), even though the category
+    # genuinely exists. Reproduced live on g4s.md: post #1760 (lang=ru)
+    # auto-created "Blog" without a lang param; post #1762 (lang=ru) then
+    # failed to find it ("could not be found or created") until a manual
+    # update_post (which searches with no lang filter) resolved it.
+    ctx = await _ctx()
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_get(CATEGORIES, [], 200)  # not found yet -> triggers auto-create
+    ctx.http.mock_post(CATEGORIES, {"id": 55, "name": "Blog"}, 201)
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello", slug="hello", meta_title="Hello", category="Blog",
+        excerpt="A short standalone summary.", featured_media_id=99, lang="ru",
+    ))
+    assert result.status == "success"
+    assert result.data.category_resolved is True
+    category_create_calls = [c for c in seen if c[0] == CATEGORIES]
+    assert category_create_calls, "expected a POST to /categories"
+    assert category_create_calls[0][1].get("params") == {"lang": "ru"}, (
+        "category auto-create must pass the same lang as the post, or Polylang "
+        "files it under the default language and later lookups never find it"
+    )
+
+
 async def test_create_post_uses_pages_base_for_page_type():
     ctx = await _ctx()
     ctx.http.mock_post(PAGES, _wp_post(pid=9), 201)

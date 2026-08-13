@@ -234,7 +234,7 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
             # category so the post always ends up correctly filed.
             try:
                 create_resp = await create_term(ctx, base_url, username, pw, "categories",
-                                                name=params.category.strip())
+                                                name=params.category.strip(), lang=params.lang)
                 if create_resp.status_code < 400 and isinstance(create_resp.body, dict):
                     category_id = create_resp.body.get("id")
                     category_created = category_id is not None

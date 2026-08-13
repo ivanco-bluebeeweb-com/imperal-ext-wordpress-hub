@@ -183,14 +183,25 @@ async def list_terms(ctx, base_url: str, username: str, app_password: str,
 
 async def create_term(ctx, base_url: str, username: str, app_password: str,
                        taxonomy_base: str, *, name: str, description: str = "",
-                       parent: int | None = None):
+                       parent: int | None = None, lang: str | None = None):
     """Create one term in a taxonomy. ``parent`` only applies to hierarchical
-    taxonomies (categories) — WordPress ignores it for flat ones (tags)."""
+    taxonomies (categories) — WordPress ignores it for flat ones (tags).
+
+    ``lang`` must be passed on a Polylang site whenever the term is being
+    created to satisfy a specific post's language (e.g. auto-created by
+    create_post): Polylang reads the language from the query string on
+    creation same as it does for posts, and assigns a *default*-language
+    term when it's omitted. Without this, a term auto-created while writing
+    a post in language A silently lands in the site's default language, so
+    a later find_term_id(..., lang=A) never matches it again -- the exact
+    bug this parameter fixes.
+    """
     payload: dict = {"name": name, "description": description}
     if parent is not None:
         payload["parent"] = parent
+    params = {"lang": lang} if lang else None
     return await wp_post(ctx, base_url, f"/wp-json/wp/v2/{taxonomy_base}",
-                         username=username, app_password=app_password, json=payload)
+                         username=username, app_password=app_password, json=payload, params=params)
 
 
 async def update_term(ctx, base_url: str, username: str, app_password: str,
