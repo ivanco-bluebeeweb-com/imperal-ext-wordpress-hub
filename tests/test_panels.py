@@ -298,9 +298,11 @@ async def _store_panel_ctx(woocommerce=True):
 
 
 async def test_center_detail_shows_divider_separated_sections_without_ssh_button():
-    """Setup tab must be General / Environment / PHP Limits / Extensions /
-    Database / Apache, each separated by its own ui.Divider, sourced from
-    get_php_info — and there is no Add SSH button anywhere on this screen."""
+    """Setup tab: General + Environment + PHP Limits render together as one
+    flat grid of Stat cards with no Dividers splitting them up (same gaps
+    throughout), followed by Extensions / Database / Apache, each still its
+    own Divider-separated block, sourced from get_php_info — and there is no
+    Add SSH button anywhere on this screen."""
     ctx = MockContext()
     await storage.save_site_record(ctx, {
         "id": "x-com", "name": "X", "url": "https://x.com", "username": "admin",
@@ -322,9 +324,20 @@ async def test_center_detail_shows_divider_separated_sections_without_ssh_button
     }, 200)
     node = await panels.center(ctx, view="", site_id="x-com")  # defaults to group_tab="setup"
     s = str(node)
-    assert "'label': 'General'" in s
-    assert "'label': 'Environment'" in s
-    assert "'label': 'PHP Limits'" in s
+    # General/Environment/PHP Limits no longer have their own Divider labels --
+    # they're one shared grid of Stat cards now.
+    assert "'label': 'General'" not in s
+    assert "'label': 'Environment'" not in s
+    assert "'label': 'PHP Limits'" not in s
+    # Their individual Stat cards are still present, just ungrouped.
+    assert "'label': 'Authentication'" in s
+    assert "'label': 'SSL'" in s
+    assert "'label': 'SSH'" in s
+    assert "'label': 'PHP'" in s
+    assert "'label': 'Server'" in s
+    assert "'label': 'Memory Limit'" in s
+    assert "'label': 'Max Input Vars'" in s
+    # Extensions / Database / Apache remain their own Divider-separated blocks.
     assert "'label': 'Extensions'" in s
     assert "'label': 'Database'" in s
     assert "'label': 'Apache'" in s

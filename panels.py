@@ -1591,30 +1591,6 @@ async def _fetch_environment_body(ctx, base_url, username, pw):
     return r.body, None
 
 
-def _environment_card(body, cron_count=None):
-    """Environment block: PHP, Server, Cron Jobs -- a bare grid of stat cards
-    right after the 'Environment' Divider, no nested title, no extra padding.
-    """
-    stats = [
-        ui.Stat(label="PHP", value=str(body.get("php_version", "")) or "—"),
-        ui.Stat(label="Server", value=str(body.get("server_software", "")) or "—"),
-    ]
-    if cron_count is not None:
-        stats.append(ui.Stat(label="Cron Jobs", value=str(cron_count)))
-    return ui.Stats(columns=len(stats), children=stats)
-
-
-def _php_limits_card(body):
-    """PHP Limits block: bare grid of stat cards, no nested title/padding."""
-    return ui.Stats(columns=5, children=[
-        ui.Stat(label="Memory Limit", value=str(body.get("memory_limit", "")) or "—"),
-        ui.Stat(label="Max Execution", value=str(body.get("max_execution_time", "")) or "—"),
-        ui.Stat(label="Upload Max", value=str(body.get("upload_max_filesize", "")) or "—"),
-        ui.Stat(label="Post Max", value=str(body.get("post_max_size", "")) or "—"),
-        ui.Stat(label="Max Input Vars", value=str(body.get("max_input_vars", "")) or "—"),
-    ])
-
-
 def _extensions_card(body):
     """Extensions block: bare flex-wrap of tag badges, no nested title/padding."""
     extensions = [str(e) for e in (body.get("extensions") or [])]
@@ -1679,36 +1655,43 @@ async def _render_detail(ctx, site_id,
                 ctx, {**record, "ssh_host": ssh_cred.get("host", "legacy")}
             )
 
-    # ── Setup tab content: General / Environment / PHP Limits / Extensions /
-    # Database / Apache — each its own Divider-separated block. Only built
-    # when Setup is the active tab, so other tabs don't pay for the Bridge
-    # round-trip. ────────────────────────────────────────────────────────────
+    # ── Setup tab content: General + Environment + PHP Limits render as one
+    # flat grid of Stat cards (same row/column gaps throughout, no nested
+    # Dividers splitting them up) followed by Extensions / Database / Apache,
+    # each still its own Divider-separated block. Only built when Setup is
+    # the active tab, so other tabs don't pay for the Bridge round-trip. ────
     setup_section = None
     if group_tab == "setup":
-        general_block = [
-            ui.Divider(label="General"),
-            ui.Stats(columns=3, children=[
-                ui.Stat(label="Authentication", value="OK" if reachable else "Failed",
-                        color="green" if reachable else "red"),
-                ui.Stat(label="SSL", value="HTTPS" if ssl_valid else "HTTP",
-                        color="green" if ssl_valid else "red"),
-                ui.Stat(label="SSH", value="Configured" if has_ssh else "Not configured",
-                        color="green" if has_ssh else "gray"),
-            ]),
+        top_stats = [
+            ui.Stat(label="Authentication", value="OK" if reachable else "Failed",
+                    color="green" if reachable else "red"),
+            ui.Stat(label="SSL", value="HTTPS" if ssl_valid else "HTTP",
+                    color="green" if ssl_valid else "red"),
+            ui.Stat(label="SSH", value="Configured" if has_ssh else "Not configured",
+                    color="green" if has_ssh else "gray"),
         ]
 
         env_body, env_error = await _fetch_environment_body(ctx, base_url, username, pw)
         if env_error:
-            env_block = [
-                ui.Divider(label="Environment"),
+            setup_section = [
+                ui.Stats(columns=4, children=top_stats),
                 env_error,
             ]
         else:
-            env_block = [
-                ui.Divider(label="Environment"),
-                _environment_card(env_body, cron_count=record.get("cron_count")),
-                ui.Divider(label="PHP Limits"),
-                _php_limits_card(env_body),
+            top_stats.append(ui.Stat(label="PHP", value=str(env_body.get("php_version", "")) or "—"))
+            top_stats.append(ui.Stat(label="Server", value=str(env_body.get("server_software", "")) or "—"))
+            cron_count = record.get("cron_count")
+            if cron_count is not None:
+                top_stats.append(ui.Stat(label="Cron Jobs", value=str(cron_count)))
+            top_stats += [
+                ui.Stat(label="Memory Limit", value=str(env_body.get("memory_limit", "")) or "—"),
+                ui.Stat(label="Max Execution", value=str(env_body.get("max_execution_time", "")) or "—"),
+                ui.Stat(label="Upload Max", value=str(env_body.get("upload_max_filesize", "")) or "—"),
+                ui.Stat(label="Post Max", value=str(env_body.get("post_max_size", "")) or "—"),
+                ui.Stat(label="Max Input Vars", value=str(env_body.get("max_input_vars", "")) or "—"),
+            ]
+            setup_section = [
+                ui.Stats(columns=4, children=top_stats),
                 ui.Divider(label="Extensions"),
                 _extensions_card(env_body),
                 ui.Divider(label="Database"),
@@ -1716,7 +1699,6 @@ async def _render_detail(ctx, site_id,
                 ui.Divider(label="Apache"),
                 _apache_section(env_body),
             ]
-        setup_section = [*general_block, *env_block]
 
     # ── Plugin updates: rendered above the tab bar, right under the site
     # name/subtitle — visible on every tab, not just one. Nothing at all
