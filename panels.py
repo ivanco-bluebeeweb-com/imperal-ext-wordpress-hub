@@ -1990,7 +1990,9 @@ async def _render_detail(ctx, site_id,
                          on_click=_call(**{param: key}))
 
     # Group-level tab bar: Setup, Content, Commerce (if WooCommerce), Activity,
-    # Taxonomies, Manage, Custom Types — in that order.
+    # Taxonomies, Manage — in that order. Custom post types are NOT a
+    # separate group anymore; they're extra sub-tabs inside Content
+    # alongside Posts/Pages/Media (see the "content" branch below).
     group_btns = [
         _group_btn("Setup", "setup"),
         _group_btn("Content", "content"),
@@ -2001,8 +2003,6 @@ async def _render_detail(ctx, site_id,
     if tax_meta:
         group_btns.append(_group_btn("Taxonomies", "tax"))
     group_btns.append(_group_btn("Manage", "manage"))
-    if cpt_meta:
-        group_btns.append(_group_btn("Custom Types", "cpt"))
 
     group_nav = ui.Stack(direction="h", gap=1, sticky=True, children=group_btns)
 
@@ -2093,16 +2093,6 @@ async def _render_detail(ctx, site_id,
             commerce_body,
         ])
 
-    elif group_tab == "cpt" and cpt_meta:
-        first_cpt = f"cpt:{list(cpt_meta.keys())[0]}"
-        cpt_active = cpt_tab if cpt_tab else first_cpt
-        cpt_btns = [_item_btn(m["name"], f"cpt:{s}", cpt_active, "cpt_tab")
-                    for s, m in cpt_meta.items()]
-        active_content = ui.Stack(gap=3, children=[
-            ui.Stack(direction="h", gap=1, wrap=True, children=cpt_btns),
-            _render_content_table(content_map.get(cpt_active), cpt_active),
-        ])
-
     elif group_tab == "tax" and tax_meta:
         first_tax = f"tax:{list(tax_meta.keys())[0]}"
         tax_active = tax_tab if tax_tab else first_tax
@@ -2119,19 +2109,32 @@ async def _render_detail(ctx, site_id,
                 _taxonomy_manage_block(content_map.get(tax_active) or [], site_id, tax_slug),
             ])
 
-    else:  # content (default)
+    else:  # content (default) -- Posts/Pages/Media plus every custom post
+           # type merged in as extra sub-tabs, each labeled with its live count
         if std_tab in ("posts", "pages"):
             content_body = _posts_management_block(content_map.get(std_tab), std_tab, site_id)
         elif std_tab == "media":
             content_body = _media_management_block(content_map.get("media"), site_id)
         else:
             content_body = _render_content_table(content_map.get(std_tab), std_tab)
+
+        def _counted(label, items):
+            return f"{label} ({len(items)})" if isinstance(items, list) else label
+
+        content_btns = [
+            _item_btn(_counted("Posts", content_map.get("posts")), "posts", std_tab, "std_tab"),
+            _item_btn(_counted("Pages", content_map.get("pages")), "pages", std_tab, "std_tab"),
+            _item_btn(_counted("Media", content_map.get("media")), "media", std_tab, "std_tab"),
+        ]
+        for slug, meta in cpt_meta.items():
+            cpt_key = f"cpt:{slug}"
+            content_btns.append(
+                _item_btn(_counted(meta["name"], content_map.get(cpt_key)),
+                          cpt_key, std_tab, "std_tab")
+            )
+
         active_content = ui.Stack(gap=3, children=[
-            ui.Stack(direction="h", gap=1, children=[
-                _item_btn("Posts", "posts", std_tab, "std_tab"),
-                _item_btn("Pages", "pages", std_tab, "std_tab"),
-                _item_btn("Media", "media", std_tab, "std_tab"),
-            ]),
+            ui.Stack(direction="h", gap=1, wrap=True, children=content_btns),
             content_body,
         ])
 
@@ -2141,9 +2144,10 @@ async def _render_detail(ctx, site_id,
 
     # ── Assemble page: Plugin updates (only if there is any) above the tab
     # bar, right under the site name/subtitle, then the tab bar + active
-    # tab's content. Setup now holds General/Environment/PHP Limits/
-    # Extensions/Database/Apache; Content/Activity/Taxonomies/Manage/
-    # Custom Types are unchanged ───────────────────────────────────────────
+    # tab's content. Setup holds General/Environment/PHP Limits/Extensions/
+    # Database/Apache; Content now also carries every custom post type as
+    # a sub-tab (merged in from the former standalone Custom Types group);
+    # Activity/Taxonomies/Manage are unchanged ─────────────────────────────
     page_children = [
         *plugin_updates_section,
         group_nav,

@@ -598,11 +598,12 @@ async def test_group_tab_bar_includes_manage():
 
 async def test_group_tab_bar_order_and_setup_default():
     """Tab bar under the site URL must read, left to right: Setup, Content,
-    Activity, Taxonomies, Manage, Custom Types (Commerce inserted after
-    Content only when WooCommerce is present; Custom Types last only when
-    the site actually has custom post types). Setup is the default tab --
-    no group_tab passed at all still renders it, with General/Environment/
-    etc. inside, not the old Standard (Posts/Pages/Media) tab.
+    Activity, Taxonomies, Manage (Commerce inserted after Content only when
+    WooCommerce is present). There is no separate 'Custom Types' group tab
+    anymore -- custom post types are merged into Content as extra sub-tabs.
+    Setup is the default tab -- no group_tab passed at all still renders it,
+    with General/Environment/etc. inside, not the old Standard
+    (Posts/Pages/Media) tab.
     """
     ctx = await _base_panel_ctx()
     ctx.http.mock_get("https://blog.com/wp-json/imperal/v1/security/php-info",
@@ -829,6 +830,47 @@ async def test_activity_users_tab_has_create_and_delete_actions():
 
 
 # ── Standard tab rework: Posts/Pages lifecycle actions ─────────────────────────
+
+async def test_content_tab_merges_custom_post_types_and_shows_counts():
+    """Custom Types used to be its own top-level group tab (group_tab='cpt').
+    It must now be merged into Content as extra sub-tabs alongside
+    Posts/Pages/Media -- no standalone 'Custom Types' group button at all --
+    and every sub-tab label must show its live item count, e.g. 'Posts (2)'
+    instead of a bare 'Posts'.
+    """
+    ctx = MockContext()
+    await storage.save_site_record(ctx, {"id": "blog-com", "name": "Blog",
+                                         "url": "https://blog.com", "username": "admin",
+                                         "status": "connected"})
+    await storage.set_credential(ctx, "blog-com", "pw")
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/types",
+                      {"post": {"name": "Posts"},
+                       "page": {"name": "Pages"},
+                       "project": {"name": "Projects", "rest_base": "projects"}}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/taxonomies", {}, 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/posts",
+                      [{"id": 1, "title": {"rendered": "A"}, "status": "publish", "date": "2026-01-01"},
+                       {"id": 2, "title": {"rendered": "B"}, "status": "publish", "date": "2026-01-02"}], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/pages", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/media", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/comments", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/users", [], 200)
+    ctx.http.mock_get("https://blog.com/wp-json/wc/v3/orders", {"code": "rest_no_route"}, 404)
+    ctx.http.mock_get("https://blog.com/wp-json/wp/v2/projects",
+                      [{"id": 10, "title": {"rendered": "Kitchen"}}], 200)
+
+    node = await panels.center(ctx, view="", site_id="blog-com", group_tab="content")
+    s = str(node)
+    # No separate "Custom Types" group tab anymore.
+    assert "'label': 'Custom Types'" not in s
+    # Counts baked into every Content sub-tab label.
+    assert "'label': 'Posts (2)'" in s
+    assert "'label': 'Pages (0)'" in s
+    assert "'label': 'Media (0)'" in s
+    assert "'label': 'Projects (1)'" in s
+    # The custom post type is reachable as a std_tab value under Content.
+    assert "cpt:project" in s
+
 
 async def test_posts_tab_has_publish_duplicate_delete_actions():
     ctx = MockContext()
