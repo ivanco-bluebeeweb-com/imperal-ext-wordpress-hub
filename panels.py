@@ -5,6 +5,7 @@ from imperal_sdk import ui
 from app import ext
 from wp_client import wp_get, wp_post, wp_title
 from handlers_builders import BRIDGE_PATH, BRIDGE_STATUS_PATH, _content_rows
+from handlers_security import BRIDGE_PHP_INFO_PATH
 import storage
 
 _BUILTIN_TYPES = {
@@ -981,6 +982,7 @@ async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, m
         _manage_btn("Redirects", "redirects"),
         _manage_btn("SEO", "seo"),
         _manage_btn("Builders", "builders"),
+        _manage_btn("Server", "server"),
         _manage_btn("Settings", "settings"),
         _manage_btn("Plugins", "plugins"),
     ]
@@ -991,6 +993,8 @@ async def _render_manage_tab(ctx, site_id, base_url, username, pw, manage_tab, m
         body = await _render_rankmath_block(ctx, site_id, base_url, username, pw)
     elif manage_tab == "builders":
         body = await _render_builders_block(ctx, site_id, base_url, username, pw, builder_sel, call)
+    elif manage_tab == "server":
+        body = await _render_server_block(ctx, site_id, base_url, username, pw)
     elif manage_tab == "settings":
         body = await _render_settings_block(ctx, site_id, base_url, username, pw)
     elif manage_tab == "plugins":
@@ -1563,6 +1567,82 @@ async def _render_plugins_block(ctx, site_id, base_url, username, pw):
             ],
         ))
     return ui.List(items=rows_ui)
+
+
+async def _render_server_block(ctx, site_id, base_url, username, pw):
+    """Server/PHP environment: reads get_php_info's live Bridge data (PHP version,
+    extensions as tags, ini limits, opcache, database engine/version) and lays it
+    out as Environment / PHP limits / Extensions / Database cards — same shape
+    as the WHM-style server-info screen this mirrors, point-in-time, no SSH.
+    """
+    try:
+        r = await wp_get(ctx, base_url, BRIDGE_PHP_INFO_PATH, username=username, app_password=pw)
+    except Exception:
+        r = None
+    if r is None:
+        return ui.Alert(message="Could not reach the site — try again.", type="error")
+    if r.status_code == 404:
+        return ui.Alert(
+            message="The Imperal Bridge plugin (2.6.0+) is not installed on this site, or is on "
+                    "an older version that predates this. Update/install Imperal Bridge on the site.",
+            type="info")
+    if r.status_code in (401, 403):
+        return ui.Alert(message="The connected user cannot read server info.", type="error")
+    if r.status_code != 200 or not isinstance(r.body, dict):
+        return ui.Alert(message="Could not load server info — check the connection.", type="error")
+    body = r.body
+
+    refresh_btn = ui.Button("Refresh", icon="RefreshCw", variant="ghost", size="sm",
+                            on_click=ui.Call("get_php_info", site_id=site_id))
+
+    environment_card = ui.Card(title="Environment", content=ui.Stats(columns=3, children=[
+        ui.Stat(label="WordPress", value=str(body.get("wp_version", "")) or "—"),
+        ui.Stat(label="PHP", value=str(body.get("php_version", "")) or "—"),
+        ui.Stat(label="Server", value=str(body.get("server_software", "")) or "—"),
+    ]))
+
+    limits_card = ui.Card(title="PHP limits", content=ui.Stats(columns=5, children=[
+        ui.Stat(label="Memory limit", value=str(body.get("memory_limit", "")) or "—"),
+        ui.Stat(label="Max execution", value=str(body.get("max_execution_time", "")) or "—"),
+        ui.Stat(label="Upload max", value=str(body.get("upload_max_filesize", "")) or "—"),
+        ui.Stat(label="Post max", value=str(body.get("post_max_size", "")) or "—"),
+        ui.Stat(label="Max input vars", value=str(body.get("max_input_vars", "")) or "—"),
+    ]))
+
+    opcache_enabled = bool(body.get("opcache_enabled"))
+    opcache_card = ui.Card(title="Opcache", content=ui.Stack(direction="h", gap=3, align="center", children=[
+        ui.Badge(label="Enabled" if opcache_enabled else "Disabled",
+                color="green" if opcache_enabled else "yellow"),
+        ui.Text(f"Hit rate: {body.get('opcache_hit_rate')}", variant="caption")
+              if opcache_enabled and body.get("opcache_hit_rate") else ui.Empty(),
+    ]))
+
+    extensions = [str(e) for e in (body.get("extensions") or [])]
+    extensions_card = ui.Card(
+        title=f"Extensions ({len(extensions)})",
+        content=ui.Stack(direction="h", gap=1, wrap=True, children=[
+            ui.Badge(label=ext, color="gray") for ext in sorted(extensions)
+        ]) if extensions else ui.Empty(message="No extensions reported."),
+    )
+
+    db_version = str(body.get("db_version", ""))
+    db_server_info = str(body.get("db_server_info", ""))
+    db_size = body.get("db_size_mb")
+    database_card = ui.Card(title="Database", content=ui.Stats(columns=3, children=[
+        ui.Stat(label="Version", value=db_version or "—"),
+        ui.Stat(label="Server", value=db_server_info or "—"),
+        ui.Stat(label="Size",
+                value=(f"{db_size} MB" if db_size not in (None, "") else "—")),
+    ]))
+
+    return ui.Stack(gap=3, children=[
+        ui.Stack(direction="h", justify="end", children=[refresh_btn]),
+        environment_card,
+        limits_card,
+        opcache_card,
+        extensions_card,
+        database_card,
+    ])
 
 
 # ── Site detail ───────────────────────────────────────────────────────────────

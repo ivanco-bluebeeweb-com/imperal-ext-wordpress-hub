@@ -2616,6 +2616,14 @@ class PhpInfo(sdl.Entity):
     max_execution_time: str = ""
     upload_max_filesize: str = ""
     post_max_size: str = ""
+    max_input_vars: str = ""
+    server_software: str = ""
+    wp_version: str = ""
+    opcache_enabled: bool = False
+    opcache_hit_rate: str = ""
+    db_version: str = ""
+    db_server_info: str = ""
+    db_size_mb: str = ""
     source: str = ""  # "bridge" or "ssh"
 
 

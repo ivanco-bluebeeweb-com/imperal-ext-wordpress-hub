@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.21.0
+ * Version:           2.22.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.21.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.22.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -4005,10 +4005,33 @@ add_action( 'rest_api_init', 'imperal_meta_bridge_register_routes' );
 define( 'IMPERAL_SECURITY_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
- * GET /imperal/v1/security/php-info — PHP version, loaded extensions, and
- * the handful of ini limits that gate media uploads / long-running requests.
+ * GET /imperal/v1/security/php-info — PHP version, loaded extensions, the
+ * handful of ini limits that gate media uploads / long-running requests,
+ * plus environment facts (server software, opcache status, database
+ * engine/version) — all plain PHP/WP built-ins ($_SERVER, opcache_get_status(),
+ * $wpdb->db_version(), $wpdb->db_server_info()), nothing invented.
  */
 function imperal_security_bridge_php_info() {
+	global $wpdb;
+
+	$opcache_enabled = function_exists( 'opcache_get_status' );
+	$opcache_status  = $opcache_enabled ? @opcache_get_status( false ) : false; // phpcs:ignore
+	$opcache_hit_rate = '';
+	if ( is_array( $opcache_status ) && isset( $opcache_status['opcache_statistics']['opcache_hit_rate'] ) ) {
+		$opcache_hit_rate = round( (float) $opcache_status['opcache_statistics']['opcache_hit_rate'], 1 ) . '%';
+	}
+
+	$db_size_mb = null;
+	$row        = $wpdb->get_row(
+		$wpdb->prepare(
+			"SELECT SUM(data_length + index_length) AS bytes FROM information_schema.tables WHERE table_schema = %s",
+			DB_NAME
+		)
+	);
+	if ( $row && null !== $row->bytes ) {
+		$db_size_mb = round( ( (float) $row->bytes ) / 1048576, 2 );
+	}
+
 	return rest_ensure_response(
 		array(
 			'php_version'         => PHP_VERSION,
@@ -4017,6 +4040,14 @@ function imperal_security_bridge_php_info() {
 			'max_execution_time'  => (string) ini_get( 'max_execution_time' ),
 			'upload_max_filesize' => (string) ini_get( 'upload_max_filesize' ),
 			'post_max_size'       => (string) ini_get( 'post_max_size' ),
+			'max_input_vars'      => (string) ini_get( 'max_input_vars' ),
+			'server_software'     => isset( $_SERVER['SERVER_SOFTWARE'] ) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) ) : '',
+			'wp_version'          => get_bloginfo( 'version' ),
+			'opcache_enabled'     => (bool) ( $opcache_enabled && is_array( $opcache_status ) && ! empty( $opcache_status['opcache_enabled'] ) ),
+			'opcache_hit_rate'    => $opcache_hit_rate,
+			'db_version'          => method_exists( $wpdb, 'db_version' ) ? (string) $wpdb->db_version() : '',
+			'db_server_info'      => method_exists( $wpdb, 'db_server_info' ) ? (string) $wpdb->db_server_info() : '',
+			'db_size_mb'          => $db_size_mb,
 		)
 	);
 }

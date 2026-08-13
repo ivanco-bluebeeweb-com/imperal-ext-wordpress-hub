@@ -94,6 +94,7 @@ async def get_php_info(ctx, params: SiteIdParams) -> ActionResult:
     if not 200 <= r.status_code < 300:
         return _failure(r.status_code, r.body)
     body = r.body if isinstance(r.body, dict) else {}
+    db_size = body.get("db_size_mb")
     return ActionResult.success(
         PhpInfo(
             id=params.site_id, title=f"PHP info {params.site_id}", kind="wp_php_info",
@@ -103,6 +104,14 @@ async def get_php_info(ctx, params: SiteIdParams) -> ActionResult:
             max_execution_time=str(body.get("max_execution_time", "")),
             upload_max_filesize=str(body.get("upload_max_filesize", "")),
             post_max_size=str(body.get("post_max_size", "")),
+            max_input_vars=str(body.get("max_input_vars", "")),
+            server_software=str(body.get("server_software", "")),
+            wp_version=str(body.get("wp_version", "")),
+            opcache_enabled=bool(body.get("opcache_enabled")),
+            opcache_hit_rate=str(body.get("opcache_hit_rate", "")),
+            db_version=str(body.get("db_version", "")),
+            db_server_info=str(body.get("db_server_info", "")),
+            db_size_mb=(str(db_size) if db_size not in (None, "") else ""),
             source="bridge",
         ),
         summary=f"PHP {body.get('php_version', '?')}, {len(body.get('extensions') or [])} extension(s) loaded")

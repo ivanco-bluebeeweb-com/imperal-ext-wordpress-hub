@@ -39,6 +39,40 @@ async def test_get_php_info_reads_bridge_data():
     assert result.data.source == "bridge"
 
 
+async def test_get_php_info_reads_environment_fields():
+    """Server software, opcache, database engine/version, max_input_vars — the
+    fields this adds on top of the original PHP-only payload, for the
+    WHM-style Server tab in the panel."""
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/wp-json/imperal/v1/security/php-info", {
+        "php_version": "8.2.10",
+        "extensions": ["curl", "mbstring"],
+        "memory_limit": "256M",
+        "max_execution_time": "300",
+        "upload_max_filesize": "64M",
+        "post_max_size": "64M",
+        "max_input_vars": "3000",
+        "server_software": "nginx/1.24.0",
+        "wp_version": "6.7",
+        "opcache_enabled": True,
+        "opcache_hit_rate": "98.4%",
+        "db_version": "8.0.35",
+        "db_server_info": "8.0.35-0ubuntu0.22.04.1",
+        "db_size_mb": 42.7,
+    })
+    result = await hsec.get_php_info(ctx, SiteIdParams(site_id="blog-test"))
+    assert result.status == "success"
+    d = result.data
+    assert d.max_input_vars == "3000"
+    assert d.server_software == "nginx/1.24.0"
+    assert d.wp_version == "6.7"
+    assert d.opcache_enabled is True
+    assert d.opcache_hit_rate == "98.4%"
+    assert d.db_version == "8.0.35"
+    assert d.db_server_info == "8.0.35-0ubuntu0.22.04.1"
+    assert d.db_size_mb == "42.7"
+
+
 async def test_get_php_info_bridge_missing_is_clear_error():
     ctx = await _ctx()
     ctx.http.mock_get(f"{BASE}/wp-json/imperal/v1/security/php-info", {"code": "rest_no_route"}, status=404)
