@@ -36,10 +36,32 @@ def basic_auth_header(username: str, app_password: str) -> dict:
 
 
 def normalize_base_url(url: str) -> str:
-    parsed = urlparse(url.strip())
-    if parsed.scheme != "https":
-        raise ValueError("Site URL must use https://")
-    return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    """Accept whatever a human actually types in the Connect Site dialog --
+    a bare domain ("example.com"), an http:// URL, or a proper https:// one
+    -- and always resolve to a clean https:// base URL.
+
+    A bare domain has no scheme, so urlparse puts the whole string in
+    .path instead of .netloc (e.g. urlparse("example.com").netloc == "").
+    That case is detected and the domain is re-parsed with "https://"
+    prepended. An explicit "http://" is upgraded rather than rejected --
+    WordPress's own REST API requires https for Application Passwords
+    anyway, so upgrading silently is strictly more permissive than the
+    old hard rejection, never less safe.
+    """
+    raw = url.strip()
+    if not raw:
+        raise ValueError("Site URL is required")
+    parsed = urlparse(raw)
+    if not parsed.netloc:
+        # No scheme at all ("example.com", "example.com/wp-admin") --
+        # urlparse treated the whole thing as a path. Re-parse with a
+        # scheme so netloc/path split correctly.
+        parsed = urlparse(f"https://{raw}")
+    elif parsed.scheme not in ("http", "https"):
+        raise ValueError("Site URL must be a web address (http:// or https://)")
+    if not parsed.netloc:
+        raise ValueError("Site URL is not a valid address")
+    return f"https://{parsed.netloc}".rstrip("/")
 
 
 def site_id_from_url(url: str) -> str:

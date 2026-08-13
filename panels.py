@@ -204,7 +204,7 @@ def _render_connect_form():
             _field("Site URL", "The site's full address, e.g. https://example.com",
                    ui.Input(param_name="url", placeholder="https://example.com")),
             _field("Username", "The WordPress username that created the Application Password",
-                   ui.Input(param_name="username", placeholder="admin")),
+                   ui.Input(param_name="username", value="admin", placeholder="admin")),
             _field("Application Password",
                    "Create this under Users → Profile → Application Passwords in WordPress",
                    ui.Password(param_name="app_password")),

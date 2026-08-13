@@ -32,8 +32,8 @@ async def _do_connect_site(ctx, *, url: str, username: str, app_password: str) -
     """
     try:
         base_url = normalize_base_url(url)
-    except ValueError:
-        return {"ok": False, "error": "Site URL must start with https://", "retryable": False}
+    except ValueError as e:
+        return {"ok": False, "error": str(e) or "Site URL is not valid.", "retryable": False}
 
     site_id = site_id_from_url(base_url)
     try:

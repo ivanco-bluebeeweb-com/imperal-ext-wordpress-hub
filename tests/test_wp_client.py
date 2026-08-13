@@ -12,8 +12,27 @@ def test_basic_auth_header():
 
 def test_normalize_base_url_forces_https_and_strips_slash():
     assert wc.normalize_base_url("https://Example.com/") == "https://Example.com"
+
+
+def test_normalize_base_url_upgrades_http_to_https():
+    """A user pasting an http:// link should not be hard-rejected -- upgrade it,
+    since WordPress's own Application Password auth requires https anyway."""
+    assert wc.normalize_base_url("http://example.com") == "https://example.com"
+
+
+def test_normalize_base_url_accepts_bare_domain():
+    """The Connect Site dialog must accept a bare domain typed without any
+    scheme at all -- the most natural thing a human types first."""
+    assert wc.normalize_base_url("example.com") == "https://example.com"
+    assert wc.normalize_base_url("example.com/wp-admin") == "https://example.com"
+    assert wc.normalize_base_url("www.example.com") == "https://www.example.com"
+
+
+def test_normalize_base_url_rejects_empty_or_garbage():
     with pytest.raises(ValueError):
-        wc.normalize_base_url("http://example.com")
+        wc.normalize_base_url("")
+    with pytest.raises(ValueError):
+        wc.normalize_base_url("ftp://example.com")
 
 
 def test_site_id_from_url():

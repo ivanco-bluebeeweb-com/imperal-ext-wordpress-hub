@@ -22,6 +22,19 @@ async def test_sidebar_empty_state():
     assert "No sites" in s
 
 
+def test_connect_form_prefills_username_with_admin_default():
+    """The Connect Site dialog's username field must arrive pre-filled with
+    the 'admin' default value (not just a greyed-out placeholder a user has
+    to type over) -- a placeholder alone submits an empty string if the user
+    never touches the field."""
+    node = panels._render_connect_form()
+    s = str(node.to_dict())
+    assert "'param_name': 'username'" in s or '"param_name": "username"' in s
+    username_field = node.props["children"][0].props["children"][1]
+    input_node = username_field.props["children"][1]
+    assert input_node.props.get("value") == "admin"
+
+
 async def test_sidebar_hides_sync_button_when_sites_registry_not_installed():
     """No handler registered for sites-registry.ping -- MockExtensions.call
     raises, _sites_registry_installed must treat that as \"not installed\"
