@@ -131,6 +131,30 @@ async def test_create_post_creates_category_when_not_found():
     assert "created it" in result.summary
 
 
+async def test_create_post_recovers_category_id_when_search_index_lags_a_just_created_term():
+    """Task #1903: WordPress's own /wp/v2/categories search index can lag a
+    just-created term. find_category_id's search finds nothing (as if the
+    category doesn't exist yet), so create_post tries to auto-create it --
+    but the category DOES already exist, so WordPress rejects the create
+    with a 400 term_exists error. That error body carries the REAL term_id
+    at data.term_id; create_post must use it instead of silently leaving
+    the post uncategorised (category_resolved=False) with no visible error.
+    Reproduced live on g4s.md."""
+    ctx = await _ctx()
+    ctx.http.mock_get(CATEGORIES, [], 200)  # search index hasn't caught up yet
+    ctx.http.mock_post(CATEGORIES, {
+        "code": "term_exists", "message": "A term with the name provided already exists.",
+        "data": {"term_id": 70},
+    }, 400)
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello", slug="hello", meta_title="Hello", category="Blog",
+        excerpt="A short standalone summary.", featured_media_id=99,
+    ))
+    assert result.status == "success"
+    assert result.data.category_resolved is True
+
+
 async def test_create_post_forwards_lang_when_auto_creating_category():
     # Regression test: on a Polylang site, a category auto-created while
     # writing a post in language X must be created IN language X too --

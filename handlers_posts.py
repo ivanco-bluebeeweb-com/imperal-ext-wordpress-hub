@@ -238,6 +238,18 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
                 if create_resp.status_code < 400 and isinstance(create_resp.body, dict):
                     category_id = create_resp.body.get("id")
                     category_created = category_id is not None
+                elif create_resp.status_code == 400 and isinstance(create_resp.body, dict) \
+                        and create_resp.body.get("code") == "term_exists":
+                    # WordPress's own /wp/v2/categories search index can lag a
+                    # just-created term (task #1903): find_category_id's search
+                    # above finds nothing, so we try to create it -- but the
+                    # category DOES already exist, so WordPress rejects the
+                    # create with term_exists and hands back the real term_id
+                    # right in the error body. Use it instead of silently
+                    # leaving the post uncategorised.
+                    existing_id = (create_resp.body.get("data") or {}).get("term_id")
+                    if existing_id is not None:
+                        category_id = existing_id
             except Exception as e:
                 await ctx.log(f"create_post: category auto-create failed: {e}", level="error")
         category_resolved = category_id is not None
