@@ -177,12 +177,6 @@ async def center(ctx, view="", site_id="",
                  **kwargs):
     if view == "connect":
         return _render_connect_form()
-    if view == "add_ssh" and site_id:
-        if await storage.has_ssh(ctx, site_id):
-            return await _render_detail(ctx, site_id, group_tab, std_tab, act_tab,
-                                        commerce_tab, cpt_tab, tax_tab, manage_tab, menu_sel, builder_sel)
-        await storage.set_pending_ssh_site(ctx, site_id)
-        return _render_add_ssh_form(site_id)
     if site_id:
         return await _render_detail(ctx, site_id, group_tab, std_tab, act_tab,
                                     commerce_tab, cpt_tab, tax_tab, manage_tab, menu_sel, builder_sel)
@@ -215,6 +209,9 @@ def _render_connect_form():
 
 
 def _render_add_ssh_form(site_id):
+    """The connect-SSH form. Rendered inside the wp_ssh_dialog popup — no
+    inline Cancel button needed here, the Dialog wrapping it already has
+    its own Close button."""
     return ui.Stack(children=[
         ui.Form(action="add_ssh", submit_label="Connect via SSH", children=[
             _field("SSH Host", "Hostname or IP address, e.g. server1.webhostmost.com",
@@ -232,9 +229,46 @@ def _render_add_ssh_form(site_id):
             _field("SSH Password", "Leave empty if using a private key above.",
                    ui.Password(param_name="ssh_password")),
         ]),
-        ui.Button("Cancel", variant="ghost",
-                  on_click=ui.Call("__panel__center", view="", site_id=site_id)),
     ], gap=4)
+
+
+@ext.panel("wp_ssh_dialog", slot="center", title="Setup SSH", center_overlay=True)
+async def wp_ssh_dialog(ctx, site_id="", **kwargs):
+    """Popup shown over the site-detail content — opened from the SSH card's
+    'Setup SSH' / 'Manage' button (ui.Call("__panel__wp_ssh_dialog", ...)).
+    A separate center_overlay panel, not a screen swap inside "center" —
+    that's how the platform renders a true modal on top of whatever the
+    main center panel is already showing (same pattern as youtube-studio-hub's
+    yt_connect_dialog). ``add_ssh``'s Form has no site_id field, so the
+    pending-site marker is what tells the handler which site to attach
+    the new credentials to.
+    """
+    if site_id:
+        cred = await storage.get_ssh_cred(ctx, site_id)
+        if cred:
+            return ui.Dialog(
+                title="Manage SSH",
+                content=ui.Stack(gap=3, children=[
+                    ui.Stats(columns=2, children=[
+                        ui.Stat(label="Host", value=cred.get("host", "—")),
+                        ui.Stat(label="Port", value=str(cred.get("port", 22))),
+                        ui.Stat(label="User", value=cred.get("user", "—")),
+                        ui.Stat(label="WordPress Path", value=cred.get("wp_path", "—")),
+                    ]),
+                    ui.Divider(),
+                    ui.Text("Disabling removes the stored SSH credentials for this site. "
+                            "You can set them up again any time.", variant="caption"),
+                    ui.Button("Disable SSH", variant="secondary", size="sm",
+                              on_click=ui.Call("remove_ssh", site_id=site_id)),
+                ]),
+                confirm_label="", cancel_label="Close",
+            )
+        await storage.set_pending_ssh_site(ctx, site_id)
+    return ui.Dialog(
+        title="Setup SSH",
+        content=_render_add_ssh_form(site_id),
+        confirm_label="", cancel_label="Close",
+    )
 
 
 # ── Content tables ────────────────────────────────────────────────────────────
@@ -1591,6 +1625,27 @@ async def _fetch_environment_body(ctx, base_url, username, pw):
     return r.body, None
 
 
+def _ssh_card(site_id, has_ssh):
+    """SSH access, rendered as its own small block next to the Stat grid --
+    a plain ui.Stat has no slot for a button, so this isn't a Stat card.
+    Not configured: a single 'Setup SSH' button that opens the connect
+    popup. Configured: 'Manage' and 'Disable' stacked vertically as plain
+    text-style buttons (ghost variant -- no border, just a link look).
+    """
+    label = ui.Text("SSH", variant="caption")
+    if has_ssh:
+        actions = ui.Stack(direction="v", gap=1, children=[
+            ui.Button("Manage", variant="ghost", size="sm",
+                      on_click=ui.Call("__panel__wp_ssh_dialog", site_id=site_id)),
+            ui.Button("Disable", variant="ghost", size="sm",
+                      on_click=ui.Call("remove_ssh", site_id=site_id)),
+        ])
+    else:
+        actions = ui.Button("Setup SSH", variant="ghost", size="sm",
+                            on_click=ui.Call("__panel__wp_ssh_dialog", site_id=site_id))
+    return ui.Stack(gap=1, children=[label, actions])
+
+
 def _extensions_card(body):
     """Extensions block: bare flex-wrap of tag badges, no nested title/padding."""
     extensions = [str(e) for e in (body.get("extensions") or [])]
@@ -1667,14 +1722,14 @@ async def _render_detail(ctx, site_id,
                     color="green" if reachable else "red"),
             ui.Stat(label="SSL", value="HTTPS" if ssl_valid else "HTTP",
                     color="green" if ssl_valid else "red"),
-            ui.Stat(label="SSH", value="Configured" if has_ssh else "Not configured",
-                    color="green" if has_ssh else "gray"),
         ]
+        ssh_card = _ssh_card(site_id, has_ssh)
 
         env_body, env_error = await _fetch_environment_body(ctx, base_url, username, pw)
         if env_error:
             setup_section = [
-                ui.Stats(columns=4, children=top_stats),
+                ui.Stats(columns=3, children=top_stats),
+                ssh_card,
                 env_error,
             ]
         else:
@@ -1692,6 +1747,7 @@ async def _render_detail(ctx, site_id,
             ]
             setup_section = [
                 ui.Stats(columns=4, children=top_stats),
+                ssh_card,
                 ui.Divider(label="Extensions"),
                 _extensions_card(env_body),
                 ui.Divider(label="Database"),

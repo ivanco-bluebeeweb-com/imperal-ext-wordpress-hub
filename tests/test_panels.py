@@ -332,7 +332,10 @@ async def test_center_detail_shows_divider_separated_sections_without_ssh_button
     # Their individual Stat cards are still present, just ungrouped.
     assert "'label': 'Authentication'" in s
     assert "'label': 'SSL'" in s
-    assert "'label': 'SSH'" in s
+    # SSH is no longer a plain Stat -- it's its own block with a
+    # 'Setup SSH' button (opens the wp_ssh_dialog popup).
+    assert "'content': 'SSH'" in s
+    assert "'label': 'Setup SSH'" in s
     assert "'label': 'PHP'" in s
     assert "'label': 'Server'" in s
     assert "'label': 'Memory Limit'" in s
