@@ -59,6 +59,54 @@ async def test_get_post_content_missing_post_errors():
     assert r.error_code == "POST_NOT_FOUND"
 
 
+async def test_replace_post_content_text_fixes_unique_match():
+    ctx = await _connected_ctx()
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/posts/42", {
+        "id": 42, "content": {"raw": "<p><a href=\"https://x.com/ru/contact-ru/\">Contact</a></p>"},
+    }, 200)
+    seen = []
+    real_post = ctx.http.post
+
+    async def spy(url, **kwargs):
+        seen.append((url, kwargs))
+        return await real_post(url, **kwargs)
+
+    ctx.http.post = spy
+    ctx.http.mock_post("https://x.com/wp-json/wp/v2/posts/42", {"id": 42, "title": {"rendered": "Hi"}}, 200)
+    from models import ReplacePostContentTextParams
+    r = await hr.replace_post_content_text(ctx, ReplacePostContentTextParams(
+        site_id="x-com", post_id=42, find="https://x.com/ru/contact-ru/",
+        replace="https://x.com/contacte/"))
+    assert r.status == "success"
+    assert r.data.occurrences_replaced == 1
+    _, kwargs = seen[0]
+    assert kwargs["json"]["content"] == "<p><a href=\"https://x.com/contacte/\">Contact</a></p>"
+
+
+async def test_replace_post_content_text_rejects_no_match():
+    ctx = await _connected_ctx()
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/posts/42", {
+        "id": 42, "content": {"raw": "<p>Nothing here.</p>"},
+    }, 200)
+    from models import ReplacePostContentTextParams
+    r = await hr.replace_post_content_text(ctx, ReplacePostContentTextParams(
+        site_id="x-com", post_id=42, find="missing-text", replace="x"))
+    assert r.status == "error"
+    assert r.error_code == "TEXT_NOT_FOUND"
+
+
+async def test_replace_post_content_text_rejects_ambiguous_match():
+    ctx = await _connected_ctx()
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/posts/42", {
+        "id": 42, "content": {"raw": "<p>dup dup</p>"},
+    }, 200)
+    from models import ReplacePostContentTextParams
+    r = await hr.replace_post_content_text(ctx, ReplacePostContentTextParams(
+        site_id="x-com", post_id=42, find="dup", replace="x"))
+    assert r.status == "error"
+    assert r.error_code == "TEXT_NOT_UNIQUE"
+
+
 async def test_list_pages_maps_payload():
     ctx = await _connected_ctx()
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/pages",

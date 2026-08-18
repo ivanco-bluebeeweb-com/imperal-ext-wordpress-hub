@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.19",
   "app_id": "wordpress-hub",
-  "version": "1.44.0",
+  "version": "1.45.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -1677,6 +1677,151 @@
         "x-sdl": "entity"
       },
       "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "replace_post_content_text",
+      "description": "Fix ONE exact substring inside a post/page's raw content -- e.g. a CTA link that wrongly points to the wrong-language contact page -- without touching anything else in the article (no rebuild of blocks, so existing images/structure are never at risk). 'find' must match EXACTLY ONCE in the raw content; the call is rejected if it matches zero or multiple times, so you never guess which occurrence you meant.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.post_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "description": "Numeric post/page id from list_posts/list_pages",
+            "exclusiveMinimum": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "post",
+            "description": "'post', 'page', or a custom post type's slug",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "find": {
+            "description": "Exact substring to find in the post's raw content (e.g. a wrong-language href) — must match EXACTLY ONCE",
+            "minLength": 1,
+            "title": "Find",
+            "type": "string"
+          },
+          "replace": {
+            "description": "Replacement text",
+            "title": "Replace",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "post_id",
+          "find",
+          "replace"
+        ],
+        "title": "ReplacePostContentTextParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of a targeted exact-substring fix inside one post/page's raw content.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "post_id": {
+            "default": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "occurrences_replaced": {
+            "default": 0,
+            "title": "Occurrences Replaced",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ReplaceTextResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.replace_post_content_text",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -46226,7 +46371,8 @@
       "apply_bulk_post_comment_status": 60,
       "preview_bulk_term_seo_meta": 40,
       "apply_bulk_term_seo_meta": 60,
-      "get_post_content": 8
+      "get_post_content": 8,
+      "replace_post_content_text": 16
     },
     "free_tools": [
       "add_ssh",

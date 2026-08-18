@@ -809,6 +809,20 @@ class PostContent(sdl.Entity):
     lang: str = ""
 
 
+class ReplacePostContentTextParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(gt=0, description="Numeric post/page id from list_posts/list_pages")
+    post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug")
+    find: str = Field(min_length=1, description="Exact substring to find in the post's raw content (e.g. a wrong-language href) — must match EXACTLY ONCE")
+    replace: str = Field(description="Replacement text")
+
+
+class ReplaceTextResult(sdl.Entity):
+    """Outcome of a targeted exact-substring fix inside one post/page's raw content."""
+    post_id: int = 0
+    occurrences_replaced: int = 0
+
+
 class Page(sdl.Entity):
     link: str = ""
     date: str | None = None

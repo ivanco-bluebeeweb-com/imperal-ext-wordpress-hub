@@ -14,7 +14,8 @@ from models import (_NoParams, Site, ListContentParams, ListMediaParams,
                     ServerInfo, UpdateMediaAltParams, MediaAltResult,
                     MediaAltItem, BulkMediaAltParams, ApplyBulkMediaAltParams,
                     BulkMediaAltResult, SetSingleMediaAltParams,
-                    GetPostContentParams, PostContent)
+                    GetPostContentParams, PostContent,
+                    ReplacePostContentTextParams, ReplaceTextResult)
 import wp_cli
 from wp_client import wp_get, wp_post, wp_request, wp_error_message, wp_error_code, wp_title, now_iso
 import storage
@@ -249,6 +250,76 @@ async def get_post_content(ctx, params: GetPostContentParams) -> ActionResult:
         lang=str(body.get("lang", "") or ""),
     )
     return ActionResult.success(entity, summary=f"Read content for '{entity.title}' ({len(entity.content_html)} chars).")
+
+
+@chat.function(
+    "replace_post_content_text",
+    description=(
+        "Fix ONE exact substring inside a post/page's raw content -- e.g. a CTA link that "
+        "wrongly points to the wrong-language contact page -- without touching anything else "
+        "in the article (no rebuild of blocks, so existing images/structure are never at risk). "
+        "'find' must match EXACTLY ONCE in the raw content; the call is rejected if it matches "
+        "zero or multiple times, so you never guess which occurrence you meant."
+    ),
+    action_type="write",
+    data_model=ReplaceTextResult,
+    effects=["wp.post_update"],
+    event="wordpress-hub.replace_post_content_text",
+)
+async def replace_post_content_text(ctx, params: ReplacePostContentTextParams) -> ActionResult:
+    """Read raw content, replace an exact single-occurrence substring, write it back."""
+    record = await storage.get_site_record(ctx, params.site_id)
+    if not record:
+        return ActionResult.error(
+            "No connected site with that id — run list_sites to see the connected sites.",
+            retryable=False, code="SITE_NOT_CONNECTED")
+    pw = await storage.get_credential(ctx, params.site_id)
+    if not pw:
+        return ActionResult.error(
+            "Stored credential is missing — reconnect the site.",
+            retryable=False, code="SITE_CREDENTIAL_MISSING")
+    base_url, username = record["url"], record["username"]
+    post_type = (params.post_type or "post").strip() or "post"
+    rest_base = {"post": "posts", "page": "pages"}.get(post_type, post_type)
+    try:
+        r = await wp_get(ctx, base_url, f"/wp-json/wp/v2/{rest_base}/{params.post_id}",
+                         username=username, app_password=pw, params={"context": "edit"})
+    except Exception as e:
+        await ctx.log(f"replace_post_content_text read failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")
+    if r.status_code == 404:
+        return ActionResult.error("That post/page does not exist.", retryable=False, code="POST_NOT_FOUND")
+    if r.status_code != 200 or not isinstance(r.body, dict):
+        return ActionResult.error(wp_error_message(r.status_code),
+                                  retryable=r.status_code >= 500, code=wp_error_code(r.status_code))
+    body = r.body
+    raw_content = (body.get("content") or {}).get("raw", "") or (body.get("content") or {}).get("rendered", "")
+    occurrences = raw_content.count(params.find)
+    if occurrences == 0:
+        return ActionResult.error(
+            "That exact text was not found in the post's current content — nothing changed.",
+            retryable=False, code="TEXT_NOT_FOUND")
+    if occurrences > 1:
+        return ActionResult.error(
+            f"That text appears {occurrences} times in the post's content — give more surrounding "
+            "context so it matches exactly once, to avoid changing the wrong occurrence.",
+            retryable=False, code="TEXT_NOT_UNIQUE")
+    new_content = raw_content.replace(params.find, params.replace, 1)
+    try:
+        wr = await wp_post(ctx, base_url, f"/wp-json/wp/v2/{rest_base}/{params.post_id}",
+                           username=username, app_password=pw, json={"content": new_content})
+    except Exception as e:
+        await ctx.log(f"replace_post_content_text write failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")
+    if wr.status_code != 200:
+        return ActionResult.error(wp_error_message(wr.status_code),
+                                  retryable=wr.status_code >= 500, code=wp_error_code(wr.status_code))
+    entity = ReplaceTextResult(
+        id=str(params.post_id), title=wp_title(wr.body if isinstance(wr.body, dict) else body),
+        kind=f"wp_{post_type}", post_id=params.post_id, occurrences_replaced=1,
+    )
+    return ActionResult.success(entity, summary=f"Replaced 1 occurrence in post #{params.post_id}.",
+                                refresh_panels=["center"])
 
 
 @chat.function("list_pages", description="List pages on a connected WordPress site.",

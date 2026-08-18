@@ -160,6 +160,7 @@
   "refresh_site": 16,
   "remove_ssh": 0,
   "reorder_menu_items": 16,
+  "replace_post_content_text": 16,
   "reply_to_comment": 16,
   "reply_to_product_review": 16,
   "resend_order_email": 16,
