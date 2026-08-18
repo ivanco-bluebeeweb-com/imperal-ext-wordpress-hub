@@ -517,7 +517,7 @@ async def get_option(ctx, params: GetOptionParams) -> ActionResult:
     value = body.get("value")
     return ActionResult.success(
         OptionValue(id=params.name, title=params.name, kind="wp_option", name=params.name,
-                    value=value if isinstance(value, str) else str(value), exists=bool(body.get("exists"))),
+                    value=value, exists=bool(body.get("exists"))),
         summary=f"Read option '{params.name}'.",
     )
 
@@ -557,7 +557,7 @@ async def update_option(ctx, params: UpdateOptionParams) -> ActionResult:
     value = body.get("value")
     return ActionResult.success(
         OptionValue(id=params.name, title=params.name, kind="wp_option", name=params.name,
-                    value=value if isinstance(value, str) else str(value), exists=True),
+                    value=value, exists=True),
         summary=f"Updated option '{params.name}'.",
     )
 

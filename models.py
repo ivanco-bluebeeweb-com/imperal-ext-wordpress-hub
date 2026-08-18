@@ -1,3 +1,4 @@
+from typing import Any
 from pydantic import BaseModel, Field
 from imperal_sdk import sdl
 
@@ -2408,7 +2409,7 @@ class GetOptionParams(BaseModel):
 class OptionValue(sdl.Entity):
     """One named row from wp_options — only names on the Bridge's hard allowlist are readable/writable."""
     name: str = ""
-    value: str = ""
+    value: Any = ""
     exists: bool = False
 
 
@@ -2416,7 +2417,9 @@ class UpdateOptionParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     name: str = Field(min_length=1, description="Option name to write — must be on the Bridge's "
                        "hard allowlist. Never siteurl/home/active_plugins/etc.")
-    value: str = Field(description="New value. Must not be a serialized PHP object — refused for safety.")
+    value: Any = Field(description="New value — a plain string, number, boolean, or a nested "
+                        "JSON object/array (sent as a REAL WordPress array, not a JSON-string blob). "
+                        "Must not be a serialized PHP object — refused for safety.")
 
 
 class AcfFieldsParams(BaseModel):
