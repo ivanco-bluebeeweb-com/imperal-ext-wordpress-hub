@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.24.1
+ * Version:           2.24.2
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.24.1' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.24.2' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -3882,8 +3882,14 @@ function imperal_meta_bridge_get_option( WP_REST_Request $request ) {
 	if ( ! in_array( $name, imperal_meta_bridge_option_allowlist(), true ) ) {
 		return new WP_Error( 'imperal_meta_option_not_allowed', __( 'This option name is not on the allowed list.', 'imperal-bridge' ), array( 'status' => 403 ) );
 	}
-	$value = get_option( $name );
-	return rest_ensure_response( array( 'name' => $name, 'value' => $value, 'exists' => false !== $value ) );
+	// get_option() returns false both when a row is genuinely absent AND when it was
+	// saved with an explicit falsy value -- a unique sentinel default disambiguates
+	// the two cases reliably instead of guessing from the value alone.
+	$sentinel = '__imperal_bridge_missing_' . md5( $name );
+	$raw      = get_option( $name, $sentinel );
+	$exists   = $raw !== $sentinel;
+	$value    = $exists ? $raw : false;
+	return rest_ensure_response( array( 'name' => $name, 'value' => $value, 'exists' => $exists ) );
 }
 
 function imperal_meta_bridge_update_option( WP_REST_Request $request ) {
