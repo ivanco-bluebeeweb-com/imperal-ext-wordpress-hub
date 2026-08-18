@@ -13,7 +13,8 @@ from models import (_NoParams, Site, ListContentParams, ListMediaParams,
                     PurgeCacheParams, CacheActionResult, InstallPluginParams, PluginInstallResult,
                     ServerInfo, UpdateMediaAltParams, MediaAltResult,
                     MediaAltItem, BulkMediaAltParams, ApplyBulkMediaAltParams,
-                    BulkMediaAltResult, SetSingleMediaAltParams)
+                    BulkMediaAltResult, SetSingleMediaAltParams,
+                    GetPostContentParams, PostContent)
 import wp_cli
 from wp_client import wp_get, wp_post, wp_request, wp_error_message, wp_error_code, wp_title, now_iso
 import storage
@@ -199,6 +200,55 @@ async def list_posts(ctx, params: ListContentParams) -> ActionResult:
     items = [Post(id=str(p["id"]), title=wp_title(p), kind="wp_post",
                   status=p.get("status", ""), link=p.get("link", ""), date=p.get("date")) for p in data]
     return ActionResult.success(sdl.EntityList[Post](items=items), summary=f"{len(items)} post(s)")
+
+
+@chat.function(
+    "get_post_content",
+    description=(
+        "Read one post/page's raw rendered content (HTML), excerpt, and Polylang language "
+        "(when exposed), straight from the site's native REST API -- no Bridge/SSH needed. "
+        "Use to audit an already-published article, e.g. checking it for stray scaffolding "
+        "headings ('Intro', 'CTA') or a wrong Polylang language before correcting it with "
+        "update_post."
+    ),
+    action_type="read",
+    data_model=PostContent,
+)
+async def get_post_content(ctx, params: GetPostContentParams) -> ActionResult:
+    """Fetch one item's content/excerpt/lang via the item's own native REST endpoint."""
+    record = await storage.get_site_record(ctx, params.site_id)
+    if not record:
+        return ActionResult.error(
+            "No connected site with that id — run list_sites to see the connected sites.",
+            retryable=False, code="SITE_NOT_CONNECTED")
+    pw = await storage.get_credential(ctx, params.site_id)
+    if not pw:
+        return ActionResult.error(
+            "Stored credential is missing — reconnect the site.",
+            retryable=False, code="SITE_CREDENTIAL_MISSING")
+    base_url, username = record["url"], record["username"]
+    post_type = (params.post_type or "post").strip() or "post"
+    rest_base = {"post": "posts", "page": "pages"}.get(post_type, post_type)
+    try:
+        r = await wp_get(ctx, base_url, f"/wp-json/wp/v2/{rest_base}/{params.post_id}",
+                         username=username, app_password=pw, params={"context": "edit"})
+    except Exception as e:
+        await ctx.log(f"get_post_content request failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")
+    if r.status_code == 404:
+        return ActionResult.error("That post/page does not exist.", retryable=False, code="POST_NOT_FOUND")
+    if r.status_code != 200 or not isinstance(r.body, dict):
+        return ActionResult.error(wp_error_message(r.status_code),
+                                  retryable=r.status_code >= 500, code=wp_error_code(r.status_code))
+    body = r.body
+    entity = PostContent(
+        id=str(body.get("id", params.post_id)), title=wp_title(body), kind=f"wp_{post_type}",
+        post_id=body.get("id", params.post_id), slug=body.get("slug", ""),
+        content_html=(body.get("content") or {}).get("rendered", "") or (body.get("content") or {}).get("raw", ""),
+        excerpt_html=(body.get("excerpt") or {}).get("rendered", ""),
+        lang=str(body.get("lang", "") or ""),
+    )
+    return ActionResult.success(entity, summary=f"Read content for '{entity.title}' ({len(entity.content_html)} chars).")
 
 
 @chat.function("list_pages", description="List pages on a connected WordPress site.",

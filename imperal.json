@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.19",
   "app_id": "wordpress-hub",
-  "version": "1.43.0",
+  "version": "1.44.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -1530,6 +1530,151 @@
         "title": "EntityList[Post]",
         "type": "object",
         "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "get_post_content",
+      "description": "Read one post/page's raw rendered content (HTML), excerpt, and Polylang language (when exposed), straight from the site's native REST API -- no Bridge/SSH needed. Use to audit an already-published article, e.g. checking it for stray scaffolding headings ('Intro', 'CTA') or a wrong Polylang language before correcting it with update_post.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "description": "Numeric post/page id from list_posts/list_pages",
+            "exclusiveMinimum": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "post",
+            "description": "'post', 'page', or a custom post type's slug",
+            "title": "Post Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "post_id"
+        ],
+        "title": "GetPostContentParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One post/page's raw rendered content, for auditing (e.g. checking for stray headings or the wrong Polylang language) without needing Bridge/SSH.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "post_id": {
+            "default": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "slug": {
+            "default": "",
+            "title": "Slug",
+            "type": "string"
+          },
+          "content_html": {
+            "default": "",
+            "title": "Content Html",
+            "type": "string"
+          },
+          "excerpt_html": {
+            "default": "",
+            "title": "Excerpt Html",
+            "type": "string"
+          },
+          "lang": {
+            "default": "",
+            "title": "Lang",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PostContent",
+        "type": "object",
+        "x-sdl": "entity"
       },
       "event": "",
       "background": false,
@@ -46080,7 +46225,8 @@
       "preview_bulk_post_comment_status": 40,
       "apply_bulk_post_comment_status": 60,
       "preview_bulk_term_seo_meta": 40,
-      "apply_bulk_term_seo_meta": 60
+      "apply_bulk_term_seo_meta": 60,
+      "get_post_content": 8
     },
     "free_tools": [
       "add_ssh",

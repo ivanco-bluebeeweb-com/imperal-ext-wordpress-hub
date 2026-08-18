@@ -35,6 +35,30 @@ async def test_list_posts_http_error_maps_message():
     assert r.status == "error"
 
 
+async def test_get_post_content_reads_content_excerpt_and_lang():
+    ctx = await _connected_ctx()
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/posts/42", {
+        "id": 42, "slug": "hello", "title": {"rendered": "Hello"},
+        "content": {"rendered": "<h2>Intro</h2><p>Body.</p>"},
+        "excerpt": {"rendered": "<p>Body.</p>"}, "lang": "ru",
+    }, 200)
+    from models import GetPostContentParams
+    r = await hr.get_post_content(ctx, GetPostContentParams(site_id="x-com", post_id=42))
+    assert r.status == "success"
+    assert r.data.lang == "ru"
+    assert "<h2>Intro</h2>" in r.data.content_html
+    assert r.data.slug == "hello"
+
+
+async def test_get_post_content_missing_post_errors():
+    ctx = await _connected_ctx()
+    ctx.http.mock_get("https://x.com/wp-json/wp/v2/posts/999", {}, 404)
+    from models import GetPostContentParams
+    r = await hr.get_post_content(ctx, GetPostContentParams(site_id="x-com", post_id=999))
+    assert r.status == "error"
+    assert r.error_code == "POST_NOT_FOUND"
+
+
 async def test_list_pages_maps_payload():
     ctx = await _connected_ctx()
     ctx.http.mock_get("https://x.com/wp-json/wp/v2/pages",

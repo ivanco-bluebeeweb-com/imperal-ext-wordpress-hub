@@ -794,6 +794,21 @@ class Post(sdl.Entity):
     date: str | None = None
 
 
+class GetPostContentParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(gt=0, description="Numeric post/page id from list_posts/list_pages")
+    post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug")
+
+
+class PostContent(sdl.Entity):
+    """One post/page's raw rendered content, for auditing (e.g. checking for stray headings or the wrong Polylang language) without needing Bridge/SSH."""
+    post_id: int = 0
+    slug: str = ""
+    content_html: str = ""
+    excerpt_html: str = ""
+    lang: str = ""
+
+
 class Page(sdl.Entity):
     link: str = ""
     date: str | None = None

@@ -79,6 +79,7 @@
   "get_order": 8,
   "get_permalink_structure": 8,
   "get_php_info": 8,
+  "get_post_content": 8,
   "get_post_meta": 8,
   "get_post_revisions": 8,
   "get_product": 8,
