@@ -263,18 +263,31 @@ def _ability_entity(item: dict) -> WpAbility:
     action_type="read", data_model=sdl.EntityList[WpAbility],
 )
 async def list_wp_abilities(ctx, params: SiteIdParams) -> ActionResult:
-    """GET /wp-json/wp-abilities/v1/abilities."""
+    """GET /wp-json/wp-abilities/v1/abilities -- loops all pages (route defaults to 50/page)."""
     auth, err = await _authed(ctx, params.site_id)
     if err:
         return err
     base_url, username, pw = auth
-    try:
-        r = await wp_get(ctx, base_url, WP_ABILITIES_BASE, username=username, app_password=pw)
-    except Exception as e:
-        await ctx.log(f"list_wp_abilities request failed: {e}", level="error")
-        return ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")
-    if not 200 <= r.status_code < 300:
-        return _failure(r.status_code, r.body)
-    data = r.body if isinstance(r.body, list) else []
-    items = [_ability_entity(item) for item in data if isinstance(item, dict)]
+    items: list[WpAbility] = []
+    page = 1
+    while True:
+        try:
+            r = await wp_get(
+                ctx, base_url, f"{WP_ABILITIES_BASE}?per_page=100&page={page}",
+                username=username, app_password=pw,
+            )
+        except Exception as e:
+            await ctx.log(f"list_wp_abilities request failed: {e}", level="error")
+            return ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")
+        if page == 1 and not 200 <= r.status_code < 300:
+            return _failure(r.status_code, r.body)
+        if not 200 <= r.status_code < 300:
+            break  # later page failed (e.g. out of range) -- stop, keep what we have
+        data = r.body if isinstance(r.body, list) else []
+        items.extend(_ability_entity(item) for item in data if isinstance(item, dict))
+        if len(data) < 100:
+            break  # short page -- this was the last one
+        page += 1
+        if page > 20:  # sanity cap: 2000 abilities is far beyond anything real
+            break
     return ActionResult.success(sdl.EntityList[WpAbility](items=items), summary=f"{len(items)} registered ability/abilities")
