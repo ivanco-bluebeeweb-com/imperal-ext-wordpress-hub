@@ -2608,6 +2608,17 @@ class GetRestRouteSchemaParams(BaseModel):
     route: str = Field(min_length=1, description="Exact route path from list_rest_routes, e.g. '/wp/v2/posts/(?P<id>[\\d]+)'")
 
 
+class WpAbility(sdl.Entity):
+    """One ability registered with WordPress's own Abilities API (wp-abilities/v1), e.g. a Bricks builder action an MCP client can run."""
+    name: str = ""
+    label: str = ""
+    description: str = ""
+    category: str = ""
+    input_schema: dict = Field(default_factory=dict)
+    output_schema: dict = Field(default_factory=dict)
+    meta: dict = Field(default_factory=dict)
+
+
 class RestRouteSchema(sdl.Entity):
     """Full endpoint detail for one REST route — methods and each endpoint's declared args, from the site's own root index."""
     route: str = ""

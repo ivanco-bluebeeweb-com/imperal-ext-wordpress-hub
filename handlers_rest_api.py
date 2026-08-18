@@ -32,11 +32,13 @@ from models import (
     RestRouteSchema,
     RevokeApplicationPasswordParams,
     SiteIdParams,
+    WpAbility,
 )
 import storage
 from wp_client import wp_error_code, wp_error_message, wp_get, wp_request
 
 APP_PASSWORDS_BASE = "/wp-json/wp/v2/users/me/application-passwords"
+WP_ABILITIES_BASE = "/wp-json/wp-abilities/v1/abilities"
 
 
 async def _authed(ctx, site_id):
@@ -234,3 +236,45 @@ async def revoke_application_password(ctx, params: RevokeApplicationPasswordPara
             id=params.uuid, title=f"application password {params.uuid}",
             site_id=params.site_id, uuid=params.uuid, revoked=True),
         summary="Application password revoked.")
+
+
+def _ability_entity(item: dict) -> WpAbility:
+    name = item.get("name", "") or ""
+    return WpAbility(
+        id=name, title=item.get("label", "") or name,
+        name=name, label=item.get("label", "") or "",
+        description=item.get("description", "") or "",
+        category=item.get("category", "") or "",
+        input_schema=item.get("input_schema") if isinstance(item.get("input_schema"), dict) else {},
+        output_schema=item.get("output_schema") if isinstance(item.get("output_schema"), dict) else {},
+        meta=item.get("meta") if isinstance(item.get("meta"), dict) else {})
+
+
+@chat.function(
+    "list_wp_abilities",
+    description=(
+        "List every ability currently registered with WordPress's own Abilities API "
+        "(wp-abilities/v1) on this site -- e.g. Bricks builder actions an MCP client (Claude, "
+        "Cursor...) can run once 'Bricks > AI' has been enabled. Uses the site's own native "
+        "REST route (registered by the WordPress MCP Adapter plugin), authenticated with the "
+        "connected Application Password -- no Bridge change needed. An empty list means no "
+        "plugin has registered abilities yet (e.g. Bricks AI has not been switched on)."
+    ),
+    action_type="read", data_model=sdl.EntityList[WpAbility],
+)
+async def list_wp_abilities(ctx, params: SiteIdParams) -> ActionResult:
+    """GET /wp-json/wp-abilities/v1/abilities."""
+    auth, err = await _authed(ctx, params.site_id)
+    if err:
+        return err
+    base_url, username, pw = auth
+    try:
+        r = await wp_get(ctx, base_url, WP_ABILITIES_BASE, username=username, app_password=pw)
+    except Exception as e:
+        await ctx.log(f"list_wp_abilities request failed: {e}", level="error")
+        return ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")
+    if not 200 <= r.status_code < 300:
+        return _failure(r.status_code, r.body)
+    data = r.body if isinstance(r.body, list) else []
+    items = [_ability_entity(item) for item in data if isinstance(item, dict)]
+    return ActionResult.success(sdl.EntityList[WpAbility](items=items), summary=f"{len(items)} registered ability/abilities")
