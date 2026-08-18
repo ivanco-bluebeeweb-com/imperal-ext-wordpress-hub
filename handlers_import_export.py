@@ -35,6 +35,14 @@ from wp_client import wp_get
 BRIDGE_EXPORT_WXR_PATH = "/wp-json/imperal/v1/export/wxr"
 
 
+class BridgeError:
+    """Sentinel meaning: the Bridge answered (not absent, not unreachable) but
+    explicitly refused the request with its own message -- see handlers_
+    database.py's identical sentinel for the full rationale."""
+    def __init__(self, message: str):
+        self.message = message
+
+
 async def _site_auth(ctx, site_id):
     """Resolve (base_url, username, password) for the Bridge probe, or an error."""
     record = await storage.get_site_record(ctx, site_id)
@@ -51,12 +59,23 @@ async def _site_auth(ctx, site_id):
 
 
 async def _bridge_get(ctx, base_url, username, pw, path, params=None):
+    """GET a Bridge route. Returns the body dict on 200. On any other status,
+    returns a BridgeError carrying the Bridge's own JSON error message (e.g.
+    "export too large") if the body parsed as a dict -- that is the Bridge
+    answering and explicitly refusing, NOT the Bridge being absent, so callers
+    must surface it rather than silently falling back to SSH. Only a
+    transport failure or a non-JSON body returns None, the real "fall back to
+    SSH" signal."""
     try:
         r = await wp_get(ctx, base_url, path, username=username, app_password=pw, params=params)
     except Exception:
         return None
-    if r.status_code != 200 or not isinstance(r.body, dict):
+    if not isinstance(r.body, dict):
         return None
+    if r.status_code != 200:
+        if r.body.get("code") == "rest_no_route":
+            return None  # Bridge doesn't register this route -- absent/outdated, fall back to SSH.
+        return BridgeError(r.body.get("message") or f"Bridge request failed (HTTP {r.status_code}).")
     return r.body
 
 
@@ -93,6 +112,8 @@ async def export_wxr(ctx, params: ExportWxrParams) -> ActionResult:
         "content": content, "author": params.author, "category": params.category,
         "start_date": params.start_date, "end_date": params.end_date, "status": params.status,
     })
+    if isinstance(body, BridgeError):
+        return ActionResult.error(body.message, retryable=False, code="BRIDGE_REQUEST_FAILED")
     if body is not None:
         xml = body.get("xml", "")
         return ActionResult.success(

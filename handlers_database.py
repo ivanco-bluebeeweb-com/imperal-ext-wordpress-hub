@@ -52,6 +52,15 @@ BRIDGE_DB_POST_COUNT_PATH = "/wp-json/imperal/v1/database/post-count"
 BRIDGE_DB_ORPHANED_POSTMETA_PATH = "/wp-json/imperal/v1/database/orphaned-postmeta"
 
 
+class BridgeError:
+    """Sentinel meaning: the Bridge answered (not absent, not unreachable) but
+    explicitly refused the request with its own message (e.g. an export-too-
+    large 400). Callers must surface .message to the caller, never silently
+    fall back to SSH or claim the Bridge is missing."""
+    def __init__(self, message: str):
+        self.message = message
+
+
 async def _site_auth(ctx, site_id):
     """Resolve (base_url, username, password) for the Bridge probe, or an error."""
     record = await storage.get_site_record(ctx, site_id)
@@ -68,26 +77,42 @@ async def _site_auth(ctx, site_id):
 
 
 async def _bridge_get(ctx, base_url, username, pw, path, params=None):
-    """GET a Bridge database route. Returns (body, None) on 200, else (None, None)
-    to signal "fall back to SSH" -- never raises, this is a probe."""
+    """GET a Bridge database route. Returns the body dict on 200. On any other
+    status, returns a BridgeError carrying the Bridge's own JSON error message
+    (e.g. "export too large") if the body parsed as a dict -- that is the
+    Bridge answering and explicitly refusing, NOT the Bridge being absent, so
+    callers must surface it rather than silently falling back to SSH. Only a
+    transport failure or a non-JSON body returns None, the real "fall back to
+    SSH" signal."""
     try:
         r = await wp_get(ctx, base_url, path, username=username, app_password=pw, params=params)
     except Exception:
         return None
-    if r.status_code != 200 or not isinstance(r.body, dict):
+    if not isinstance(r.body, dict):
         return None
+    if r.status_code != 200:
+        if r.body.get("code") == "rest_no_route":
+            return None  # Bridge doesn't register this route -- absent/outdated, fall back to SSH.
+        return BridgeError(r.body.get("message") or f"Bridge request failed (HTTP {r.status_code}).")
     return r.body
 
 
 async def _bridge_post(ctx, base_url, username, pw, path, json_body=None):
-    """POST to a Bridge database route. Returns the body dict on 200, else None
-    to signal "fall back to SSH" -- never raises, this is a probe."""
+    """POST to a Bridge database route. Returns the body dict on 200, a
+    BridgeError if the Bridge answered but explicitly refused (see _bridge_get
+    for why that must not be treated as "Bridge absent"), or None only on a
+    real transport failure / non-JSON body -- the actual "fall back to SSH"
+    signal."""
     try:
         r = await wp_post(ctx, base_url, path, username=username, app_password=pw, json=json_body)
     except Exception:
         return None
-    if r.status_code != 200 or not isinstance(r.body, dict):
+    if not isinstance(r.body, dict):
         return None
+    if r.status_code != 200:
+        if r.body.get("code") == "rest_no_route":
+            return None  # Bridge doesn't register this route -- absent/outdated, fall back to SSH.
+        return BridgeError(r.body.get("message") or f"Bridge request failed (HTTP {r.status_code}).")
     return r.body
 
 
@@ -111,6 +136,8 @@ async def list_database_tables(ctx, params: SiteIdParams) -> ActionResult:
     base_url, username, pw = auth
 
     body = await _bridge_get(ctx, base_url, username, pw, BRIDGE_DB_TABLES_PATH)
+    if isinstance(body, BridgeError):
+        return ActionResult.error(body.message, retryable=False, code="BRIDGE_REQUEST_FAILED")
     if body is not None:
         rows = body.get("tables", [])
         items = [
@@ -172,6 +199,8 @@ async def run_db_search_replace(ctx, params: SearchReplaceParams) -> ActionResul
     body = await _bridge_post(ctx, base_url, username, pw, BRIDGE_DB_SEARCH_REPLACE_PATH, json_body={
         "old": params.old, "new": params.new, "dry_run": True, "tables": params.tables,
     })
+    if isinstance(body, BridgeError):
+        return ActionResult.error(body.message, retryable=False, code="BRIDGE_REQUEST_FAILED")
     if body is not None:
         count = body.get("replacements", 0)
         return ActionResult.success(
@@ -240,6 +269,8 @@ async def apply_db_search_replace(ctx, params: ApplySearchReplaceParams) -> Acti
     fresh_body = await _bridge_post(ctx, base_url, username, pw, BRIDGE_DB_SEARCH_REPLACE_PATH, json_body={
         "old": params.old, "new": params.new, "dry_run": True, "tables": params.tables,
     })
+    if isinstance(fresh_body, BridgeError):
+        return ActionResult.error(fresh_body.message, retryable=False, code="BRIDGE_REQUEST_FAILED")
     if fresh_body is not None:
         fresh_count = fresh_body.get("replacements", 0)
         if fresh_count != params.expected_replacements:
@@ -252,6 +283,8 @@ async def apply_db_search_replace(ctx, params: ApplySearchReplaceParams) -> Acti
         apply_body = await _bridge_post(ctx, base_url, username, pw, BRIDGE_DB_SEARCH_REPLACE_PATH, json_body={
             "old": params.old, "new": params.new, "dry_run": False, "tables": params.tables,
         })
+        if isinstance(apply_body, BridgeError):
+            return ActionResult.error(apply_body.message, retryable=False, code="BRIDGE_REQUEST_FAILED")
         if apply_body is not None:
             count = apply_body.get("replacements", 0)
             return ActionResult.success(
@@ -329,6 +362,8 @@ async def optimize_database_tables(ctx, params: SiteIdParams) -> ActionResult:
     base_url, username, pw = auth
 
     body = await _bridge_post(ctx, base_url, username, pw, BRIDGE_DB_OPTIMIZE_PATH)
+    if isinstance(body, BridgeError):
+        return ActionResult.error(body.message, retryable=False, code="BRIDGE_REQUEST_FAILED")
     if body is not None:
         return ActionResult.success(
             DatabaseMaintenanceResult(
@@ -385,6 +420,8 @@ async def check_database_repair(ctx, params: CheckDatabaseParams) -> ActionResul
 
     body = await _bridge_post(ctx, base_url, username, pw, BRIDGE_DB_CHECK_PATH,
                               json_body={"repair": params.repair})
+    if isinstance(body, BridgeError):
+        return ActionResult.error(body.message, retryable=False, code="BRIDGE_REQUEST_FAILED")
     if body is not None:
         return ActionResult.success(
             DatabaseMaintenanceResult(
@@ -444,6 +481,8 @@ async def export_database_dump(ctx, params: ExportDatabaseDumpParams) -> ActionR
 
     body = await _bridge_get(ctx, base_url, username, pw, BRIDGE_DB_EXPORT_PATH,
                              params={"tables": params.tables} if params.tables else None)
+    if isinstance(body, BridgeError):
+        return ActionResult.error(body.message, retryable=False, code="BRIDGE_REQUEST_FAILED")
     if body is not None:
         return ActionResult.success(
             DatabaseDumpResult(
@@ -499,6 +538,8 @@ async def count_post_type_rows(ctx, params: CountPostTypeRowsParams) -> ActionRe
 
     body = await _bridge_get(ctx, base_url, username, pw, BRIDGE_DB_POST_COUNT_PATH,
                              params={"post_type": params.post_type})
+    if isinstance(body, BridgeError):
+        return ActionResult.error(body.message, retryable=False, code="BRIDGE_REQUEST_FAILED")
     if body is not None:
         count = body.get("count", 0)
         return ActionResult.success(
@@ -552,6 +593,8 @@ async def count_orphaned_postmeta(ctx, params: SiteIdParams) -> ActionResult:
     base_url, username, pw = auth
 
     body = await _bridge_get(ctx, base_url, username, pw, BRIDGE_DB_ORPHANED_POSTMETA_PATH)
+    if isinstance(body, BridgeError):
+        return ActionResult.error(body.message, retryable=False, code="BRIDGE_REQUEST_FAILED")
     if body is not None:
         count = body.get("orphaned_postmeta", 0)
         return ActionResult.success(
