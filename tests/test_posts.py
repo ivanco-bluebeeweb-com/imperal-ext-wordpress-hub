@@ -191,6 +191,39 @@ async def test_create_post_forwards_lang_when_auto_creating_category():
     )
 
 
+async def test_create_post_corrects_lang_against_configured_polylang_languages():
+    # The pipeline fix: when Polylang IS configured on the site, a wrong or
+    # missing lang must be corrected against the site's OWN real language
+    # list, not passed through blindly or left to silently default.
+    ctx = await _ctx()
+    ctx.http.mock_get("https://x.com/wp-json/pll/v1/languages",
+                       [{"slug": "ro"}, {"slug": "ru"}], 200)
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Привет", slug="hello", meta_title="Hello", category="News",
+        excerpt="A short standalone summary.", featured_media_id=99,
+        lang="en",  # not one of this site's configured languages
+        blocks=[PostBlockInput(type="paragraph", text="Статья на русском языке про что-то важное.")],
+    ))
+    assert result.status == "success"
+    assert "isn't one of this site's configured Polylang languages" in result.summary
+
+
+async def test_create_post_keeps_matching_lang_silently_when_polylang_configured():
+    ctx = await _ctx()
+    ctx.http.mock_get("https://x.com/wp-json/pll/v1/languages",
+                       [{"slug": "ro"}, {"slug": "ru"}], 200)
+    ctx.http.mock_get(CATEGORIES, [{"id": 7, "name": "News"}], 200)
+    ctx.http.mock_post(POSTS, _wp_post(), 201)
+    result = await hp.create_post(ctx, CreatePostParams(
+        site_id="x-com", title="Hello", slug="hello", meta_title="Hello", category="News",
+        excerpt="A short standalone summary.", featured_media_id=99, lang="ru",
+    ))
+    assert result.status == "success"
+    assert "configured Polylang languages" not in result.summary
+
+
 async def test_create_post_uses_pages_base_for_page_type():
     ctx = await _ctx()
     ctx.http.mock_post(PAGES, _wp_post(pid=9), 201)

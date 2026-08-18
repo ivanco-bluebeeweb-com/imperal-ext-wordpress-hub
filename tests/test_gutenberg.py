@@ -328,3 +328,54 @@ def test_markdown_to_blocks_empty_input_returns_empty_list():
     assert gutenberg.markdown_to_blocks("") == []
     assert gutenberg.markdown_to_blocks(None) == []
 
+
+# ─────────── strip_scaffolding_headings (post-check) ───────────
+
+def test_strip_scaffolding_headings_drops_bare_intro_and_cta():
+    blocks = [
+        {"type": "heading", "text": "Intro", "level": 2},
+        {"type": "paragraph", "text": "Real intro copy stays."},
+        {"type": "heading", "text": "Real Section Title", "level": 2},
+        {"type": "paragraph", "text": "Body."},
+        {"type": "heading", "text": "CTA", "level": 2},
+        {"type": "paragraph", "text": "Real CTA copy stays too."},
+    ]
+    out = gutenberg.strip_scaffolding_headings(blocks)
+    texts = [b["text"] for b in out]
+    assert "Intro" not in texts
+    assert "CTA" not in texts
+    assert "Real Section Title" in texts
+    assert "Real intro copy stays." in texts
+    assert "Real CTA copy stays too." in texts
+    assert len(out) == 4
+
+
+def test_strip_scaffolding_headings_is_case_and_language_insensitive_exact_match_only():
+    blocks = [
+        {"type": "heading", "text": "введение", "level": 2},
+        {"type": "heading", "text": "Introducere", "level": 2},
+        {"type": "heading", "text": "call to action", "level": 3},
+        # Must NOT be stripped: a real heading that merely mentions the word.
+        {"type": "heading", "text": "Introducere in sisteme de climatizare", "level": 2},
+        {"type": "paragraph", "text": "CTA reminders inside a paragraph are never touched."},
+    ]
+    out = gutenberg.strip_scaffolding_headings(blocks)
+    texts = [b["text"] for b in out]
+    assert "введение" not in texts
+    assert "Introducere" not in texts
+    assert "call to action" not in texts
+    assert "Introducere in sisteme de climatizare" in texts
+    assert "CTA reminders inside a paragraph are never touched." in texts
+
+
+def test_strip_scaffolding_headings_handles_none_and_pydantic_blocks():
+    from models import PostBlockInput
+    assert gutenberg.strip_scaffolding_headings(None) == []
+    blocks = [
+        PostBlockInput(type="heading", text="Intro", level=2),
+        PostBlockInput(type="paragraph", text="Keep me"),
+    ]
+    out = gutenberg.strip_scaffolding_headings(blocks)
+    assert len(out) == 1
+    assert out[0].text == "Keep me"
+

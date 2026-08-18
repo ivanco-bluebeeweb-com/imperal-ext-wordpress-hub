@@ -188,6 +188,51 @@ def _block_fields(block) -> tuple[str, str, int, int | None, str | None, str | N
 _HEADING_LINE_RE = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
 _BULLET_LINE_RE = re.compile(r"^[-*]\s+(.*\S)\s*$")
 
+# POST-CHECK: Article Writer's own authoring template uses bare scaffolding
+# labels ("Intro", "CTA", their translations) as section markers while it is
+# drafting -- they are meta-labels for the WRITER, never real article
+# headings meant for a reader. Left in place they end up as a visible,
+# meaningless <h2>Intro</h2> or <h2>CTA</h2> on the published page. This is
+# deliberately an EXACT (not substring) match against the whole heading
+# text, case-insensitive, so a real heading that merely happens to mention
+# "cta" or start a sentence with "Introducere" (a full, real title) is never
+# stripped -- only a heading whose ENTIRE text is one of these known
+# scaffolding labels is dropped. Covers the two Article Writer sites in use
+# (RO/RU) plus English/generic; safe to extend if a new label surfaces.
+_SCAFFOLDING_HEADING_LABELS = {
+    "intro", "introduction", "introducere", "введение", "вступление",
+    "cta", "call to action", "apel la actiune", "apel la acțiune",
+    "призыв к действию",
+}
+
+
+def _is_scaffolding_heading(text: str) -> bool:
+    normalized = (text or "").strip().strip(":").strip().lower()
+    return normalized in _SCAFFOLDING_HEADING_LABELS
+
+
+def strip_scaffolding_headings(blocks: list | None) -> list:
+    """Drop any heading block whose text is EXACTLY a known writer-template
+    scaffolding label ("Intro", "CTA", ...) -- see
+    _SCAFFOLDING_HEADING_LABELS for the exact, deliberately narrow rule.
+
+    Only the heading itself is removed; the paragraph(s) that followed it
+    (the real intro/CTA copy) are kept as ordinary content. Mandatory
+    post-check run by create_post/update_post on every markdown-derived (and
+    explicitly given) block list, so a published article never carries a
+    bare, meaningless "Intro" or "CTA" heading regardless of which pipeline
+    stage produced the blocks.
+    """
+    if not blocks:
+        return blocks or []
+    cleaned = []
+    for block in blocks:
+        block_type, text, level, media_id, media_url, caption, faq_items = _block_fields(block)
+        if block_type == "heading" and _is_scaffolding_heading(text):
+            continue
+        cleaned.append(block)
+    return cleaned
+
 
 def markdown_to_blocks(markdown_text: str, *, skip_h1: bool = True) -> list[dict]:
     """Deterministically convert full article Markdown (Article Writer's own

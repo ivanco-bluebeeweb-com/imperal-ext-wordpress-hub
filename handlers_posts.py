@@ -25,6 +25,7 @@ from wp_client import (
     create_term,
     find_category_id,
     find_term_ids,
+    resolve_post_language,
     update_post as wp_update_post,
     wp_error_code,
     wp_error_message,
@@ -213,6 +214,10 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
     source_blocks = params.blocks
     if not source_blocks and params.body_markdown:
         source_blocks = gutenberg.markdown_to_blocks(params.body_markdown)
+    # POST-CHECK: drop scaffolding headings ("Intro", "CTA", ...) that are
+    # writer-template labels, not real article content -- see
+    # gutenberg.strip_scaffolding_headings for the exact rule.
+    source_blocks = gutenberg.strip_scaffolding_headings(source_blocks)
     blocks, featured_media_id, image_warnings = await resolve_external_images(
         ctx, base_url, username, pw, external_images=params.external_images,
         blocks=source_blocks, featured_media_id=params.featured_media_id,
@@ -224,17 +229,29 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
     # per-link marking required from whoever wrote the article.
     content = gutenberg.blocks_to_content(blocks, site_domain=base_url)
 
+    # LANGUAGE CHECK: when Polylang is active on this site, never trust a
+    # caller-passed (or missing) lang blindly -- reconcile it against the
+    # site's OWN already-configured Polylang languages first. This is the
+    # fix for a whole class of silent language mistakes (wrong code, or a
+    # missing lang silently landing the post in the site's default
+    # language) -- see wp_client.resolve_post_language for the exact rule.
+    resolved_lang, lang_warning = await resolve_post_language(
+        ctx, base_url, username, pw, requested_lang=params.lang,
+        title=params.title, content=content,
+    )
+    lang = resolved_lang
+
     category_id = None
     category_resolved = True
     category_created = False
     if params.category:
-        category_id = await find_category_id(ctx, base_url, username, pw, params.category, lang=params.lang)
+        category_id = await find_category_id(ctx, base_url, username, pw, params.category, lang=lang)
         if category_id is None:
             # Don't just warn and publish uncategorised -- create the
             # category so the post always ends up correctly filed.
             try:
                 create_resp = await create_term(ctx, base_url, username, pw, "categories",
-                                                name=params.category.strip(), lang=params.lang)
+                                                name=params.category.strip(), lang=lang)
                 if create_resp.status_code < 400 and isinstance(create_resp.body, dict):
                     category_id = create_resp.body.get("id")
                     category_created = category_id is not None
@@ -257,14 +274,14 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
     tag_ids = []
     tags_not_found = []
     if params.tags:
-        tag_ids, tags_not_found = await find_term_ids(ctx, base_url, username, pw, "tags", params.tags, lang=params.lang)
+        tag_ids, tags_not_found = await find_term_ids(ctx, base_url, username, pw, "tags", params.tags, lang=lang)
 
     try:
         resp = await wp_create_post(
             ctx, base_url, username, pw, post_type=rest_base, title=params.title,
             content=content, status=params.status, slug=params.slug,
             category_id=category_id, tag_ids=tag_ids, featured_media=featured_media_id,
-            lang=params.lang, date=params.date, excerpt=params.excerpt,
+            lang=lang, date=params.date, excerpt=params.excerpt,
         )
     except Exception as e:
         await ctx.log(f"create_post request failed: {e}", level="error")
@@ -281,6 +298,8 @@ async def create_post(ctx, params: CreatePostParams) -> ActionResult:
 
     post = resp.body
     warnings = list(image_warnings)
+    if lang_warning:
+        warnings.append(lang_warning)
     if params.category and category_created:
         warnings.append(f"category '{params.category}' didn't exist yet — created it")
     elif params.category and not category_resolved:
@@ -342,6 +361,11 @@ async def update_post(ctx, params: UpdatePostParams) -> ActionResult:
     blocks = params.blocks
     if blocks is None and params.body_markdown:
         blocks = gutenberg.markdown_to_blocks(params.body_markdown)
+    # POST-CHECK: same scaffolding-heading cleanup as create_post -- drop
+    # writer-template labels ("Intro", "CTA", ...) that are never meant to
+    # render as a visible heading on the live page.
+    if blocks is not None:
+        blocks = gutenberg.strip_scaffolding_headings(blocks)
     image_warnings: list[str] = []
     if params.external_images:
         # params.blocks is None when the caller only wants to change images/

@@ -92,6 +92,114 @@ async def wp_post(ctx, base_url, path, *, username, app_password, json=None, par
     return await ctx.http.post(f"{base_url}{path}", **kwargs)
 
 
+_CYRILLIC_RE = re.compile(r"[а-яА-ЯёЁ]")
+_LATIN_RE = re.compile(r"[a-zA-Z]")
+
+# Polylang's own REST namespace for listing configured site languages. This
+# has shipped since Polylang 3.7 (both free and Pro) at this exact path --
+# see polylang.pro/documentation/support/developers/languages-rest-api/.
+# Older Polylang installs (pre-3.7) don't expose it: callers MUST treat a
+# 404/error here as "unknown", never as "Polylang has no languages".
+_POLYLANG_LANGUAGES_PATH = "/wp-json/pll/v1/languages"
+
+
+async def list_polylang_languages(ctx, base_url: str, username: str, app_password: str) -> list[str] | None:
+    """Best-effort read of the site's OWN configured Polylang language codes
+    (e.g. ["ro", "ru"]), so a caller can pick a real, already-configured
+    language instead of guessing or hard-coding one.
+
+    Returns None (never an empty list standing in for "no languages") when
+    Polylang isn't active, this Polylang version doesn't expose the REST
+    endpoint, or the site is unreachable -- callers must treat None as
+    "could not determine", not as "Polylang has no languages configured".
+    """
+    try:
+        resp = await wp_get(ctx, base_url, _POLYLANG_LANGUAGES_PATH,
+                            username=username, app_password=app_password)
+    except Exception:
+        return None
+    if resp.status_code >= 400 or not isinstance(resp.body, list):
+        return None
+    codes = []
+    for item in resp.body:
+        if isinstance(item, dict):
+            code = item.get("slug") or item.get("locale") or item.get("code")
+            if code:
+                codes.append(str(code).lower())
+    return codes or None
+
+
+def detect_script_language(title: str, content: str) -> str:
+    """Best-effort Cyrillic-vs-Latin script guess, used ONLY to pick between
+    a site's OWN already-configured Polylang languages when no explicit
+    ``lang`` was given or the given one doesn't match any configured code.
+    Deterministic, no fabrication, no external calls -- distinguishes ru
+    (Cyrillic) from a Latin-script language but cannot tell two Latin-script
+    languages apart (e.g. ro vs en), so it returns 'ru' or 'latin' only.
+    """
+    text = f"{title} {content}"
+    cyr = len(_CYRILLIC_RE.findall(text))
+    lat = len(_LATIN_RE.findall(text))
+    if cyr == 0 and lat == 0:
+        return "unknown"
+    return "ru" if cyr > lat else "latin"
+
+
+async def resolve_post_language(ctx, base_url: str, username: str, app_password: str, *,
+                                 requested_lang: str | None, title: str, content: str) -> tuple[str | None, str | None]:
+    """Reconcile a caller-requested Polylang language against the site's OWN
+    real configured languages before create_post/update_post ever writes it.
+
+    This is the fix for a whole class of silent mistakes: a caller passing
+    'ru' when the site's own Polylang setup actually uses 'rus', or leaving
+    ``lang`` empty and letting a Russian article land in the site's default
+    (often Romanian) language. The rule, in order:
+
+    1. Polylang not detected on this site (list_polylang_languages -> None):
+       pass ``requested_lang`` through unchanged -- nothing to reconcile
+       against, and this must never block a non-Polylang site.
+    2. Polylang IS configured and ``requested_lang`` matches one of its real
+       codes (case-insensitive): use it as-is.
+    3. Polylang IS configured but ``requested_lang`` is missing or doesn't
+       match any configured code: detect the article's own script
+       (Cyrillic vs Latin) and pick whichever configured language's code
+       starts with 'ru'/'rus' for Cyrillic content, or the first
+       non-Russian configured language for Latin content. Never invents a
+       language code that isn't one of the site's own.
+
+    Returns (resolved_lang, warning) -- warning is None unless the requested
+    language had to be corrected, so the caller can surface that to the user
+    instead of silently overriding it.
+    """
+    configured = await list_polylang_languages(ctx, base_url, username, app_password)
+    if not configured:
+        return requested_lang, None
+
+    normalized_requested = (requested_lang or "").strip().lower()
+    if normalized_requested and normalized_requested in configured:
+        return normalized_requested, None
+
+    script = detect_script_language(title, content)
+    russian_codes = [c for c in configured if c.startswith("ru")]
+    other_codes = [c for c in configured if not c.startswith("ru")]
+    if script == "ru" and russian_codes:
+        resolved = russian_codes[0]
+    elif script != "unknown" and other_codes:
+        resolved = other_codes[0]
+    else:
+        resolved = configured[0]
+
+    if normalized_requested and normalized_requested != resolved:
+        return resolved, (
+            f"requested language '{requested_lang}' isn't one of this site's configured "
+            f"Polylang languages ({', '.join(configured)}) -- used '{resolved}' instead, "
+            f"matched from the article's own script."
+        )
+    if not normalized_requested:
+        return resolved, None
+    return resolved, None
+
+
 async def wp_request(ctx, method, base_url, path, *, username, app_password, json=None, params=None):
     """Send an authenticated WordPress REST request using a supported HTTP verb."""
     verb = method.lower().strip()
