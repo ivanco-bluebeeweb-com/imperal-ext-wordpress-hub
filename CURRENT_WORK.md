@@ -1507,6 +1507,16 @@ document — `docx_parser.py`, `parse_article`, `confirm_mapping`, and the headi
 - The `WP Publisher` app itself was left untouched — this was a one-way port of
   capability, not a decommission. Whether to deprecate/retire WP Publisher now that its
   posting half has a home here is a separate decision, not made in this session.
+
+**UPDATE 2026-08-19 — the open question above is now resolved: WP Publisher has been
+permanently deleted.** Per explicit user decision, `WP Publisher` is no longer needed —
+its GitHub repository (`imperal-ext-wp-publisher`) and its local `Apps/WP Publisher/`
+directory have been removed. Its posting capability lives on exclusively in WordPress Hub
+(`create_post`/`update_post`, ported per the entry above). This app is NOT referenced
+anywhere as a live/installable app going forward; any remaining mentions of "WP Publisher"
+elsewhere in this repo are historical attribution of ported code or the dated "WP
+Publisher incident" lesson baked into other apps' error-handling tests — those are kept
+as accurate history, not live references to an existing app.
 - No live WordPress round-trip smoke test yet — only `MockContext` tests. The bridge
   plugins this module relies on for SEO (`imperal-seo-bridge`) already exist and are
   presumably live on connected sites; `create_post`/`update_post` themselves need no new

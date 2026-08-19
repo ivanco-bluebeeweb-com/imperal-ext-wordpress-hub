@@ -5,6 +5,38 @@
 
 ---
 
+## 2026-08-19 — Plausible Scenario Testing (PST) — 2 реальных бага найдены и исправлены
+
+Метод и детали в `SCENARIO_TESTS.md`. Систематический grep всех 259
+`@chat.function` имён против текста `tests/*.py` нашёл 9 функций, ни
+разу не вызванных напрямую ни в одном тесте: `add_ssh`, `remove_ssh`,
+`create_network_site`, `refresh_all_sites`, `list_scheduled`,
+`list_users`, `list_custom_posts`, `list_wp_abilities`,
+`update_order_status_risky`. Написан `tests/test_pst_coverage.py`
+(23 сценария).
+
+**Найдены и исправлены 2 реальных бага:**
+1. `create_network_site` (`handlers_multisite.py`) вызывал
+   `wp_post(..., json_body=payload)` напрямую вместо `json=payload` —
+   каждый реальный вызов падал с `TypeError` до отправки запроса.
+   Единственное место в приложении, где `wp_post` вызывался напрямую
+   с неверным именем аргумента (все остальные файлы используют
+   локальный `_bridge_post()` wrapper, который транслирует правильно).
+2. `remove_ssh` (`handlers_connect.py`) делал `record.pop(field, None)`
+   для 8 SSH-производных полей, затем сохранял через
+   `storage.save_site_record()` → `store.update()`. Платформенная схема
+   `store_update.json` документирует `store.update` как **patch
+   semantics only** — нет примитива удаления ключа. `.pop()` был тихим
+   no-op: после «удаления» SSH сайт мог вечно показывать старые
+   `wp_version`/`php_version`/`db_size_mb`/список обновлений как будто
+   SSH всё ещё подключён. Исправлено явным обнулением полей.
+
+Итог: 23/23 новых теста зелёные, полный набор 887/887 (было 864).
+Код приложения изменён (2 файла) — коммит + push, `deploy_app` для
+подтверждения.
+
+---
+
 ## 2026-08-19 — Сквозной пост-аудит + исправление окружения тестов
 
 **Что проверялось:** py_compile всех 50 модулей; количество `@chat.function`

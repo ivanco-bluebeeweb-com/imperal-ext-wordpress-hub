@@ -141,7 +141,7 @@ async def create_network_site(ctx, params: CreateNetworkSiteParams) -> ActionRes
     base_url, username, password = auth
     payload = {"domain": params.domain, "path": params.path, "title": params.title, "owner_email": params.owner_email}
     try:
-        response = await wp_post(ctx, base_url, NETWORK_CREATE_SITE_PATH, username=username, app_password=password, json_body=payload)
+        response = await wp_post(ctx, base_url, NETWORK_CREATE_SITE_PATH, username=username, app_password=password, json=payload)
     except Exception as exc:
         await ctx.log(f"create_network_site failed: {exc}", level="error")
         return ActionResult.error("Could not reach the site — try again.", retryable=True, code="WP_UNREACHABLE")

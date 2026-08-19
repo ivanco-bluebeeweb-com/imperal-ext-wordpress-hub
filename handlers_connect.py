@@ -238,11 +238,21 @@ async def remove_ssh(ctx, params: SiteIdParams) -> ActionResult:
     await storage.delete_ssh_cred(ctx, params.site_id)
     await storage.clear_content_cache(ctx, params.site_id)
     record = await storage.get_site_record(ctx, params.site_id) or {}
-    # Remove all SSH-derived fields from the record
-    for field in ("ssh_host", "wp_version", "php_version", "db_size_mb", "cron_count",
-                  "pending_updates", "plugin_updates_list", "theme_updates_list",
-                  "server_last_checked"):
-        record.pop(field, None)
+    # NOTE: storage.save_site_record() goes through the platform store's
+    # store.update(), which is documented PATCH semantics only (see
+    # store_update.json: "set: Field values to apply (patch semantics)") --
+    # there is no key-deletion primitive. Popping keys from this local dict
+    # before saving is therefore a silent no-op: the stale SSH-derived
+    # fields would survive in the stored record forever, so a site could
+    # keep reporting an old wp_version/php_version/db_size/etc. as if SSH
+    # were still connected. Explicitly clear each field to its empty
+    # value instead so the "removal" actually takes effect on read.
+    for field in ("ssh_host", "wp_version", "php_version", "cron_count",
+                  "pending_updates", "server_last_checked"):
+        record[field] = ""
+    record["db_size_mb"] = ""
+    record["plugin_updates_list"] = []
+    record["theme_updates_list"] = []
     await storage.save_site_record(ctx, record)
     site = Site(id=params.site_id, title=record.get("name", params.site_id),
                 kind="wp_site", url=record.get("url", ""),
