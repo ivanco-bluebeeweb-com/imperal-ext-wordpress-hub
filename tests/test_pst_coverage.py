@@ -315,3 +315,25 @@ async def test_update_order_status_risky_rejects_unknown_status():
     result = await ho.update_order_status_risky(ctx, UpdateOrderStatusParams(
         site_id="shop-test", order_id=12, status="deleted"))
     assert result.status == "error"
+
+
+# ── Part D3 (SCENARIO_TESTING_STANDARD.md): security / SSRF surface -------
+
+def test_d3_upload_media_never_fetches_source_url_itself():
+    """upload_media's own description states the safe-by-design contract:
+    'WordPress fetches the image itself (via the Imperal Bridge plugin) --
+    Imperal never downloads or re-uploads the image bytes.' sideload_image
+    only ever POSTs source_url as JSON body data to the site's own bridge
+    endpoint (wp_post) -- it must never appear as an argument to this app's
+    own outbound GET. Regression trip-wire against that contract silently
+    regressing (e.g. someone 'optimizing' by fetching the image directly
+    here first, which would reintroduce a user-supplied-URL SSRF surface)."""
+    import pathlib
+    import re
+
+    handlers_media = pathlib.Path(__file__).resolve().parent.parent / "handlers_media.py"
+    text = handlers_media.read_text(encoding="utf-8")
+    # sideload_image must build its request as a POST body (json=body),
+    # never a GET/fetch keyed directly off source_url.
+    assert "json=body" in text
+    assert not re.search(r"wp_get\([^)]*source_url", text)

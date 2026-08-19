@@ -253,3 +253,26 @@ async def test_set_post_password_not_found():
         site_id="blog-test", post_id=999, password="x"))
     assert result.status == "error"
     assert result.error_code == "WP_POST_NOT_FOUND"
+
+
+# ── Part D2 (SCENARIO_TESTING_STANDARD.md): idempotency / double-invocation ─
+
+async def test_d2_double_force_delete_second_call_fails_clean():
+    """A retried force=true delete on a post already permanently gone must
+    surface WordPress's own 404 cleanly, never crash or claim a second
+    successful permanent deletion (which -- unlike the default trash path --
+    would be actively misleading since force delete has no undo)."""
+    ctx = await _ctx()
+    _mock_delete(ctx, f"{BASE}/posts/7", {"deleted": True, "previous": {}}, 200)
+    first = await hpl.delete_post(ctx, DeletePostParams(
+        site_id="blog-test", post_id=7, force=True))
+    assert first.status == "success", first.error
+
+    # MockHTTP matches the FIRST registered entry for a pattern, not a queue --
+    # clear it so the second call sees WordPress's own 404, not the stale 200.
+    ctx.http._mocks.clear()
+    _mock_delete(ctx, f"{BASE}/posts/7", {"code": "rest_post_invalid_id"}, 404)
+    second = await hpl.delete_post(ctx, DeletePostParams(
+        site_id="blog-test", post_id=7, force=True))
+    assert second.status == "error"
+    assert second.error_code == "WP_POST_NOT_FOUND"
