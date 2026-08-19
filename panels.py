@@ -1629,12 +1629,14 @@ def _ssh_card(site_id, has_ssh):
     """SSH access, rendered as its own small block next to the Stat grid --
     a plain ui.Stat has no slot for a button, so this isn't a Stat card.
     Not configured: a single 'Setup SSH' button that opens the connect
-    popup. Configured: 'Manage' and 'Disable' stacked vertically as plain
-    text-style buttons (ghost variant -- no border, just a link look).
+    popup. Configured: 'Manage' and 'Disable' laid out in a row, per
+    UI_INTERFACE_STANDARD.md's button-group rule (never stack action
+    buttons vertically; same size across the group) -- plain text-style
+    buttons (ghost variant -- no border, just a link look).
     """
     label = ui.Text("SSH", variant="caption")
     if has_ssh:
-        actions = ui.Stack(direction="v", gap=1, children=[
+        actions = ui.Row(gap=1, children=[
             ui.Button("Manage", variant="ghost", size="sm",
                       on_click=ui.Call("__panel__wp_ssh_dialog", site_id=site_id)),
             ui.Button("Disable", variant="ghost", size="sm",
