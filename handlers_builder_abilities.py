@@ -52,7 +52,7 @@ from models import (
 from wp_client import wp_error_code, wp_error_message, wp_get, wp_request
 import storage
 
-ABILITIES_BASE = "/wp-json/wp-abilities/v1"
+ABILITIES_BASE = "/wp-json/wp-abilities/v1/abilities"
 
 
 async def _authed(ctx, site_id):
