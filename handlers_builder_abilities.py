@@ -252,7 +252,9 @@ async def _run_ability(ctx, params: CallBuilderAbilityParams, *, allow_destructi
 
     output = r.body.get("output") if isinstance(r.body, dict) and "output" in r.body else r.body
     return ActionResult.success(
-        BuilderAbilityResult(ability_name=params.ability_name, output=output),
+        BuilderAbilityResult(
+            id=params.ability_name, title=params.ability_name,
+            ability_name=params.ability_name, output=output),
         summary=f"{params.ability_name}: ran successfully",
         refresh_panels=["center"])
 
