@@ -25,6 +25,13 @@ Key rules that apply here:
 - Only use components listed there. Missing component → tell Vlad before writing code.
 - **Write a component sketch (pseudocode tree) before every panel** — required, no exceptions.
 - If `Docs/imperal-docs/.last-check` is stale (>24h), run `bash Docs/imperal-docs/refresh.sh` first.
+- **Bricks detection gate — MANDATORY, every session, every user.** Whenever a connected
+  site is detected running Bricks (`check_builder_support` returns `bricks_active: true`),
+  follow `Imperal OS/Docs/BRICKS_DETECTION_STANDARD.md` in full before any further Bricks
+  work: check `bricks_version` (need 2.4+ for the MCP Abilities API), and if 2.4+, verify
+  MCP Adapter + Abilities API + an actual MCP server connection are configured before
+  using the 142 real `bricks/*` abilities — never fall back to hand-authored raw
+  `_bricks_page_content_2` postmeta writes once real abilities are reachable.
 
 ---
 

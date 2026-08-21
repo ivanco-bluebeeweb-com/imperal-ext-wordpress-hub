@@ -1527,6 +1527,16 @@ class BuilderSupport(sdl.Entity):
     bricks_active: bool = False
     bricks_version: str = ""
     detected_builders: list[DetectedBuilder] = Field(default_factory=list)
+    # Real, deterministic readiness of Bricks' own MCP Abilities API (142
+    # bricks/* abilities: full page authoring, design-system reads, revisions
+    # -- see bricks-start-here skill) computed live on every call, not left
+    # for a caller to infer. This exists for EVERY user/session automatically:
+    # no local docs or memory notes required to get the right next step.
+    bricks_min_version_met: bool = False  # bricks_version parses as >= 2.4
+    bricks_abilities_reachable: bool = False  # site's own /wp-abilities/v1/abilities route responded
+    bricks_abilities_count: int = 0  # registered bricks/* abilities found there
+    bricks_readiness: str = ""  # "" | not_installed | needs_update | needs_configuration | ready
+    bricks_readiness_message: str = ""  # human-readable, always tells the exact next action
 
 
 class BuilderScanItem(sdl.Entity):

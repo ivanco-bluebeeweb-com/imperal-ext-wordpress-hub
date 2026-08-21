@@ -43,6 +43,23 @@ import storage
 
 _TAG_RE = re.compile(r"<[^>]+>")
 
+# Minimum Bricks version that ships the MCP Abilities API (142 bricks/*
+# abilities: full page authoring, design-system reads, revisions). Betas of
+# this line count (e.g. "2.4-beta2") -- only the major.minor matters here.
+_BRICKS_ABILITIES_MIN_VERSION = (2, 4)
+_WP_ABILITIES_PATH = "/wp-json/wp-abilities/v1/abilities?per_page=100&page=1"
+
+
+def _parse_bricks_version(raw: str) -> tuple[int, int] | None:
+    """Extract (major, minor) from a Bricks version string, tolerating betas
+    like '2.4-beta2' or '2.4.1'. Returns None if nothing numeric is found."""
+    if not raw:
+        return None
+    m = re.match(r"(\d+)\.(\d+)", raw.strip())
+    if not m:
+        return None
+    return (int(m.group(1)), int(m.group(2)))
+
 
 def _coerce_panel_value(value):
     """Turn a plain string typed into a panel form into the same JSON-shaped
@@ -568,8 +585,20 @@ async def create_bricks_heading(ctx, params: CreateBricksHeadingParams) -> Actio
 @chat.function(
     "check_builder_support",
     description=("Check whether a connected WordPress site can read/edit Elementor or Bricks "
-                 "page-builder content — whether the Imperal Bridge plugin is installed "
-                 "and which builder plugin(s) are active site-wide."),
+                 "page-builder content, and — when Bricks is active — whether its real MCP "
+                 "Abilities API (142 bricks/* abilities: full page authoring via set-page-elements/ "
+                 "add-element/update-element, plus get-design-context, templates, revisions) is "
+                 "actually usable right now. This is computed live on every call for every site: "
+                 "read `bricks_readiness` ('not_installed' | 'needs_update' | 'needs_configuration' "
+                 "| 'ready') and `bricks_readiness_message` for the exact next action — no local "
+                 "docs or prior session memory needed, this works the same for every user. MANDATORY: "
+                 "if bricks_readiness == 'ready', use the real bricks/* abilities for ALL page "
+                 "authoring; NEVER hand-author raw _bricks_page_content_2 postmeta as a substitute "
+                 "— that path can round-trip through get_builder_element while still rendering "
+                 "empty in the real Bricks editor. If bricks_readiness is 'needs_update' or "
+                 "'needs_configuration', relay bricks_readiness_message to the user verbatim and "
+                 "fall back only to this connector's narrow point-edit tools (update_builder_field, "
+                 "create_bricks_heading) until they've acted on it."),
     action_type="read",
     data_model=BuilderSupport,
 )
@@ -614,11 +643,82 @@ async def check_builder_support(ctx, params: SiteIdParams) -> ActionResult:
         bricks_version=str(body.get("bricks_version", "") or ""),
         detected_builders=detected,
     )
+
+    # Real, deterministic Bricks Abilities API readiness gate -- computed live
+    # on every call, for every site/user, no local docs or memory required.
+    # See Imperal OS/Docs/BRICKS_DETECTION_STANDARD.md for the full rationale
+    # (this exists because hand-authoring raw _bricks_page_content_2 postmeta
+    # can round-trip through get_builder_content while still rendering empty
+    # in the real Bricks editor -- the abilities API is the only supported
+    # path to real page authoring, so callers must be told plainly whether
+    # it's actually usable, not left to assume).
+    if not support.bricks_active:
+        support.bricks_readiness = "not_installed"
+        support.bricks_readiness_message = (
+            "Bricks is not active on this site — page-building abilities do not apply here."
+        )
+    else:
+        parsed = _parse_bricks_version(support.bricks_version)
+        support.bricks_min_version_met = bool(parsed and parsed >= _BRICKS_ABILITIES_MIN_VERSION)
+        if not support.bricks_min_version_met:
+            support.bricks_readiness = "needs_update"
+            support.bricks_readiness_message = (
+                f"Bricks {support.bricks_version or '(unknown version)'} is active, but the MCP "
+                f"Abilities API (full page authoring: set/add/update elements, design-system reads, "
+                f"revisions) needs Bricks {_BRICKS_ABILITIES_MIN_VERSION[0]}.{_BRICKS_ABILITIES_MIN_VERSION[1]}+ "
+                f"— ask the site owner to update Bricks first. Until then, only narrow point-edits "
+                f"(update_builder_field, create_bricks_heading) are available."
+            )
+        else:
+            # Version is sufficient -- now check whether the abilities are
+            # ACTUALLY reachable (MCP Adapter plugin installed + Bricks > AI
+            # enabled), by hitting the site's own native wp-abilities route.
+            # This is a real HTTP call, not an assumption from the version
+            # number alone -- version 2.4+ does not imply the feature is on.
+            count = 0
+            reachable = False
+            try:
+                ar = await wp_get(ctx, base_url, _WP_ABILITIES_PATH, username=username, app_password=pw)
+                if 200 <= ar.status_code < 300 and isinstance(ar.body, list):
+                    reachable = True
+                    count = sum(1 for item in ar.body
+                                if isinstance(item, dict) and str(item.get("name", "")).startswith("bricks"))
+            except Exception as e:
+                await ctx.log(f"check_builder_support wp-abilities probe failed: {e}", level="warning")
+
+            support.bricks_abilities_reachable = reachable
+            support.bricks_abilities_count = count
+
+            if not reachable:
+                support.bricks_readiness = "needs_configuration"
+                support.bricks_readiness_message = (
+                    f"Bricks {support.bricks_version} meets the version requirement, but this site's "
+                    f"own WordPress Abilities API route did not respond — the WordPress MCP Adapter "
+                    f"plugin is likely not installed/active. Ask the site owner to install it."
+                )
+            elif count == 0:
+                support.bricks_readiness = "needs_configuration"
+                support.bricks_readiness_message = (
+                    f"Bricks {support.bricks_version} and the MCP Adapter plugin are both present, "
+                    f"but no bricks/* abilities are registered yet — ask the site owner to enable "
+                    f"'Bricks > AI' (the Bricks Abilities API toggle) in the Bricks admin settings."
+                )
+            else:
+                support.bricks_readiness = "ready"
+                support.bricks_readiness_message = (
+                    f"Bricks {support.bricks_version} is fully ready: {count} bricks/* abilities are "
+                    f"registered and reachable. Use the real MCP Abilities API for all page authoring "
+                    f"(bricks/get-design-context, bricks/set-page-elements, bricks/add-element, etc.) "
+                    f"— do not hand-author raw _bricks_page_content_2 postmeta."
+                )
+
     active = [name for name, on in (("Elementor", support.elementor_active), ("Bricks", support.bricks_active)) if on]
     active += [d.label for d in detected if d.active]
     summary = f"Builder bridge v{support.bridge_version} — active: {', '.join(active) if active else 'none'}"
     if detected:
         summary += f" (scanned {len(detected)} other builder(s))"
+    if support.bricks_readiness:
+        summary += f" | Bricks abilities: {support.bricks_readiness}"
     return ActionResult.success(support, summary=summary)
 
 
