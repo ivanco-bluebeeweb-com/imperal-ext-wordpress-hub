@@ -151,6 +151,7 @@
   "list_themes": 8,
   "list_transients": 8,
   "list_users": 8,
+  "list_wp_abilities": 8,
   "optimize_database_tables": 20,
   "preview_bulk_product_change": 40,
   "preview_bulk_variation_change": 40,
