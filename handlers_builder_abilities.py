@@ -39,6 +39,30 @@ WP_REST_Abilities_V1_Run_Controller):
 Input is passed as the query param 'input' (GET/DELETE) or a JSON body
 {"input": {...}} (POST). All authenticated with the site's own connected
 Application Password -- no Bridge change, no MCP/JSON-RPC client needed.
+
+OPERATING DISCIPLINE (baked in from the Bricks Skills operating manual --
+bricks-start-here, bricks-design-systems, bricks-quality-gate -- so every
+caller gets it automatically from the tool descriptions below, with no
+separate skill-file install step required):
+  1. Before creating or changing anything in the SITE'S design system
+     (global classes, variables, color palettes, components), call
+     'bricks/get-design-context' first and reuse what already exists.
+     Never force a same-named global to duplicate -- if a name collides,
+     resolve the conflict, don't silently rename around it.
+  2. NEVER trust a successful write response alone. Read the result back
+     (get_builder_content / a readonly 'bricks/get-*' ability) before
+     telling anyone the change is live. A save can return success while
+     silently rendering empty in the real builder if the underlying data
+     isn't shaped as Bricks' own native array format -- this happened for
+     real on a production page and was only caught by reading it back.
+  3. Design-system-level edits (global classes/variables/components) have
+     no automatic per-save revision the way normal post edits do -- export
+     or otherwise snapshot the current state before a large design-system
+     change, since there is no built-in undo for it.
+  4. Never hand-author raw _bricks_page_content_2 postmeta as a shortcut
+     for calling the real 'bricks/set-page-elements' ability -- it is easy
+     to save it in a shape (e.g. a JSON string) the live builder cannot
+     read, even though a naive readback may still show the content.
 """
 import json
 
@@ -162,7 +186,9 @@ def _annotations(meta: dict) -> dict:
         "'bricks/set-page-elements' or 'bricks/add-element'. Works for any builder that registers "
         "abilities via WordPress's own Abilities API, not just Bricks. Always call this before "
         "call_builder_ability for an ability you haven't used yet, so the input object you send "
-        "actually matches what the ability expects."
+        "actually matches what the ability expects. Before any design-system write (global "
+        "classes/variables/components), also call 'bricks/get-design-context' first and reuse "
+        "what already exists rather than creating duplicates."
     ),
     action_type="read", data_model=WpAbility,
 )
@@ -269,8 +295,10 @@ async def _run_ability(ctx, params: CallBuilderAbilityParams, *, allow_destructi
         "to see the expected 'input' shape. Once check_builder_support reports bricks_readiness "
         "'ready', use this for ALL real page authoring -- never hand-author raw "
         "_bricks_page_content_2 postmeta as a substitute; it can silently render empty in the "
-        "real builder. Abilities the site itself marks destructive are refused here -- use "
-        "call_builder_ability_risky for those."
+        "real builder even though it looks saved. Abilities the site itself marks destructive are "
+        "refused here -- use call_builder_ability_risky for those. ALWAYS read the result back "
+        "(get_builder_content or a readonly ability) after a write before reporting success -- a "
+        "200 response alone does not prove the real builder can render what was saved."
     ),
     action_type="write", data_model=BuilderAbilityResult,
 )
