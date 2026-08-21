@@ -201,15 +201,41 @@ async def resolve_post_language(ctx, base_url: str, username: str, app_password:
 
 
 async def wp_request(ctx, method, base_url, path, *, username, app_password, json=None, params=None):
-    """Send an authenticated WordPress REST request using a supported HTTP verb."""
+    """Send an authenticated WordPress REST request using a supported HTTP verb.
+
+    Some hosts/WAFs block the DELETE verb outright at the web-server layer
+    (HTTP 405) before the request ever reaches WordPress PHP -- confirmed
+    live on climtec.md, where every destructive Abilities API call
+    (bricks/remove-element, bricks/set-page-elements, even with an empty
+    payload) returned 405 regardless of body size, while POST calls to the
+    exact same host worked fine. This is not an auth, ability-name, or
+    payload-shape problem -- it is the DELETE verb itself being rejected
+    upstream of WordPress.
+
+    WordPress core's own REST server has a built-in, documented answer for
+    exactly this: WP_REST_Server::override_by_header() reads the standard
+    X-HTTP-Method-Override header on an incoming POST and processes it as
+    the overridden verb internally -- most hosts/WAFs let POST through
+    without question. So on a genuine 405 to a DELETE call, retry once as
+    POST with that header and the same query params (destructive Abilities
+    API input travels as query params, not a JSON body, so nothing needs
+    reshaping). This only fires when the initial DELETE actually failed
+    with 405 -- hosts where DELETE works natively never take this path.
+    """
     verb = method.lower().strip()
     if verb not in {"post", "put", "delete"}:
         raise ValueError(f"Unsupported WordPress HTTP method: {method}")
     sender = getattr(ctx.http, verb)
-    kwargs = {"headers": basic_auth_header(username, app_password), "params": params}
+    headers = basic_auth_header(username, app_password)
+    kwargs = {"headers": headers, "params": params}
     if verb != "delete":
         kwargs["json"] = json
-    return await sender(f"{base_url}{path}", **kwargs)
+    resp = await sender(f"{base_url}{path}", **kwargs)
+    if verb == "delete" and resp.status_code == 405:
+        override_headers = dict(headers)
+        override_headers["X-HTTP-Method-Override"] = "DELETE"
+        resp = await ctx.http.post(f"{base_url}{path}", headers=override_headers, params=params)
+    return resp
 
 
 def now_iso() -> str:
