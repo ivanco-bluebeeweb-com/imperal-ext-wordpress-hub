@@ -40,6 +40,8 @@ Input is passed as the query param 'input' (GET/DELETE) or a JSON body
 {"input": {...}} (POST). All authenticated with the site's own connected
 Application Password -- no Bridge change, no MCP/JSON-RPC client needed.
 """
+import json
+
 from imperal_sdk import ActionResult, sdl
 
 from app import chat
@@ -185,13 +187,20 @@ async def _run_ability(ctx, params: CallBuilderAbilityParams, *, allow_destructi
 
     run_path = f"{ABILITIES_BASE}/{namespace}/{ability}/run"
     if is_destructive:
+        # Same query-param serialization fix as the GET path below --
+        # DELETE also carries 'input' as a query param, not a JSON body.
         r = await wp_request(
             ctx, "delete", base_url, run_path, username=username, app_password=pw,
-            params={"input": params.input} if params.input else None)
+            params={"input": json.dumps(params.input)} if params.input else None)
     elif is_readonly:
+        # GET query params must be flat strings -- httpx str()-ifies a raw
+        # dict into Python repr (single-quoted), which WordPress's REST
+        # input-schema validation rejects as invalid JSON (HTTP 400). The
+        # ability's own 'input' argument must travel as a JSON-encoded
+        # string in the query string instead.
         r = await wp_get(
             ctx, base_url, run_path, username=username, app_password=pw,
-            params={"input": params.input} if params.input else None)
+            params={"input": json.dumps(params.input)} if params.input else None)
     else:
         r = await wp_request(
             ctx, "post", base_url, run_path, username=username, app_password=pw,
