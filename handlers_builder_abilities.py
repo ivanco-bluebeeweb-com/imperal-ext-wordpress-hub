@@ -102,6 +102,34 @@ def _failure(status_code, body):
         wp_error_message(status_code), retryable=retryable, code=wp_error_code(status_code))
 
 
+def _flatten_input_params(input_obj):
+    """WordPress's REST query-arg parsing (PHP parse_str/rest_parse_request)
+    expects a nested object as bracket-notation params -- input[key]=value,
+    input[nested][key]=value -- NOT a single JSON-encoded string. Confirmed
+    live: passing json.dumps(input) as the 'input' value returns
+    ability_invalid_input: "input is not of type object" -- WordPress read
+    the whole thing as one literal string, never parsed it as JSON.
+    """
+    flat = {}
+
+    def _walk(prefix, value):
+        if isinstance(value, dict):
+            for k, v in value.items():
+                _walk(f"{prefix}[{k}]", v)
+        elif isinstance(value, list):
+            for i, v in enumerate(value):
+                _walk(f"{prefix}[{i}]", v)
+        elif isinstance(value, bool):
+            flat[prefix] = "true" if value else "false"
+        elif value is not None:
+            flat[prefix] = str(value)
+
+    if input_obj:
+        for key, val in input_obj.items():
+            _walk(f"input[{key}]", val)
+    return flat or None
+
+
 def _split_ability_name(ability_name: str):
     """'bricks/get-design-context' -> ('bricks', 'get-design-context')."""
     if "/" not in ability_name:
@@ -200,20 +228,20 @@ async def _run_ability(ctx, params: CallBuilderAbilityParams, *, allow_destructi
 
     run_path = f"{ABILITIES_BASE}/{namespace}/{ability}/run"
     if is_destructive:
-        # Same query-param serialization fix as the GET path below --
-        # DELETE also carries 'input' as a query param, not a JSON body.
+        # 'input' travels as bracket-notation query params (input[key]=val),
+        # not a JSON string -- see _flatten_input_params for why.
         r = await wp_request(
             ctx, "delete", base_url, run_path, username=username, app_password=pw,
-            params={"input": json.dumps(params.input)} if params.input else None)
+            params=_flatten_input_params(params.input))
     elif is_readonly:
-        # GET query params must be flat strings -- httpx str()-ifies a raw
-        # dict into Python repr (single-quoted), which WordPress's REST
-        # input-schema validation rejects as invalid JSON (HTTP 400). The
-        # ability's own 'input' argument must travel as a JSON-encoded
-        # string in the query string instead.
+        # GET query params must use PHP's bracket notation for nested data
+        # (input[key]=val) -- WordPress's own rest_parse_request never
+        # JSON-decodes a single query value, confirmed live: sending
+        # json.dumps(input) as one string returned ability_invalid_input
+        # ("input is not of type object").
         r = await wp_get(
             ctx, base_url, run_path, username=username, app_password=pw,
-            params={"input": json.dumps(params.input)} if params.input else None)
+            params=_flatten_input_params(params.input))
     else:
         r = await wp_request(
             ctx, "post", base_url, run_path, username=username, app_password=pw,
