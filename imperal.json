@@ -1,6 +1,6 @@
 {
   "manifest_schema_version": 3,
-  "sdk_version": "5.9.19",
+  "sdk_version": "5.9.22",
   "app_id": "wordpress-hub",
   "version": "1.45.0",
   "name": "WordPress Hub",
@@ -21003,7 +21003,7 @@
     },
     {
       "name": "check_builder_support",
-      "description": "Check whether a connected WordPress site can read/edit Elementor or Bricks page-builder content — whether the Imperal Bridge plugin is installed and which builder plugin(s) are active site-wide.",
+      "description": "Check whether a connected WordPress site can read/edit Elementor or Bricks page-builder content, and — when Bricks is active — whether its real MCP Abilities API (142 bricks/* abilities: full page authoring via set-page-elements/ add-element/update-element, plus get-design-context, templates, revisions) is actually usable right now. This is computed live on every call for every site: read `bricks_readiness` ('not_installed' | 'needs_update' | 'needs_configuration' | 'ready') and `bricks_readiness_message` for the exact next action — no local docs or prior session memory needed, this works the same for every user. MANDATORY: if bricks_readiness == 'ready', use the real bricks/* abilities for ALL page authoring; NEVER hand-author raw _bricks_page_content_2 postmeta as a substitute — that path can round-trip through get_builder_element while still rendering empty in the real Bricks editor. If bricks_readiness is 'needs_update' or 'needs_configuration', relay bricks_readiness_message to the user verbatim and fall back only to this connector's narrow point-edit tools (update_builder_field, create_bricks_heading) until they've acted on it.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -21152,6 +21152,31 @@
             },
             "title": "Detected Builders",
             "type": "array"
+          },
+          "bricks_min_version_met": {
+            "default": false,
+            "title": "Bricks Min Version Met",
+            "type": "boolean"
+          },
+          "bricks_abilities_reachable": {
+            "default": false,
+            "title": "Bricks Abilities Reachable",
+            "type": "boolean"
+          },
+          "bricks_abilities_count": {
+            "default": 0,
+            "title": "Bricks Abilities Count",
+            "type": "integer"
+          },
+          "bricks_readiness": {
+            "default": "",
+            "title": "Bricks Readiness",
+            "type": "string"
+          },
+          "bricks_readiness_message": {
+            "default": "",
+            "title": "Bricks Readiness Message",
+            "type": "string"
           }
         },
         "required": [
@@ -35441,8 +35466,7 @@
           },
           "value": {
             "default": "",
-            "title": "Value",
-            "type": "string"
+            "title": "Value"
           },
           "exists": {
             "default": false,
@@ -35487,9 +35511,8 @@
             "type": "string"
           },
           "value": {
-            "description": "New value. Must not be a serialized PHP object — refused for safety.",
-            "title": "Value",
-            "type": "string"
+            "description": "New value — a plain string, number, boolean, or a nested JSON object/array (sent as a REAL WordPress array, not a JSON-string blob). Must not be a serialized PHP object — refused for safety.",
+            "title": "Value"
           }
         },
         "required": [
@@ -35578,8 +35601,7 @@
           },
           "value": {
             "default": "",
-            "title": "Value",
-            "type": "string"
+            "title": "Value"
           },
           "exists": {
             "default": false,
@@ -38933,6 +38955,629 @@
         "x-sdl": "entity"
       },
       "event": "wordpress-hub.revoke_application_password",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "list_wp_abilities",
+      "description": "List every ability currently registered with WordPress's own Abilities API (wp-abilities/v1) on this site -- e.g. Bricks builder actions an MCP client (Claude, Cursor...) can run once 'Bricks > AI' has been enabled. Uses the site's own native REST route (registered by the WordPress MCP Adapter plugin), authenticated with the connected Application Password -- no Bridge change needed. An empty list means no plugin has registered abilities yet (e.g. Bricks AI has not been switched on).",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "WpAbility": {
+            "description": "One ability registered with WordPress's own Abilities API (wp-abilities/v1), e.g. a Bricks builder action an MCP client can run.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "default": "",
+                "title": "Description",
+                "type": "string"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "name": {
+                "default": "",
+                "title": "Name",
+                "type": "string"
+              },
+              "label": {
+                "default": "",
+                "title": "Label",
+                "type": "string"
+              },
+              "category": {
+                "default": "",
+                "title": "Category",
+                "type": "string"
+              },
+              "input_schema": {
+                "additionalProperties": true,
+                "title": "Input Schema",
+                "type": "object"
+              },
+              "output_schema": {
+                "additionalProperties": true,
+                "title": "Output Schema",
+                "type": "object"
+              },
+              "meta": {
+                "additionalProperties": true,
+                "title": "Meta",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "WpAbility",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/WpAbility"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[WpAbility]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "describe_builder_ability",
+      "description": "Read ONE WordPress builder ability's own declared schema (input_schema, output_schema, and its readonly/destructive/idempotent annotations) before calling it -- e.g. 'bricks/set-page-elements' or 'bricks/add-element'. Works for any builder that registers abilities via WordPress's own Abilities API, not just Bricks. Always call this before call_builder_ability for an ability you haven't used yet, so the input object you send actually matches what the ability expects.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "ability_name": {
+            "description": "Exact ability name from list_wp_abilities, e.g. 'bricks/get-design-context' or 'bricks/add-element'",
+            "minLength": 1,
+            "title": "Ability Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "ability_name"
+        ],
+        "title": "DescribeBuilderAbilityParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One ability registered with WordPress's own Abilities API (wp-abilities/v1), e.g. a Bricks builder action an MCP client can run.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "title": "Label",
+            "type": "string"
+          },
+          "category": {
+            "default": "",
+            "title": "Category",
+            "type": "string"
+          },
+          "input_schema": {
+            "additionalProperties": true,
+            "title": "Input Schema",
+            "type": "object"
+          },
+          "output_schema": {
+            "additionalProperties": true,
+            "title": "Output Schema",
+            "type": "object"
+          },
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "WpAbility",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "call_builder_ability",
+      "description": "Run ONE non-destructive WordPress builder ability by exact name (e.g. 'bricks/get-design-context', 'bricks/set-page-elements', 'bricks/add-element') -- the universal dispatcher that covers any builder registering abilities via WordPress's own Abilities API, without needing one tool per ability. Call describe_builder_ability first to see the expected 'input' shape. Once check_builder_support reports bricks_readiness 'ready', use this for ALL real page authoring -- never hand-author raw _bricks_page_content_2 postmeta as a substitute; it can silently render empty in the real builder. Abilities the site itself marks destructive are refused here -- use call_builder_ability_risky for those.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "ability_name": {
+            "description": "Exact ability name from list_wp_abilities, e.g. 'bricks/get-design-context', 'bricks/set-page-elements', 'bricks/add-element'",
+            "minLength": 1,
+            "title": "Ability Name",
+            "type": "string"
+          },
+          "input": {
+            "additionalProperties": true,
+            "description": "Input object matching this ability's own input_schema (see describe_builder_ability) — e.g. {'postId': 2285, 'zone': 'content'}",
+            "title": "Input",
+            "type": "object"
+          }
+        },
+        "required": [
+          "site_id",
+          "ability_name"
+        ],
+        "title": "CallBuilderAbilityParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "The raw output of one WordPress ability execution (wp-abilities/v1 .../run).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "ability_name": {
+            "default": "",
+            "title": "Ability Name",
+            "type": "string"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Output"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "BuilderAbilityResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "call_builder_ability_risky",
+      "description": "Run ONE ability the site itself marks destructive (e.g. an ability that deletes or irreversibly overwrites content) after explicit confirmation. Refuses any ability that is NOT marked destructive -- use call_builder_ability for those instead. Same universal dispatcher shape as call_builder_ability, covering any builder on WordPress's own Abilities API.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "ability_name": {
+            "description": "Exact ability name from list_wp_abilities, e.g. 'bricks/get-design-context', 'bricks/set-page-elements', 'bricks/add-element'",
+            "minLength": 1,
+            "title": "Ability Name",
+            "type": "string"
+          },
+          "input": {
+            "additionalProperties": true,
+            "description": "Input object matching this ability's own input_schema (see describe_builder_ability) — e.g. {'postId': 2285, 'zone': 'content'}",
+            "title": "Input",
+            "type": "object"
+          }
+        },
+        "required": [
+          "site_id",
+          "ability_name"
+        ],
+        "title": "CallBuilderAbilityParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "The raw output of one WordPress ability execution (wp-abilities/v1 .../run).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "ability_name": {
+            "default": "",
+            "title": "Ability Name",
+            "type": "string"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Output"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "BuilderAbilityResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
       "background": false,
       "long_running": false,
       "scopes": [],

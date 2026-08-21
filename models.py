@@ -2632,6 +2632,29 @@ class WpAbility(sdl.Entity):
     meta: dict = Field(default_factory=dict)
 
 
+class DescribeBuilderAbilityParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    ability_name: str = Field(
+        min_length=1,
+        description="Exact ability name from list_wp_abilities, e.g. 'bricks/get-design-context' or 'bricks/add-element'")
+
+
+class CallBuilderAbilityParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    ability_name: str = Field(
+        min_length=1,
+        description="Exact ability name from list_wp_abilities, e.g. 'bricks/get-design-context', 'bricks/set-page-elements', 'bricks/add-element'")
+    input: dict = Field(
+        default_factory=dict,
+        description="Input object matching this ability's own input_schema (see describe_builder_ability) — e.g. {'postId': 2285, 'zone': 'content'}")
+
+
+class BuilderAbilityResult(sdl.Entity):
+    """The raw output of one WordPress ability execution (wp-abilities/v1 .../run)."""
+    ability_name: str = ""
+    output: JsonValue = None
+
+
 class RestRouteSchema(sdl.Entity):
     """Full endpoint detail for one REST route — methods and each endpoint's declared args, from the site's own root index."""
     route: str = ""
