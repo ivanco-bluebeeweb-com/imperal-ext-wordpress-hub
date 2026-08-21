@@ -84,6 +84,19 @@ def _failure(status_code, body):
             "administrator Application Password, or check the ability's own permission "
             "requirements.",
             retryable=False, code="WP_FORBIDDEN")
+    if status_code == 400:
+        # The Abilities API's own 400 responses carry a specific, useful
+        # WP_Error code/message (ability_invalid_input, ability_missing_input_schema,
+        # rest_ability_invalid_method, ...) -- surface that real reason instead of a
+        # generic phrase, so a bad 'input' shape is actually diagnosable.
+        wp_code = body.get("code") if isinstance(body, dict) else None
+        wp_message = body.get("message") if isinstance(body, dict) else None
+        if wp_code or wp_message:
+            return ActionResult.error(
+                f"WordPress rejected the ability call: {wp_message or wp_code} "
+                f"({wp_code or 'no code'}). Check describe_builder_ability's input_schema "
+                "against the input you sent.",
+                retryable=False, code="WP_ABILITY_INVALID_INPUT")
     retryable = status_code == 429 or status_code >= 500
     return ActionResult.error(
         wp_error_message(status_code), retryable=retryable, code=wp_error_code(status_code))
