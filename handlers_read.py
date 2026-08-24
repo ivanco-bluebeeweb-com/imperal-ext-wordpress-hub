@@ -629,28 +629,35 @@ async def refresh_site(ctx, params: SiteIdParams) -> ActionResult:
     event="wordpress-hub.refresh_all_sites",
 )
 async def refresh_all_sites(ctx, params: _NoParams) -> ActionResult:
-    """Ping every connected site in parallel, update stored statuses, clear content caches."""
+    """Ping every connected site in parallel (bounded concurrency -- see
+    task #2371: an unbounded fan-out here could overwhelm a weak self-hosted
+    WordPress instance or trip a host's simultaneous-connection limit when
+    many sites are connected), update stored statuses, clear content caches."""
     rows = await storage.list_site_records(ctx)
     if not rows:
         return ActionResult.error("No sites connected.", retryable=False)
 
+    _REFRESH_CONCURRENCY = 5
+    semaphore = asyncio.Semaphore(_REFRESH_CONCURRENCY)
+
     async def _check(record):
-        site_id = record["id"]
-        auth, err = await _authed(ctx, site_id)
-        if err:
-            updated = {**record, "status": "error", "last_checked": now_iso()}
-        else:
-            base_url, username, pw = auth
-            try:
-                r = await wp_get(ctx, base_url, "/wp-json/wp/v2/users/me",
-                                 username=username, app_password=pw)
-                status = "connected" if 200 <= r.status_code < 300 else "error"
-            except Exception:
-                status = "error"
-            updated = {**record, "status": status, "last_checked": now_iso()}
-        await storage.save_site_record(ctx, updated)
-        await storage.clear_content_cache(ctx, site_id)
-        return updated
+        async with semaphore:
+            site_id = record["id"]
+            auth, err = await _authed(ctx, site_id)
+            if err:
+                updated = {**record, "status": "error", "last_checked": now_iso()}
+            else:
+                base_url, username, pw = auth
+                try:
+                    r = await wp_get(ctx, base_url, "/wp-json/wp/v2/users/me",
+                                     username=username, app_password=pw)
+                    status = "connected" if 200 <= r.status_code < 300 else "error"
+                except Exception:
+                    status = "error"
+                updated = {**record, "status": status, "last_checked": now_iso()}
+            await storage.save_site_record(ctx, updated)
+            await storage.clear_content_cache(ctx, site_id)
+            return updated
 
     results = await asyncio.gather(*[_check(r) for r in rows])
     connected = sum(1 for r in results if r.get("status") == "connected")
