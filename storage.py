@@ -160,6 +160,32 @@ async def has_ssh(ctx, site_id) -> bool:
     return await get_ssh_cred(ctx, site_id) is not None
 
 
+FORM_AUDIT_COLLECTION = "bricks_form_audit_state"
+FORM_AUDIT_INTERVAL_SECONDS = 3 * 24 * 60 * 60  # every 3 days, per user directive
+
+
+async def form_audit_is_due(ctx, site_id) -> bool:
+    """True the first time a site is ever checked, or once >=3 days have
+    passed since its last check -- whichever comes first. Absence of a
+    record means 'never checked', which is always due."""
+    import time
+    doc = await _find_doc(ctx, FORM_AUDIT_COLLECTION, site_id)
+    if not doc:
+        return True
+    last = doc.data.get("last_checked_at", 0)
+    return (time.time() - float(last or 0)) >= FORM_AUDIT_INTERVAL_SECONDS
+
+
+async def mark_form_audit_checked(ctx, site_id):
+    import time
+    data = {"site_id": site_id, "last_checked_at": time.time()}
+    doc = await _find_doc(ctx, FORM_AUDIT_COLLECTION, site_id)
+    if doc:
+        await ctx.store.update(FORM_AUDIT_COLLECTION, doc.id, data)
+    else:
+        await ctx.store.create(FORM_AUDIT_COLLECTION, data)
+
+
 async def clear_content_cache(ctx, site_id):
     doc = await _find_doc(ctx, CACHE_COLLECTION, site_id)
     if doc:

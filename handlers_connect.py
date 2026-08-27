@@ -77,7 +77,34 @@ async def connect_site(ctx, params: ConnectSiteParams) -> ActionResult:
         return ActionResult.error(result["error"], retryable=result["retryable"])
     site = Site(id=result["site_id"], title=result["name"], kind="wp_site", url=result["url"],
                 username=params.username, status="connected")
+    await _nudge_bricks_forms_on_connect(ctx, site_id=result["site_id"], name=result["name"])
     return ActionResult.success(site, summary=f"Connected {result['name']}", refresh_panels=["sidebar"])
+
+
+async def _nudge_bricks_forms_on_connect(ctx, *, site_id: str, name: str) -> None:
+    """Best-effort: run the Bricks form completeness audit right after a new
+    site connects, and say something in chat only if it actually found an
+    incomplete form. Wrapped defensively -- the site may not run Bricks at
+    all, or Imperal Bridge may be older than 2.27.0 -- neither should ever
+    block or fail a real WordPress connect."""
+    try:
+        import handlers_bricks_forms as bf
+        import storage as st
+        result, err = await bf._run_audit(ctx, site_id)
+        await st.mark_form_audit_checked(ctx, site_id)
+        if err is not None or result is None:
+            return
+        if result.all_complete or result.total_forms_found == 0:
+            return
+        await ctx.deliver_chat_message(
+            f"By the way -- {name} has {len(result.incomplete_forms)} Bricks form(s) that "
+            f"aren't fully set up yet (missing form name, action, save-to-database, success "
+            f"or error message). Want me to walk through fixing them? Run audit_bricks_forms "
+            f"any time for the details.",
+            msg_type="system",
+        )
+    except Exception as e:
+        await ctx.log(f"bricks form connect-nudge skipped for {site_id}: {e}", level="info")
 
 
 @chat.function(

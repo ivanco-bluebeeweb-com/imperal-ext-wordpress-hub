@@ -47261,10 +47261,270 @@
       "long_running": false,
       "scopes": [],
       "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "audit_bricks_forms",
+      "description": "Sweep every Bricks form element on a connected site (every page, post, template) and report which ones are incompletely configured: missing form name, no action selected, 'Save submission' not chosen, the site-wide 'Save form submissions in database' switch off, missing success message, or missing error message. Call this after connecting a new site, or any time to re-check -- the same check also runs automatically every 3 days and nudges in chat when something is still incomplete.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "title": "SiteIdParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "BricksFormIssue": {
+            "description": "One incompletely-configured Bricks form element found on a site.\n\n`issues` codes: form_name, action, save_submission,\nsave_submission_global, success_message, error_message.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "post_id": {
+                "default": 0,
+                "title": "Post Id",
+                "type": "integer"
+              },
+              "post_title": {
+                "default": "",
+                "title": "Post Title",
+                "type": "string"
+              },
+              "post_type": {
+                "default": "",
+                "title": "Post Type",
+                "type": "string"
+              },
+              "zone": {
+                "default": "",
+                "title": "Zone",
+                "type": "string"
+              },
+              "element_id": {
+                "default": "",
+                "title": "Element Id",
+                "type": "string"
+              },
+              "form_name": {
+                "default": "",
+                "title": "Form Name",
+                "type": "string"
+              },
+              "issues": {
+                "default": [],
+                "items": {
+                  "type": "string"
+                },
+                "title": "Issues",
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "BricksFormIssue",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "description": "Site-wide sweep of every Bricks form element and whether each one is\nfully configured (name, action, save submission -- both the per-form\naction and the site-wide database switch --, success message, error\nmessage).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "site_id": {
+            "default": "",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "save_submissions_enabled_globally": {
+            "default": false,
+            "title": "Save Submissions Enabled Globally",
+            "type": "boolean"
+          },
+          "total_forms_found": {
+            "default": 0,
+            "title": "Total Forms Found",
+            "type": "integer"
+          },
+          "incomplete_forms": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/BricksFormIssue"
+            },
+            "title": "Incomplete Forms",
+            "type": "array"
+          },
+          "all_complete": {
+            "default": true,
+            "title": "All Complete",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "AuditBricksFormsResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
     }
   ],
   "signals": [],
-  "schedules": [],
+  "schedules": [
+    {
+      "name": "bricks_form_audit_nag",
+      "cron": "0 9 * * *"
+    }
+  ],
   "required_scopes": [],
   "icon_size_bytes": 4608,
   "exposed": [

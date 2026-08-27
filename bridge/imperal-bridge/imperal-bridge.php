@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log), and Polylang post language + translation linking, to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.26.0
+ * Version:           2.27.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.26.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.27.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -1045,7 +1045,7 @@ add_action( 'rest_api_init', 'imperal_seo_bridge_register_routes' );
  * builder content without touching the rest of the page.
  * ============================================================================= */
 
-define( 'IMPERAL_BUILDER_BRIDGE_VERSION', '1.3.0' );
+define( 'IMPERAL_BUILDER_BRIDGE_VERSION', '1.4.0' );
 define( 'IMPERAL_BUILDER_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 
@@ -1616,6 +1616,162 @@ function imperal_builder_bridge_scan() {
 }
 
 /**
+ * SECTION 22 — BRICKS FORM COMPLETENESS AUDIT
+ *
+ * A Bricks "form" element can be dropped onto a page and left half-wired:
+ * no name (submissions show as "[No name]" in the admin list), no action
+ * at all (submit does nothing), Save submission not selected (or the
+ * site-wide "Save form submissions in database" switch left off, in which
+ * case Bricks never creates its admin-sidebar submissions screen even if
+ * every form asks to save), and default/blank success or error messages.
+ * This section finds every one of those gaps, on every form, on every
+ * page/post/template, in one call — the same one-postmeta-query pattern
+ * imperal_builder_bridge_scan() already uses, extended one level deeper
+ * into each Bricks tree to find "form" elements and read their settings.
+ *
+ * @param array $settings Bricks form element settings array (as decoded
+ *                        from postmeta by imperal_builder_bridge_flatten_bricks()).
+ * @return string[] Issue codes; empty array means fully configured.
+ *                  form_name        — submissionFormName is empty.
+ *                  action           — no action selected at all.
+ *                  save_submission  — 'save-submission' not in actions.
+ *                  success_message  — successMessage is empty (Bricks falls
+ *                                     back to a generic "Success" string).
+ *                  error_message    — none of the actions that support a
+ *                                     custom error message have one set.
+ */
+function imperal_builder_bridge_bricks_form_issues( $settings ) {
+	if ( ! is_array( $settings ) ) {
+		$settings = array();
+	}
+	$issues  = array();
+	$actions = isset( $settings['actions'] ) && is_array( $settings['actions'] ) ? $settings['actions'] : array();
+
+	if ( '' === trim( (string) ( $settings['submissionFormName'] ?? '' ) ) ) {
+		$issues[] = 'form_name';
+	}
+	if ( empty( $actions ) ) {
+		$issues[] = 'action';
+	}
+	if ( ! in_array( 'save-submission', $actions, true ) ) {
+		$issues[] = 'save_submission';
+	}
+	if ( '' === trim( (string) ( $settings['successMessage'] ?? '' ) ) ) {
+		$issues[] = 'success_message';
+	}
+
+	// Every Bricks action that has its OWN dedicated error-message field —
+	// 'redirect' and 'save-submission' have none, so a form using only
+	// those two is not faulted for a missing error message.
+	$action_error_keys = array(
+		'email'      => 'emailErrorMessage',
+		'webhook'    => 'webhookErrorMessage',
+		'mailchimp'  => 'mailchimpErrorMessage',
+		'sendgrid'   => 'sendgridErrorMessage',
+		'login'      => 'loginErrorMessage',
+		'createPost' => 'createPostErrorMessage',
+		'updatePost' => 'updatePostErrorMessage',
+	);
+	$actionable = array_values( array_intersect( $actions, array_keys( $action_error_keys ) ) );
+	if ( ! empty( $actionable ) ) {
+		$has_error_message = false;
+		foreach ( $actionable as $action ) {
+			if ( '' !== trim( (string) ( $settings[ $action_error_keys[ $action ] ] ?? '' ) ) ) {
+				$has_error_message = true;
+				break;
+			}
+		}
+		if ( ! $has_error_message ) {
+			$issues[] = 'error_message';
+		}
+	}
+
+	return $issues;
+}
+
+/**
+ * GET /imperal/v1/builder/forms — audit every Bricks form on the site.
+ *
+ * Reuses the same postmeta query shape as imperal_builder_bridge_scan()
+ * (one query across every Bricks zone meta key, not one get_posts() call
+ * per post type), then flattens each hit's tree looking for el_type
+ * 'form', and evaluates imperal_builder_bridge_bricks_form_issues() on
+ * each one found.
+ *
+ * @return WP_REST_Response
+ */
+function imperal_builder_bridge_form_audit() {
+	global $wpdb;
+
+	$global_settings          = get_option( 'bricks_global_settings', array() );
+	$save_submissions_enabled = ! empty( $global_settings['saveFormSubmissions'] );
+
+	$meta_keys    = array_values( IMPERAL_BUILDER_BRICKS_META );
+	$placeholders = implode( ',', array_fill( 0, count( $meta_keys ), '%s' ) );
+
+	// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+	$sql = $wpdb->prepare(
+		"SELECT pm.post_id, pm.meta_key, pm.meta_value, p.post_type, p.post_title, p.post_status
+		 FROM {$wpdb->postmeta} pm
+		 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+		 WHERE pm.meta_key IN ($placeholders)
+		 AND pm.meta_value IS NOT NULL
+		 AND pm.meta_value != ''
+		 AND pm.meta_value != '[]'
+		 ORDER BY p.post_type, pm.post_id
+		 LIMIT 1000",
+		$meta_keys
+	);
+	$rows = $wpdb->get_results( $sql );
+
+	$zone_by_meta_key = array_flip( IMPERAL_BUILDER_BRICKS_META );
+	$forms            = array();
+
+	foreach ( (array) $rows as $row ) {
+		$zone    = $zone_by_meta_key[ $row->meta_key ] ?? 'content';
+		$decoded = imperal_builder_bridge_decode_meta( $row->meta_value );
+		$flat    = imperal_builder_bridge_flatten_bricks( $decoded, $zone );
+
+		foreach ( $flat as $el ) {
+			if ( 'form' !== ( $el['el_type'] ?? '' ) ) {
+				continue;
+			}
+			$issues = imperal_builder_bridge_bricks_form_issues( $el['settings'] ?? array() );
+			// The global switch gates save_submission regardless of what the
+			// form's own actions say — surface it as its own issue so the
+			// fix path is obvious (site setting vs. per-form action).
+			if ( ! $save_submissions_enabled && ! in_array( 'save_submission_global', $issues, true ) ) {
+				$issues[] = 'save_submission_global';
+			}
+			$forms[] = array(
+				'post_id'      => (int) $row->post_id,
+				'post_title'   => $row->post_title,
+				'post_type'    => $row->post_type,
+				'post_status'  => $row->post_status,
+				'zone'         => $zone,
+				'element_id'   => (string) $el['id'],
+				'form_name'    => (string) ( $el['settings']['submissionFormName'] ?? '' ),
+				'issues'       => $issues,
+				'is_complete'  => empty( $issues ),
+			);
+		}
+	}
+
+	return rest_ensure_response(
+		array(
+			'save_submissions_enabled' => $save_submissions_enabled,
+			'forms_found'              => count( $forms ),
+			'forms_incomplete'         => count(
+				array_filter( $forms, static function ( $f ) {
+					return ! empty( $f['issues'] );
+				} )
+			),
+			'forms'                    => $forms,
+		)
+	);
+}
+
+/**
  * GET /imperal/v1/builder — read the flattened element tree for one post,
  * across whichever builder(s) are active on it.
  *
@@ -2137,6 +2293,20 @@ function imperal_builder_bridge_register_routes() {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => 'imperal_builder_bridge_scan',
+				'permission_callback' => function () {
+					return current_user_can( 'edit_posts' );
+				},
+			),
+		)
+	);
+
+	register_rest_route(
+		IMPERAL_BUILDER_BRIDGE_NAMESPACE,
+		'/builder/forms',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_builder_bridge_form_audit',
 				'permission_callback' => function () {
 					return current_user_can( 'edit_posts' );
 				},

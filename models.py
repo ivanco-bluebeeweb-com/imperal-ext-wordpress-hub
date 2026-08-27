@@ -3222,3 +3222,32 @@ class LinkPostTranslationsParams(BaseModel):
 class LinkPostTranslationsResult(sdl.Entity):
     site_id: str = ""
     translations: dict = {}
+
+
+# ─────────── Bricks form completeness audit (Bridge SECTION 22) ───────────
+
+class BricksFormIssue(sdl.Entity):
+    """One incompletely-configured Bricks form element found on a site.
+
+    `issues` codes: form_name, action, save_submission,
+    save_submission_global, success_message, error_message.
+    """
+    post_id: int = 0
+    post_title: str = ""
+    post_type: str = ""
+    zone: str = ""
+    element_id: str = ""
+    form_name: str = ""
+    issues: list[str] = []
+
+
+class AuditBricksFormsResult(sdl.Entity):
+    """Site-wide sweep of every Bricks form element and whether each one is
+    fully configured (name, action, save submission -- both the per-form
+    action and the site-wide database switch --, success message, error
+    message)."""
+    site_id: str = ""
+    save_submissions_enabled_globally: bool = False
+    total_forms_found: int = 0
+    incomplete_forms: list[BricksFormIssue] = []
+    all_complete: bool = True
