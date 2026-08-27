@@ -6,6 +6,32 @@
 
 ---
 
+## 2026-08-27 — новая SECTION 20 (Polylang) + прайсинг на 3 новые функции
+
+**Контекст:** пользователь попросил связать Polylang-переводы RU/RO товаров
+на climtec.md как встроенную, универсальную функцию платформы — работающую
+на любом сайте с Polylang, а не только на climtec.md. Polylang не
+регистрирует REST-маршруты ни для назначения языка посту, ни для связывания
+переводов (админ-редактор общается через admin-ajax.php, не REST) — тот же
+класс пробела, что SECTION 1 закрывает для Rank Math SEO-меты и SECTION 5
+для редиректов. Добавлена SECTION 20 в imperal-bridge.php (v2.25.0),
+вызывающая официальные PHP-функции Polylang (`pll_set_post_language`,
+`pll_save_post_translations`, `pll_get_post_translations`,
+`pll_languages_list`) напрямую — обёрнутые в `function_exists()` по
+собственному требованию документации Polylang.
+
+**Три новые функции и цены (шкала `{0,8,16,20,40,60}` из `PRICING_POLICY.md`):**
+
+| Функция | action_type | Цена | Обоснование |
+|---|---|---|---|
+| `get_post_translations` | read | 8 | Простое чтение текущего языка + карты переводов одного поста — тот же тир, что `get_post_meta`/`get_post_revisions`/`list_redirects` |
+| `set_post_language` | write | 16 | Одиночная write-операция назначения языка посту — тот же тир, что `set_redirect_status`/`update_post_meta` |
+| `link_post_translations` | write | 16 | Связывание N постов как переводов друг друга одним вызовом — тот же тир одиночного write-действия, что `create_redirect`/`set_redirect_status`, независимо от числа языков в карте |
+
+Обе новые write-функции проверены тестами (`tests/test_pricing_map.py`) —
+`pricing.tool_prices` в `imperal.json` синхронизирован с `tool-prices.json`
+через `imperal build`, 899/899 тестов зелёные.
+
 ## 2026-08-21 — новый диспетчер способностей билдеров + закрытие старой дыры в прайсинге
 
 **Контекст:** добавлен универсальный диспетчер для WordPress Abilities API

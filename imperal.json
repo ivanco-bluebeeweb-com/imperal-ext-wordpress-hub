@@ -56,7 +56,7 @@
             "type": "string"
           },
           "app_password": {
-            "description": "WordPress Application Password (from Users \u2192 Profile \u2192 Application Passwords)",
+            "description": "WordPress Application Password (from Users → Profile → Application Passwords)",
             "title": "App Password",
             "type": "string"
           }
@@ -299,7 +299,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -425,7 +425,7 @@
         "properties": {
           "site_id": {
             "default": "",
-            "description": "Site id \u2014 set automatically by the panel form",
+            "description": "Site id — set automatically by the panel form",
             "title": "Site Id",
             "type": "string"
           },
@@ -585,7 +585,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -710,7 +710,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -824,7 +824,7 @@
     },
     {
       "name": "update_plugin",
-      "description": "Update ONE already-installed WordPress plugin to its latest version. Reads through the Imperal Bridge plugin if it's installed (the same WordPress upgrader wp-admin's own 'Update Now' link uses), or falls back to SSH + WP-CLI (`wp plugin update <slug>`) if SSH is configured with add_ssh. Pass a slug from list_plugins/list_native_plugins \u2014 never a guessed slug.",
+      "description": "Update ONE already-installed WordPress plugin to its latest version. Reads through the Imperal Bridge plugin if it's installed (the same WordPress upgrader wp-admin's own 'Update Now' link uses), or falls back to SSH + WP-CLI (`wp plugin update <slug>`) if SSH is configured with add_ssh. Pass a slug from list_plugins/list_native_plugins — never a guessed slug.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -834,7 +834,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -951,7 +951,7 @@
     },
     {
       "name": "update_core",
-      "description": "Update WordPress core to the latest version. Reads through the Imperal Bridge plugin if it's installed (the same WordPress upgrader wp-admin's own 'Update Now' link uses), or falls back to SSH + WP-CLI (`wp core update`) if SSH is configured with add_ssh. Runs the update immediately with no version pinning \u2014 always the latest available core release.",
+      "description": "Update WordPress core to the latest version. Reads through the Imperal Bridge plugin if it's installed (the same WordPress upgrader wp-admin's own 'Update Now' link uses), or falls back to SSH + WP-CLI (`wp core update`) if SSH is configured with add_ssh. Runs the update immediately with no version pinning — always the latest available core release.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -961,7 +961,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -1065,7 +1065,7 @@
     },
     {
       "name": "run_wp_cron",
-      "description": "Force every due WordPress cron event to run now. Reads through the Imperal Bridge plugin if it's installed (the same _get_cron_array()/do_action_ref_array() WordPress core itself uses), or falls back to SSH + WP-CLI (`wp cron event run --due-now`) if SSH is configured with add_ssh. Only events already past their scheduled time are run \u2014 nothing is rescheduled early.",
+      "description": "Force every due WordPress cron event to run now. Reads through the Imperal Bridge plugin if it's installed (the same _get_cron_array()/do_action_ref_array() WordPress core itself uses), or falls back to SSH + WP-CLI (`wp cron event run --due-now`) if SSH is configured with add_ssh. Only events already past their scheduled time are run — nothing is rescheduled early.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -1075,7 +1075,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -1349,7 +1349,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -1376,7 +1376,7 @@
           },
           "status": {
             "default": "publish,draft,pending,future,private",
-            "description": "Comma-separated WordPress post status(es) to include, e.g. 'publish' or 'draft' or 'publish,draft'. WordPress's REST API returns ONLY 'publish' posts by default when this is omitted \u2014 so drafts/pending/scheduled/private posts silently disappear from list_posts/list_pages unless requested explicitly. Defaults to every common status so nothing is hidden by default; narrow it explicitly (e.g. status='draft') to see only drafts.",
+            "description": "Comma-separated WordPress post status(es) to include, e.g. 'publish' or 'draft' or 'publish,draft'. WordPress's REST API returns ONLY 'publish' posts by default when this is omitted — so drafts/pending/scheduled/private posts silently disappear from list_posts/list_pages unless requested explicitly. Defaults to every common status so nothing is hidden by default; narrow it explicitly (e.g. status='draft') to see only drafts.",
             "title": "Status",
             "type": "string"
           }
@@ -1547,7 +1547,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -1694,7 +1694,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -1711,7 +1711,7 @@
             "type": "string"
           },
           "find": {
-            "description": "Exact substring to find in the post's raw content (e.g. a wrong-language href) \u2014 must match EXACTLY ONCE",
+            "description": "Exact substring to find in the post's raw content (e.g. a wrong-language href) — must match EXACTLY ONCE",
             "minLength": 1,
             "title": "Find",
             "type": "string"
@@ -1837,7 +1837,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -1864,7 +1864,7 @@
           },
           "status": {
             "default": "publish,draft,pending,future,private",
-            "description": "Comma-separated WordPress post status(es) to include, e.g. 'publish' or 'draft' or 'publish,draft'. WordPress's REST API returns ONLY 'publish' posts by default when this is omitted \u2014 so drafts/pending/scheduled/private posts silently disappear from list_posts/list_pages unless requested explicitly. Defaults to every common status so nothing is hidden by default; narrow it explicitly (e.g. status='draft') to see only drafts.",
+            "description": "Comma-separated WordPress post status(es) to include, e.g. 'publish' or 'draft' or 'publish,draft'. WordPress's REST API returns ONLY 'publish' posts by default when this is omitted — so drafts/pending/scheduled/private posts silently disappear from list_posts/list_pages unless requested explicitly. Defaults to every common status so nothing is hidden by default; narrow it explicitly (e.g. status='draft') to see only drafts.",
             "title": "Status",
             "type": "string"
           }
@@ -2035,7 +2035,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -2049,7 +2049,7 @@
           },
           "missing_alt_only": {
             "default": false,
-            "description": "Only return images whose alt text is empty \u2014 the accessibility/SEO gap",
+            "description": "Only return images whose alt text is empty — the accessibility/SEO gap",
             "title": "Missing Alt Only",
             "type": "boolean"
           }
@@ -2238,7 +2238,7 @@
         },
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -2419,7 +2419,7 @@
         },
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -2603,7 +2603,7 @@
         },
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -2762,7 +2762,7 @@
     },
     {
       "name": "set_single_media_alt",
-      "description": "Set the alt text of ONE media library image \u2014 a single-item convenience wrapper around update_media_alt for cases with just one attachment to fix (e.g. a form on the Media panel). Always overwrites, unlike the bulk version's default skip-if-already-set behaviour.",
+      "description": "Set the alt text of ONE media library image — a single-item convenience wrapper around update_media_alt for cases with just one attachment to fix (e.g. a form on the Media panel). Always overwrites, unlike the bulk version's default skip-if-already-set behaviour.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -2770,10 +2770,10 @@
       ],
       "id_projection": "",
       "params_schema": {
-        "description": "Single-item convenience wrapper around update_media_alt \u2014 the panel UI can only submit a\nflat form per row, not a nested items[] list, so this feeds one {media_id, alt_text} through.",
+        "description": "Single-item convenience wrapper around update_media_alt — the panel UI can only submit a\nflat form per row, not a nested items[] list, so this feeds one {media_id, alt_text} through.",
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -2783,7 +2783,7 @@
             "type": "integer"
           },
           "alt_text": {
-            "description": "Alt text to store on this attachment \u2014 always overwrites",
+            "description": "Alt text to store on this attachment — always overwrites",
             "minLength": 1,
             "title": "Alt Text",
             "type": "string"
@@ -2929,7 +2929,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -3067,7 +3067,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -3299,7 +3299,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -3484,7 +3484,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -3618,7 +3618,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -3794,7 +3794,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -3978,7 +3978,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -4106,7 +4106,7 @@
     },
     {
       "name": "edit_comment_content",
-      "description": "Overwrite the text of an existing comment \u2014 fixes a typo, redacts something, or corrects a misattributed comment without deleting and re-creating it. Use list_comments first to find the comment_id.",
+      "description": "Overwrite the text of an existing comment — fixes a typo, redacts something, or corrects a misattributed comment without deleting and re-creating it. Use list_comments first to find the comment_id.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -4116,7 +4116,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -4127,7 +4127,7 @@
             "type": "integer"
           },
           "content": {
-            "description": "Replacement text for the comment's content \u2014 overwrites the existing comment entirely",
+            "description": "Replacement text for the comment's content — overwrites the existing comment entirely",
             "maxLength": 5000,
             "minLength": 1,
             "title": "Content",
@@ -4252,7 +4252,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -4279,7 +4279,7 @@
           },
           "status": {
             "default": "publish,draft,pending,future,private",
-            "description": "Comma-separated WordPress post status(es) to include, e.g. 'publish' or 'draft' or 'publish,draft'. WordPress's REST API returns ONLY 'publish' posts by default when this is omitted \u2014 so drafts/pending/scheduled/private posts silently disappear from list_posts/list_pages unless requested explicitly. Defaults to every common status so nothing is hidden by default; narrow it explicitly (e.g. status='draft') to see only drafts.",
+            "description": "Comma-separated WordPress post status(es) to include, e.g. 'publish' or 'draft' or 'publish,draft'. WordPress's REST API returns ONLY 'publish' posts by default when this is omitted — so drafts/pending/scheduled/private posts silently disappear from list_posts/list_pages unless requested explicitly. Defaults to every common status so nothing is hidden by default; narrow it explicitly (e.g. status='draft') to see only drafts.",
             "title": "Status",
             "type": "string"
           }
@@ -4450,7 +4450,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -4477,7 +4477,7 @@
           },
           "status": {
             "default": "publish,draft,pending,future,private",
-            "description": "Comma-separated WordPress post status(es) to include, e.g. 'publish' or 'draft' or 'publish,draft'. WordPress's REST API returns ONLY 'publish' posts by default when this is omitted \u2014 so drafts/pending/scheduled/private posts silently disappear from list_posts/list_pages unless requested explicitly. Defaults to every common status so nothing is hidden by default; narrow it explicitly (e.g. status='draft') to see only drafts.",
+            "description": "Comma-separated WordPress post status(es) to include, e.g. 'publish' or 'draft' or 'publish,draft'. WordPress's REST API returns ONLY 'publish' posts by default when this is omitted — so drafts/pending/scheduled/private posts silently disappear from list_posts/list_pages unless requested explicitly. Defaults to every common status so nothing is hidden by default; narrow it explicitly (e.g. status='draft') to see only drafts.",
             "title": "Status",
             "type": "string"
           }
@@ -4641,7 +4641,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -4798,7 +4798,7 @@
     },
     {
       "name": "purge_cache",
-      "description": "Purge the site's page cache. Auto-detects an active cache plugin (LiteSpeed Cache or W3 Total Cache) \u2014 if none is found, reports that clearly instead of silently doing nothing. Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all \u2014 fires the cache plugin's own real purge hook, litespeed_purge_all / w3tc_flush_all), or falls back to SSH + WP-CLI if SSH is configured with add_ssh instead.",
+      "description": "Purge the site's page cache. Auto-detects an active cache plugin (LiteSpeed Cache or W3 Total Cache) — if none is found, reports that clearly instead of silently doing nothing. Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all — fires the cache plugin's own real purge hook, litespeed_purge_all / w3tc_flush_all), or falls back to SSH + WP-CLI if SSH is configured with add_ssh instead.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -4808,7 +4808,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -4826,7 +4826,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "Result of a cache purge \u2014 which plugin ran it and what it printed.",
+        "description": "Result of a cache purge — which plugin ran it and what it printed.",
         "properties": {
           "id": {
             "anyOf": [
@@ -4928,7 +4928,7 @@
     },
     {
       "name": "install_plugin",
-      "description": "Install a WordPress plugin from a WordPress.org slug or a direct https:// .zip URL, and optionally activate it immediately. Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all \u2014 uses the same Plugin_Upgrader API wp-admin's own 'Add New Plugin' screen uses), or falls back to SSH + WP-CLI (`wp plugin install`) if SSH is configured instead. Use this to install Imperal's own companion bridge plugin (Imperal Bridge \u2014 SEO + builder + media in one) or any third-party plugin the site needs.",
+      "description": "Install a WordPress plugin from a WordPress.org slug or a direct https:// .zip URL, and optionally activate it immediately. Reads through the Imperal Bridge plugin if it's installed (no SSH needed at all — uses the same Plugin_Upgrader API wp-admin's own 'Add New Plugin' screen uses), or falls back to SSH + WP-CLI (`wp plugin install`) if SSH is configured instead. Use this to install Imperal's own companion bridge plugin (Imperal Bridge — SEO + builder + media in one) or any third-party plugin the site needs.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -4938,12 +4938,12 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
           "source": {
-            "description": "WordPress.org plugin slug or a direct https:// .zip URL (e.g. a GitHub release asset \u2014 use the Imperal Bridge zip for the companion plugin). Never a shell command.",
+            "description": "WordPress.org plugin slug or a direct https:// .zip URL (e.g. a GitHub release asset — use the Imperal Bridge zip for the companion plugin). Never a shell command.",
             "title": "Source",
             "type": "string"
           },
@@ -5072,7 +5072,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -5272,7 +5272,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -5433,7 +5433,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -5559,7 +5559,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -5847,7 +5847,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -6027,7 +6027,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -6312,7 +6312,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -6502,7 +6502,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -6719,7 +6719,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -7010,7 +7010,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -7204,7 +7204,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -7386,7 +7386,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -7644,7 +7644,7 @@
         },
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -7910,7 +7910,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -8185,7 +8185,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -8411,7 +8411,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -8643,7 +8643,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -8815,7 +8815,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -9006,7 +9006,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -9183,7 +9183,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -9379,7 +9379,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -9581,7 +9581,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -9734,7 +9734,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -9905,7 +9905,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -10220,7 +10220,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -10580,7 +10580,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -10770,7 +10770,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -10964,7 +10964,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -11101,7 +11101,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -11329,7 +11329,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -11590,7 +11590,7 @@
         },
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -11624,7 +11624,7 @@
               }
             ],
             "default": null,
-            "description": "Billing email \u2014 REQUIRED for a guest order (customer_id omitted)",
+            "description": "Billing email — REQUIRED for a guest order (customer_id omitted)",
             "title": "Billing Email"
           },
           "billing_first_name": {
@@ -11681,7 +11681,7 @@
           },
           "set_paid": {
             "default": false,
-            "description": "Mark the order as already paid (skips the payment step) \u2014 use for phone/in-person orders taken with payment already received",
+            "description": "Mark the order as already paid (skips the payment step) — use for phone/in-person orders taken with payment already received",
             "title": "Set Paid",
             "type": "boolean"
           }
@@ -11857,7 +11857,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -12045,7 +12045,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -12231,7 +12231,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -12398,7 +12398,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -12573,7 +12573,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -12727,7 +12727,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -12879,7 +12879,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -13067,7 +13067,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -13212,7 +13212,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -13362,7 +13362,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -13540,7 +13540,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -13729,7 +13729,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -13926,7 +13926,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -14134,7 +14134,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -14271,7 +14271,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -14514,7 +14514,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -14821,7 +14821,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -15136,7 +15136,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -15510,7 +15510,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -15980,7 +15980,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -16202,7 +16202,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -16385,7 +16385,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -16605,7 +16605,7 @@
         },
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -16786,7 +16786,7 @@
         },
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -16948,7 +16948,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -16999,7 +16999,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" \u2014 Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
+        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" — Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
         "properties": {
           "id": {
             "anyOf": [
@@ -17197,7 +17197,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -17461,7 +17461,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -17733,7 +17733,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -17854,7 +17854,7 @@
               }
             ],
             "default": null,
-            "description": "Optional Rank Math schema/rich-snippet type, e.g. 'Article', 'Product', 'Recipe', or 'off' to disable schema for this item. Rank Math accepts an open-ended set of schema.org type names here (including PRO schema templates and custom schema), so this is free text, not a fixed list \u2014 pass exactly what should appear in Rank Math's Schema type dropdown. Omit to leave unchanged; empty string clears it.",
+            "description": "Optional Rank Math schema/rich-snippet type, e.g. 'Article', 'Product', 'Recipe', or 'off' to disable schema for this item. Rank Math accepts an open-ended set of schema.org type names here (including PRO schema templates and custom schema), so this is free text, not a fixed list — pass exactly what should appear in Rank Math's Schema type dropdown. Omit to leave unchanged; empty string clears it.",
             "title": "Rich Snippet"
           },
           "og_image_url": {
@@ -17878,7 +17878,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" \u2014 Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
+        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" — Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
         "properties": {
           "id": {
             "anyOf": [
@@ -18076,7 +18076,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -18331,7 +18331,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -18584,7 +18584,7 @@
     },
     {
       "name": "get_term_seo_meta",
-      "description": "Read the Rank Math SEO fields (meta title, meta description, focus keyword, canonical, robots) of one taxonomy term \u2014 a category or tag \u2014 on a connected WordPress site. Identify the term by term_id or by slug.",
+      "description": "Read the Rank Math SEO fields (meta title, meta description, focus keyword, canonical, robots) of one taxonomy term — a category or tag — on a connected WordPress site. Identify the term by term_id or by slug.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -18592,7 +18592,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -18643,7 +18643,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" \u2014 Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
+        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" — Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
         "properties": {
           "id": {
             "anyOf": [
@@ -18833,7 +18833,7 @@
     },
     {
       "name": "update_term_seo_meta",
-      "description": "Update the Rank Math SEO fields of one taxonomy term \u2014 a category or tag \u2014 on a connected WordPress site: meta title, meta description, and optionally focus keyword, canonical URL and robots directives. Identify the term by term_id or by slug. Omitted fields are left unchanged.",
+      "description": "Update the Rank Math SEO fields of one taxonomy term — a category or tag — on a connected WordPress site: meta title, meta description, and optionally focus keyword, canonical URL and robots directives. Identify the term by term_id or by slug. Omitted fields are left unchanged.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -18843,7 +18843,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -18964,7 +18964,7 @@
               }
             ],
             "default": null,
-            "description": "Optional Rank Math schema/rich-snippet type for the term archive, e.g. 'Article', 'CollectionPage', or 'off'. Free text \u2014 Rank Math accepts an open-ended set of schema.org type names. Omit to leave unchanged; empty string clears it.",
+            "description": "Optional Rank Math schema/rich-snippet type for the term archive, e.g. 'Article', 'CollectionPage', or 'off'. Free text — Rank Math accepts an open-ended set of schema.org type names. Omit to leave unchanged; empty string clears it.",
             "title": "Rich Snippet"
           }
         },
@@ -18975,7 +18975,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" \u2014 Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
+        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" — Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
         "properties": {
           "id": {
             "anyOf": [
@@ -19173,7 +19173,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -19185,7 +19185,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" \u2014 Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
+        "description": "Rank Math SEO fields for a single post or page.\n\nEmpty strings mean \"no SEO value set\" — Rank Math then falls back to its\nown template for that post type, so an empty meta_title is normal, not a\nfailure. robots is a list because Rank Math stores it as an array.",
         "properties": {
           "id": {
             "anyOf": [
@@ -19383,7 +19383,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -19462,7 +19462,7 @@
       "return_schema": {
         "$defs": {
           "BuilderContent": {
-            "description": "One builder's (or one Bricks zone's) element tree for a single post.\n\nstate_token is required to call update_builder_field against any element\nin this exact tree \u2014 copy it from here, do not invent it.",
+            "description": "One builder's (or one Bricks zone's) element tree for a single post.\n\nstate_token is required to call update_builder_field against any element\nin this exact tree — copy it from here, do not invent it.",
             "properties": {
               "id": {
                 "anyOf": [
@@ -19581,7 +19581,7 @@
               },
               "heading_outline": {
                 "default": "",
-                "description": "Plain-text outline of every heading widget/element found in this builder/zone, one per line as 'h2: Some Title (id=abc123)' in document order \u2014 always fully readable as text (unlike `elements`, which display clients may show as a compact summary card). Use this to check heading hierarchy (e.g. H1->H3 skips) or confirm a true absence of any H1 without needing to inspect `elements` directly.",
+                "description": "Plain-text outline of every heading widget/element found in this builder/zone, one per line as 'h2: Some Title (id=abc123)' in document order — always fully readable as text (unlike `elements`, which display clients may show as a compact summary card). Use this to check heading hierarchy (e.g. H1->H3 skips) or confirm a true absence of any H1 without needing to inspect `elements` directly.",
                 "title": "Heading Outline",
                 "type": "string"
               }
@@ -19595,7 +19595,7 @@
             "x-sdl": "entity"
           },
           "BuilderElement": {
-            "description": "One flattened builder element row: a widget, section, column or container.\n\nNesting is expressed by parent_id (this row's parent element_id), not by\nphysical structure \u2014 both Elementor's tree and Bricks' flat array are\nflattened into this same shape so a caller doesn't need two mental models.",
+            "description": "One flattened builder element row: a widget, section, column or container.\n\nNesting is expressed by parent_id (this row's parent element_id), not by\nphysical structure — both Elementor's tree and Bricks' flat array are\nflattened into this same shape so a caller doesn't need two mental models.",
             "properties": {
               "element_id": {
                 "default": "",
@@ -19687,7 +19687,7 @@
     },
     {
       "name": "get_builder_element",
-      "description": "Read ONE builder/zone record in full \u2014 id, slug, builder, zone, state_token, element_count, the full `elements` tree, and the never-compacted `heading_outline` text. Unlike get_builder_content (which always returns a list, and a list gets compacted to id/title/kind by display clients even with one row), this returns a single record that is never compacted. For Bricks pages you MUST pass zone ('header', 'content', or 'footer'); Elementor items ignore zone. Use this whenever you actually need to read heading_outline/elements, not just confirm a builder is active.",
+      "description": "Read ONE builder/zone record in full — id, slug, builder, zone, state_token, element_count, the full `elements` tree, and the never-compacted `heading_outline` text. Unlike get_builder_content (which always returns a list, and a list gets compacted to id/title/kind by display clients even with one row), this returns a single record that is never compacted. For Bricks pages you MUST pass zone ('header', 'content', or 'footer'); Elementor items ignore zone. Use this whenever you actually need to read heading_outline/elements, not just confirm a builder is active.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -19695,7 +19695,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -19774,7 +19774,7 @@
       "return_schema": {
         "$defs": {
           "BuilderElement": {
-            "description": "One flattened builder element row: a widget, section, column or container.\n\nNesting is expressed by parent_id (this row's parent element_id), not by\nphysical structure \u2014 both Elementor's tree and Bricks' flat array are\nflattened into this same shape so a caller doesn't need two mental models.",
+            "description": "One flattened builder element row: a widget, section, column or container.\n\nNesting is expressed by parent_id (this row's parent element_id), not by\nphysical structure — both Elementor's tree and Bricks' flat array are\nflattened into this same shape so a caller doesn't need two mental models.",
             "properties": {
               "element_id": {
                 "default": "",
@@ -19813,7 +19813,7 @@
             "type": "object"
           }
         },
-        "description": "One builder's (or one Bricks zone's) element tree for a single post.\n\nstate_token is required to call update_builder_field against any element\nin this exact tree \u2014 copy it from here, do not invent it.",
+        "description": "One builder's (or one Bricks zone's) element tree for a single post.\n\nstate_token is required to call update_builder_field against any element\nin this exact tree — copy it from here, do not invent it.",
         "properties": {
           "id": {
             "anyOf": [
@@ -19932,7 +19932,7 @@
           },
           "heading_outline": {
             "default": "",
-            "description": "Plain-text outline of every heading widget/element found in this builder/zone, one per line as 'h2: Some Title (id=abc123)' in document order \u2014 always fully readable as text (unlike `elements`, which display clients may show as a compact summary card). Use this to check heading hierarchy (e.g. H1->H3 skips) or confirm a true absence of any H1 without needing to inspect `elements` directly.",
+            "description": "Plain-text outline of every heading widget/element found in this builder/zone, one per line as 'h2: Some Title (id=abc123)' in document order — always fully readable as text (unlike `elements`, which display clients may show as a compact summary card). Use this to check heading hierarchy (e.g. H1->H3 skips) or confirm a true absence of any H1 without needing to inspect `elements` directly.",
             "title": "Heading Outline",
             "type": "string"
           }
@@ -20015,7 +20015,7 @@
         },
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -20288,7 +20288,7 @@
         },
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -20504,7 +20504,7 @@
     },
     {
       "name": "update_builder_field",
-      "description": "Change exactly ONE settings field on exactly ONE existing Elementor or Bricks element, identified by element_id from a previous get_builder_content call. Requires the exact state_token from that same read; the write is refused if the page changed since. Cannot create elements or replace the page \u2014 point edits only.",
+      "description": "Change exactly ONE settings field on exactly ONE existing Elementor or Bricks element, identified by element_id from a previous get_builder_content call. Requires the exact state_token from that same read; the write is refused if the page changed since. Cannot create elements or replace the page — point edits only.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -20514,7 +20514,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -20558,7 +20558,7 @@
             "title": "Post Type"
           },
           "element_id": {
-            "description": "Builder-native id of the exact element to edit \u2014 from a previous get_builder_content call",
+            "description": "Builder-native id of the exact element to edit — from a previous get_builder_content call",
             "title": "Element Id",
             "type": "string"
           },
@@ -20593,11 +20593,11 @@
                 "type": "null"
               }
             ],
-            "description": "New value for the field \u2014 a plain string/number for simple fields, or an object for structured ones like {'unit': 'px', 'size': 20}",
+            "description": "New value for the field — a plain string/number for simple fields, or an object for structured ones like {'unit': 'px', 'size': 20}",
             "title": "Value"
           },
           "state_token": {
-            "description": "Exact state_token from a previous get_builder_content call for this item/builder/zone \u2014 the write is refused if the page changed since",
+            "description": "Exact state_token from a previous get_builder_content call for this item/builder/zone — the write is refused if the page changed since",
             "title": "State Token",
             "type": "string"
           },
@@ -20611,7 +20611,7 @@
               }
             ],
             "default": null,
-            "description": "'elementor' or 'bricks' \u2014 required only when both are active on the same item",
+            "description": "'elementor' or 'bricks' — required only when both are active on the same item",
             "title": "Builder"
           },
           "zone": {
@@ -20624,7 +20624,7 @@
               }
             ],
             "default": null,
-            "description": "Bricks only: 'header', 'content', or 'footer' \u2014 which template area the element lives in",
+            "description": "Bricks only: 'header', 'content', or 'footer' — which template area the element lives in",
             "title": "Zone"
           }
         },
@@ -20766,7 +20766,7 @@
         "description": "Safely append one semantic heading to an existing Bricks zone.\n\nThis deliberately does not accept arbitrary Bricks JSON. It exists for\nrepairs such as a confirmed missing H1 in a category/archive template,\nwhile retaining an explicit parent, insertion position, and optimistic\nconcurrency guard.",
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -21003,7 +21003,7 @@
     },
     {
       "name": "check_builder_support",
-      "description": "Check whether a connected WordPress site can read/edit Elementor or Bricks page-builder content, and \u2014 when Bricks is active \u2014 whether its real MCP Abilities API (142 bricks/* abilities: full page authoring via set-page-elements/ add-element/update-element, plus get-design-context, templates, revisions) is actually usable right now. This is computed live on every call for every site: read `bricks_readiness` ('not_installed' | 'needs_update' | 'needs_configuration' | 'ready') and `bricks_readiness_message` for the exact next action \u2014 no local docs or prior session memory needed, this works the same for every user. MANDATORY: if bricks_readiness == 'ready', use the real bricks/* abilities for ALL page authoring; NEVER hand-author raw _bricks_page_content_2 postmeta as a substitute \u2014 that path can round-trip through get_builder_element while still rendering empty in the real Bricks editor. If bricks_readiness is 'needs_update' or 'needs_configuration', relay bricks_readiness_message to the user verbatim and fall back only to this connector's narrow point-edit tools (update_builder_field, create_bricks_heading) until they've acted on it.",
+      "description": "Check whether a connected WordPress site can read/edit Elementor or Bricks page-builder content, and — when Bricks is active — whether its real MCP Abilities API (142 bricks/* abilities: full page authoring via set-page-elements/ add-element/update-element, plus get-design-context, templates, revisions) is actually usable right now. This is computed live on every call for every site: read `bricks_readiness` ('not_installed' | 'needs_update' | 'needs_configuration' | 'ready') and `bricks_readiness_message` for the exact next action — no local docs or prior session memory needed, this works the same for every user. MANDATORY: if bricks_readiness == 'ready', use the real bricks/* abilities for ALL page authoring; NEVER hand-author raw _bricks_page_content_2 postmeta as a substitute — that path can round-trip through get_builder_element while still rendering empty in the real Bricks editor. If bricks_readiness is 'needs_update' or 'needs_configuration', relay bricks_readiness_message to the user verbatim and fall back only to this connector's narrow point-edit tools (update_builder_field, create_bricks_heading) until they've acted on it.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -21011,7 +21011,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -21203,7 +21203,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -21217,7 +21217,7 @@
       "return_schema": {
         "$defs": {
           "BuilderScanItem": {
-            "description": "One post/page/template found by the /builder/scan diagnostic to carry\nnon-empty Elementor or Bricks meta \u2014 including custom post types like\nbricks_template that list_pages/list_posts never surface, since they are\nnot registered for the normal REST posts endpoints.",
+            "description": "One post/page/template found by the /builder/scan diagnostic to carry\nnon-empty Elementor or Bricks meta — including custom post types like\nbricks_template that list_pages/list_posts never surface, since they are\nnot registered for the normal REST posts endpoints.",
             "properties": {
               "id": {
                 "anyOf": [
@@ -21367,7 +21367,7 @@
     },
     {
       "name": "upload_media",
-      "description": "Add a publicly reachable https:// image URL to a connected WordPress site's media library, and optionally set it as a post's featured image. WordPress fetches the image itself (via the Imperal Bridge plugin) \u2014 Imperal never downloads or re-uploads the image bytes. Use the returned attachment id/url as featured_media_id, or in an 'image' content block, on create_post/update_post. For images already generated as a Media Hub package, prefer passing external_images directly on create_post/update_post instead of calling this per image.",
+      "description": "Add a publicly reachable https:// image URL to a connected WordPress site's media library, and optionally set it as a post's featured image. WordPress fetches the image itself (via the Imperal Bridge plugin) — Imperal never downloads or re-uploads the image bytes. Use the returned attachment id/url as featured_media_id, or in an 'image' content block, on create_post/update_post. For images already generated as a Media Hub package, prefer passing external_images directly on create_post/update_post instead of calling this per image.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -21377,7 +21377,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -21574,7 +21574,7 @@
     },
     {
       "name": "check_media_support",
-      "description": "Check whether a connected WordPress site can add hosted images to its media library via upload_media \u2014 whether the Imperal Bridge plugin is installed and whether the connected user can upload files.",
+      "description": "Check whether a connected WordPress site can add hosted images to its media library via upload_media — whether the Imperal Bridge plugin is installed and whether the connected user can upload files.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -21582,7 +21582,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -21691,7 +21691,7 @@
     },
     {
       "name": "create_post",
-      "description": "Create a WordPress post or page with Gutenberg content, optional category, Polylang language, and Rank Math SEO fields (including canonical_url). Content is given as an ordered list of {type, text, level} blocks \u2014 'heading', 'paragraph', 'image', or 'faq' (renders a visible Q&A section plus FAQPage JSON-LD schema, works on any site regardless of SEO plugin) \u2014 which this tool renders into Gutenberg block markup. For post_type='post' slug, meta_title, category, excerpt, and featured_media_id are mandatory. Defaults to a draft.",
+      "description": "Create a WordPress post or page with Gutenberg content, optional category, Polylang language, and Rank Math SEO fields (including canonical_url). Content is given as an ordered list of {type, text, level} blocks — 'heading', 'paragraph', 'image', or 'faq' (renders a visible Q&A section plus FAQPage JSON-LD schema, works on any site regardless of SEO plugin) — which this tool renders into Gutenberg block markup. For post_type='post' slug, meta_title, category, excerpt, and featured_media_id are mandatory. Defaults to a draft.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -21749,7 +21749,7 @@
                 "type": "string"
               },
               "answer": {
-                "description": "The plain-text answer (no HTML needed \u2014 it is escaped and wrapped automatically)",
+                "description": "The plain-text answer (no HTML needed — it is escaped and wrapped automatically)",
                 "minLength": 1,
                 "title": "Answer",
                 "type": "string"
@@ -21763,7 +21763,7 @@
             "type": "object"
           },
           "PostBlockInput": {
-            "description": "One content block, already decided by the caller \u2014 no document parsing here.\n\ntype == \"heading\" renders <h{level}>; type == \"image\" renders a Gutenberg\nimage block from a media library attachment (id + url, both from a prior\nupload_media call); type == \"faq\" renders a visible Q&A list PLUS a\nFAQPage JSON-LD <script> block (schema.org) covering every item in\nfaq_items -- this works on any WordPress site regardless of which SEO\nplugin is installed, since it is standard schema.org markup rather than\na plugin-proprietary block; anything else renders a paragraph.",
+            "description": "One content block, already decided by the caller — no document parsing here.\n\ntype == \"heading\" renders <h{level}>; type == \"image\" renders a Gutenberg\nimage block from a media library attachment (id + url, both from a prior\nupload_media call); type == \"faq\" renders a visible Q&A list PLUS a\nFAQPage JSON-LD <script> block (schema.org) covering every item in\nfaq_items -- this works on any WordPress site regardless of which SEO\nplugin is installed, since it is standard schema.org markup rather than\na plugin-proprietary block; anything else renders a paragraph.",
             "properties": {
               "type": {
                 "default": "paragraph",
@@ -21852,7 +21852,7 @@
         },
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -21936,7 +21936,7 @@
             "title": "Category"
           },
           "tags": {
-            "description": "Optional tag names (posts only); resolved to existing terms, never created \u2014 names not found are reported back, not silently dropped",
+            "description": "Optional tag names (posts only); resolved to existing terms, never created — names not found are reported back, not silently dropped",
             "items": {
               "type": "string"
             },
@@ -21987,7 +21987,7 @@
               }
             ],
             "default": null,
-            "description": "Optional Polylang language code, e.g. 'en', 'ro' \u2014 requires Polylang on the site",
+            "description": "Optional Polylang language code, e.g. 'en', 'ro' — requires Polylang on the site",
             "title": "Lang"
           },
           "meta_title": {
@@ -22039,7 +22039,7 @@
               }
             ],
             "default": null,
-            "description": "Optional Rank Math canonical URL, set in the same call \u2014 use when this article duplicates or supersedes another URL",
+            "description": "Optional Rank Math canonical URL, set in the same call — use when this article duplicates or supersedes another URL",
             "title": "Canonical Url"
           }
         },
@@ -22240,7 +22240,7 @@
                 "type": "string"
               },
               "answer": {
-                "description": "The plain-text answer (no HTML needed \u2014 it is escaped and wrapped automatically)",
+                "description": "The plain-text answer (no HTML needed — it is escaped and wrapped automatically)",
                 "minLength": 1,
                 "title": "Answer",
                 "type": "string"
@@ -22254,7 +22254,7 @@
             "type": "object"
           },
           "PostBlockInput": {
-            "description": "One content block, already decided by the caller \u2014 no document parsing here.\n\ntype == \"heading\" renders <h{level}>; type == \"image\" renders a Gutenberg\nimage block from a media library attachment (id + url, both from a prior\nupload_media call); type == \"faq\" renders a visible Q&A list PLUS a\nFAQPage JSON-LD <script> block (schema.org) covering every item in\nfaq_items -- this works on any WordPress site regardless of which SEO\nplugin is installed, since it is standard schema.org markup rather than\na plugin-proprietary block; anything else renders a paragraph.",
+            "description": "One content block, already decided by the caller — no document parsing here.\n\ntype == \"heading\" renders <h{level}>; type == \"image\" renders a Gutenberg\nimage block from a media library attachment (id + url, both from a prior\nupload_media call); type == \"faq\" renders a visible Q&A list PLUS a\nFAQPage JSON-LD <script> block (schema.org) covering every item in\nfaq_items -- this works on any WordPress site regardless of which SEO\nplugin is installed, since it is standard schema.org markup rather than\na plugin-proprietary block; anything else renders a paragraph.",
             "properties": {
               "type": {
                 "default": "paragraph",
@@ -22343,7 +22343,7 @@
         },
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -22355,7 +22355,7 @@
           },
           "post_type": {
             "default": "post",
-            "description": "'post', 'page', or a custom post type's slug \u2014 must match the item being updated",
+            "description": "'post', 'page', or a custom post type's slug — must match the item being updated",
             "title": "Post Type",
             "type": "string"
           },
@@ -22697,7 +22697,7 @@
     },
     {
       "name": "list_post_categories",
-      "description": "List native WordPress post categories (not WooCommerce product categories). Hierarchical \u2014 filter by parent_id to walk the tree: omit parent_id for every category, or pass parent_id=0 for only top-level ones, or a category id to see its children.",
+      "description": "List native WordPress post categories (not WooCommerce product categories). Hierarchical — filter by parent_id to walk the tree: omit parent_id for every category, or pass parent_id=0 for only top-level ones, or a category id to see its children.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -22705,7 +22705,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -22924,7 +22924,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -23074,7 +23074,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -23242,7 +23242,7 @@
     },
     {
       "name": "delete_post_category",
-      "description": "Permanently delete a native WordPress post category. Posts in it are not deleted \u2014 they simply lose that category. Children of the deleted category become top-level (WordPress does not cascade-delete a category tree).",
+      "description": "Permanently delete a native WordPress post category. Posts in it are not deleted — they simply lose that category. Children of the deleted category become top-level (WordPress does not cascade-delete a category tree).",
       "action_type": "destructive",
       "chain_callable": true,
       "effects": [
@@ -23252,7 +23252,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -23363,7 +23363,7 @@
     },
     {
       "name": "list_post_tags",
-      "description": "List native WordPress post tags (flat \u2014 tags have no parent/child nesting).",
+      "description": "List native WordPress post tags (flat — tags have no parent/child nesting).",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -23371,7 +23371,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -23576,7 +23576,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -23719,7 +23719,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -23883,7 +23883,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -24024,7 +24024,7 @@
               }
             ],
             "default": null,
-            "description": "Site id from a previous list_sites call \u2014 required with post_id, optional with content_html (used only to tell internal vs external apart)",
+            "description": "Site id from a previous list_sites call — required with post_id, optional with content_html (used only to tell internal vs external apart)",
             "title": "Site Id"
           },
           "post_id": {
@@ -24299,7 +24299,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -24436,7 +24436,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -24612,7 +24612,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -24787,7 +24787,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -24963,7 +24963,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -25145,7 +25145,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -25332,7 +25332,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -25527,7 +25527,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -25665,7 +25665,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -25783,7 +25783,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -25948,7 +25948,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -26125,7 +26125,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -26287,7 +26287,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -26468,7 +26468,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -26586,7 +26586,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -26754,7 +26754,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -26930,7 +26930,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -27118,7 +27118,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -27136,7 +27136,7 @@
           },
           "force": {
             "default": false,
-            "description": "False (default) moves it to Trash, recoverable in WordPress. True permanently deletes it, bypassing Trash \u2014 cannot be undone.",
+            "description": "False (default) moves it to Trash, recoverable in WordPress. True permanently deletes it, bypassing Trash — cannot be undone.",
             "title": "Force",
             "type": "boolean"
           }
@@ -27255,7 +27255,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -27425,7 +27425,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -27441,7 +27441,7 @@
           },
           "post_type": {
             "default": "post",
-            "description": "'post', 'page', or a custom post type's slug \u2014 all ids must share this type",
+            "description": "'post', 'page', or a custom post type's slug — all ids must share this type",
             "title": "Post Type",
             "type": "string"
           },
@@ -27607,7 +27607,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -27623,7 +27623,7 @@
           },
           "post_type": {
             "default": "post",
-            "description": "'post', 'page', or a custom post type's slug \u2014 all ids must share this type",
+            "description": "'post', 'page', or a custom post type's slug — all ids must share this type",
             "title": "Post Type",
             "type": "string"
           },
@@ -27795,7 +27795,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -27811,7 +27811,7 @@
           },
           "post_type": {
             "default": "post",
-            "description": "'post', 'page', or a custom post type's slug \u2014 all ids must share this type",
+            "description": "'post', 'page', or a custom post type's slug — all ids must share this type",
             "title": "Post Type",
             "type": "string"
           },
@@ -27977,7 +27977,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -27993,7 +27993,7 @@
           },
           "post_type": {
             "default": "post",
-            "description": "'post', 'page', or a custom post type's slug \u2014 all ids must share this type",
+            "description": "'post', 'page', or a custom post type's slug — all ids must share this type",
             "title": "Post Type",
             "type": "string"
           },
@@ -28165,7 +28165,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -28370,7 +28370,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -28543,7 +28543,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -28714,7 +28714,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -28921,7 +28921,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -29064,7 +29064,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -29240,7 +29240,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -29424,7 +29424,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -29552,7 +29552,7 @@
     },
     {
       "name": "list_native_plugins",
-      "description": "List installed plugins via WordPress's own REST API (needs WordPress 5.5+ and an administrator connection) \u2014 no SSH required. Use activate_plugin/deactivate_plugin with the returned plugin id to change status.",
+      "description": "List installed plugins via WordPress's own REST API (needs WordPress 5.5+ and an administrator connection) — no SSH required. Use activate_plugin/deactivate_plugin with the returned plugin id to change status.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -29560,7 +29560,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -29711,7 +29711,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -29878,7 +29878,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -30053,7 +30053,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -30165,7 +30165,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -30267,7 +30267,7 @@
     },
     {
       "name": "list_themes",
-      "description": "List installed themes via WordPress's own REST API (needs an administrator connection) \u2014 shows which one is currently active. Read-only: WordPress core has no REST route to switch the active theme.",
+      "description": "List installed themes via WordPress's own REST API (needs an administrator connection) — shows which one is currently active. Read-only: WordPress core has no REST route to switch the active theme.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -30275,7 +30275,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -30438,7 +30438,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -30563,7 +30563,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -30772,7 +30772,7 @@
     },
     {
       "name": "list_redirects",
-      "description": "List Rank Math URL redirects on a site \u2014 which old URLs redirect to which new ones, with hit counts. Requires the Imperal Bridge plugin and Rank Math's Redirections module.",
+      "description": "List Rank Math URL redirects on a site — which old URLs redirect to which new ones, with hit counts. Requires the Imperal Bridge plugin and Rank Math's Redirections module.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -30780,7 +30780,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -30988,7 +30988,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -31170,7 +31170,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -31290,7 +31290,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -31457,7 +31457,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -31624,7 +31624,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -31797,7 +31797,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -31928,7 +31928,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -31940,7 +31940,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "Rank Math's robots.txt override \u2014 NOT the raw file on disk.",
+        "description": "Rank Math's robots.txt override — NOT the raw file on disk.",
         "properties": {
           "id": {
             "anyOf": [
@@ -32052,12 +32052,12 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
           "content": {
-            "description": "New robots.txt override text \u2014 empty string clears the override, reverting to WordPress's own default robots.txt",
+            "description": "New robots.txt override text — empty string clears the override, reverting to WordPress's own default robots.txt",
             "title": "Content",
             "type": "string"
           }
@@ -32070,7 +32070,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "Rank Math's robots.txt override \u2014 NOT the raw file on disk.",
+        "description": "Rank Math's robots.txt override — NOT the raw file on disk.",
         "properties": {
           "id": {
             "anyOf": [
@@ -32180,7 +32180,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -32297,7 +32297,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -32487,7 +32487,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -32607,7 +32607,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -32735,7 +32735,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -32904,7 +32904,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -33023,7 +33023,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -33140,7 +33140,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -33283,7 +33283,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -33482,7 +33482,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -33597,7 +33597,7 @@
     },
     {
       "name": "update_post_meta",
-      "description": "Set one or more arbitrary custom-field meta keys/values on a post/page/CPT item \u2014 the generic version of update_seo_meta for non-SEO custom fields. Requires the Imperal Bridge plugin. Values must be plain strings/numbers/booleans/arrays.",
+      "description": "Set one or more arbitrary custom-field meta keys/values on a post/page/CPT item — the generic version of update_seo_meta for non-SEO custom fields. Requires the Imperal Bridge plugin. Values must be plain strings/numbers/booleans/arrays.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -33607,7 +33607,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -33618,7 +33618,7 @@
           },
           "meta": {
             "additionalProperties": true,
-            "description": "One or more meta key/value pairs to set. Values must be plain strings/numbers/booleans/arrays \u2014 never a serialized PHP object, which is refused for safety.",
+            "description": "One or more meta key/value pairs to set. Values must be plain strings/numbers/booleans/arrays — never a serialized PHP object, which is refused for safety.",
             "minProperties": 1,
             "title": "Meta",
             "type": "object"
@@ -33739,7 +33739,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -33917,7 +33917,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -34103,7 +34103,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -34232,7 +34232,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -34357,7 +34357,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -34368,7 +34368,7 @@
           },
           "meta": {
             "additionalProperties": true,
-            "description": "One or more meta key/value pairs to set. Values must be plain strings/numbers/booleans/arrays \u2014 never a serialized PHP object, which is refused for safety.",
+            "description": "One or more meta key/value pairs to set. Values must be plain strings/numbers/booleans/arrays — never a serialized PHP object, which is refused for safety.",
             "minProperties": 1,
             "title": "Meta",
             "type": "object"
@@ -34491,7 +34491,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -34620,7 +34620,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -34745,7 +34745,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -34756,7 +34756,7 @@
           },
           "meta": {
             "additionalProperties": true,
-            "description": "One or more meta key/value pairs to set. Values must be plain strings/numbers/booleans/arrays \u2014 never a serialized PHP object, which is refused for safety.",
+            "description": "One or more meta key/value pairs to set. Values must be plain strings/numbers/booleans/arrays — never a serialized PHP object, which is refused for safety.",
             "minProperties": 1,
             "title": "Meta",
             "type": "object"
@@ -34877,7 +34877,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -35055,7 +35055,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -35241,7 +35241,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -35362,7 +35362,7 @@
     },
     {
       "name": "get_option",
-      "description": "Read one named row from wp_options. Only option names on the Imperal Bridge's hard allowlist can be read (Rank Math's own settings, site title/tagline, a few WooCommerce store-settings names) \u2014 never siteurl/home/active_plugins/etc. Requires the Imperal Bridge plugin.",
+      "description": "Read one named row from wp_options. Only option names on the Imperal Bridge's hard allowlist can be read (Rank Math's own settings, site title/tagline, a few WooCommerce store-settings names) — never siteurl/home/active_plugins/etc. Requires the Imperal Bridge plugin.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -35370,12 +35370,12 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
           "name": {
-            "description": "Option name to read \u2014 must be on the Bridge's hard allowlist (Rank Math's own settings, site title/tagline, and a few WooCommerce store-settings names). Never siteurl/home/active_plugins/etc.",
+            "description": "Option name to read — must be on the Bridge's hard allowlist (Rank Math's own settings, site title/tagline, and a few WooCommerce store-settings names). Never siteurl/home/active_plugins/etc.",
             "minLength": 1,
             "title": "Name",
             "type": "string"
@@ -35389,7 +35389,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "One named row from wp_options \u2014 only names on the Bridge's hard allowlist are readable/writable.",
+        "description": "One named row from wp_options — only names on the Bridge's hard allowlist are readable/writable.",
         "properties": {
           "id": {
             "anyOf": [
@@ -35490,7 +35490,7 @@
     },
     {
       "name": "update_option",
-      "description": "Write one named row in wp_options. Only option names on the Imperal Bridge's hard allowlist can be written \u2014 never siteurl/home/active_plugins/etc, and never a value that looks like a serialized PHP object (refused server-side). Requires the Imperal Bridge plugin.",
+      "description": "Write one named row in wp_options. Only option names on the Imperal Bridge's hard allowlist can be written — never siteurl/home/active_plugins/etc, and never a value that looks like a serialized PHP object (refused server-side). Requires the Imperal Bridge plugin.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -35500,18 +35500,18 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
           "name": {
-            "description": "Option name to write \u2014 must be on the Bridge's hard allowlist. Never siteurl/home/active_plugins/etc.",
+            "description": "Option name to write — must be on the Bridge's hard allowlist. Never siteurl/home/active_plugins/etc.",
             "minLength": 1,
             "title": "Name",
             "type": "string"
           },
           "value": {
-            "description": "New value \u2014 a plain string, number, boolean, or a nested JSON object/array (sent as a REAL WordPress array, not a JSON-string blob). Must not be a serialized PHP object \u2014 refused for safety.",
+            "description": "New value — a plain string, number, boolean, or a nested JSON object/array (sent as a REAL WordPress array, not a JSON-string blob). Must not be a serialized PHP object — refused for safety.",
             "title": "Value"
           }
         },
@@ -35524,7 +35524,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "One named row from wp_options \u2014 only names on the Bridge's hard allowlist are readable/writable.",
+        "description": "One named row from wp_options — only names on the Bridge's hard allowlist are readable/writable.",
         "properties": {
           "id": {
             "anyOf": [
@@ -35633,7 +35633,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -35801,7 +35801,7 @@
     },
     {
       "name": "list_transients",
-      "description": "List WordPress transients (temporary cached values plugins/themes store in wp_options). Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp transient list`) if SSH is configured with add_ssh. Shows name, value, and expiration \u2014 useful for diagnosing stale cached data or a bloated options table.",
+      "description": "List WordPress transients (temporary cached values plugins/themes store in wp_options). Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp transient list`) if SSH is configured with add_ssh. Shows name, value, and expiration — useful for diagnosing stale cached data or a bloated options table.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -35809,7 +35809,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -35971,7 +35971,7 @@
     },
     {
       "name": "delete_transient",
-      "description": "Delete one named transient. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp transient delete <name>`) if SSH is configured with add_ssh. Pass a name from list_transients \u2014 never a guessed name.",
+      "description": "Delete one named transient. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp transient delete <name>`) if SSH is configured with add_ssh. Pass a name from list_transients — never a guessed name.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -35981,7 +35981,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -36096,7 +36096,7 @@
     },
     {
       "name": "flush_all_transients",
-      "description": "Delete every transient on the site. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp transient delete --all`) if SSH is configured with add_ssh. More thorough than one plugin's own cache-clear button \u2014 clears every plugin's/theme's transient at once.",
+      "description": "Delete every transient on the site. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp transient delete --all`) if SSH is configured with add_ssh. More thorough than one plugin's own cache-clear button — clears every plugin's/theme's transient at once.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -36106,7 +36106,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -36222,7 +36222,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -36331,7 +36331,7 @@
     },
     {
       "name": "flush_object_cache",
-      "description": "Flush the persistent object cache (Redis/Memcached/etc., if active). Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cache flush`) if SSH is configured with add_ssh. This is different from purge_cache (which purges a PAGE cache plugin) \u2014 this clears the object cache layer instead.",
+      "description": "Flush the persistent object cache (Redis/Memcached/etc., if active). Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cache flush`) if SSH is configured with add_ssh. This is different from purge_cache (which purges a PAGE cache plugin) — this clears the object cache layer instead.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -36341,7 +36341,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -36449,7 +36449,7 @@
     },
     {
       "name": "list_cron_events",
-      "description": "List every scheduled WordPress cron event. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cron event list`) if SSH is configured with add_ssh. Shows each event's hook name, next run time, and recurrence \u2014 use before run_cron_event or delete_cron_event to see real hook names, never invent one.",
+      "description": "List every scheduled WordPress cron event. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cron event list`) if SSH is configured with add_ssh. Shows each event's hook name, next run time, and recurrence — use before run_cron_event or delete_cron_event to see real hook names, never invent one.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -36457,7 +36457,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -36624,7 +36624,7 @@
     },
     {
       "name": "run_cron_event",
-      "description": "Force one specific cron event to run right now, regardless of whether it's due. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cron event run <hook>`) if SSH is configured with add_ssh. Pass a hook name from list_cron_events \u2014 never invent one. Use run_wp_cron instead when you just want every DUE event to fire.",
+      "description": "Force one specific cron event to run right now, regardless of whether it's due. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cron event run <hook>`) if SSH is configured with add_ssh. Pass a hook name from list_cron_events — never invent one. Use run_wp_cron instead when you just want every DUE event to fire.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -36634,7 +36634,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -36754,7 +36754,7 @@
     },
     {
       "name": "delete_cron_event",
-      "description": "Unschedule one cron event \u2014 removes every scheduled occurrence of that hook. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cron event delete <hook>`) if SSH is configured with add_ssh. Use to fix a stuck or duplicated cron event. Pass a hook name from list_cron_events \u2014 never invent one.",
+      "description": "Unschedule one cron event — removes every scheduled occurrence of that hook. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp cron event delete <hook>`) if SSH is configured with add_ssh. Use to fix a stuck or duplicated cron event. Pass a hook name from list_cron_events — never invent one.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -36764,7 +36764,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -36892,7 +36892,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -37062,7 +37062,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -37227,7 +37227,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -37380,7 +37380,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -37540,7 +37540,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -37659,7 +37659,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -37782,7 +37782,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -37799,7 +37799,7 @@
               }
             ],
             "default": null,
-            "description": "Explicit table names/wildcards from list_database_tables; omit to export every registered table (capped at ~2MB of SQL text \u2014 scope down if the export is refused as too large)",
+            "description": "Explicit table names/wildcards from list_database_tables; omit to export every registered table (capped at ~2MB of SQL text — scope down if the export is refused as too large)",
             "title": "Tables"
           }
         },
@@ -37919,7 +37919,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -38047,7 +38047,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -38059,7 +38059,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "Count of wp_postmeta rows whose post no longer exists \u2014 a common DB-hygiene diagnostic.",
+        "description": "Count of wp_postmeta rows whose post no longer exists — a common DB-hygiene diagnostic.",
         "properties": {
           "id": {
             "anyOf": [
@@ -38164,7 +38164,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -38338,7 +38338,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -38352,7 +38352,7 @@
               }
             ],
             "default": null,
-            "description": "Optional namespace filter, e.g. 'wp/v2' or 'wc/v3' \u2014 omit to list every registered route on the site",
+            "description": "Optional namespace filter, e.g. 'wp/v2' or 'wc/v3' — omit to list every registered route on the site",
             "title": "Namespace"
           }
         },
@@ -38523,7 +38523,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -38542,7 +38542,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "Full endpoint detail for one REST route \u2014 methods and each endpoint's declared args, from the site's own root index.",
+        "description": "Full endpoint detail for one REST route — methods and each endpoint's declared args, from the site's own root index.",
         "properties": {
           "id": {
             "anyOf": [
@@ -38655,7 +38655,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -38842,7 +38842,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -38970,7 +38970,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -39148,7 +39148,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -39285,7 +39285,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -39297,7 +39297,7 @@
           },
           "input": {
             "additionalProperties": true,
-            "description": "Input object matching this ability's own input_schema (see describe_builder_ability) \u2014 e.g. {'postId': 2285, 'zone': 'content'}. IMPORTANT for any post/page-scoped ability (bricks/add-element, update-element, get-page-elements, etc.): always pass 'postId' (or 'slug'/'path') explicitly, even when input_schema does not mark it required. WordPress's own permission check for these abilities resolves the target post first and fails closed with a 401/403 (WP_FORBIDDEN) if it cannot -- that error looks like a credential/role problem but is usually just a missing target id. Never omit postId when you already know which post you're editing.",
+            "description": "Input object matching this ability's own input_schema (see describe_builder_ability) — e.g. {'postId': 2285, 'zone': 'content'}. IMPORTANT for any post/page-scoped ability (bricks/add-element, update-element, get-page-elements, etc.): always pass 'postId' (or 'slug'/'path') explicitly, even when input_schema does not mark it required. WordPress's own permission check for these abilities resolves the target post first and fails closed with a 401/403 (WP_FORBIDDEN) if it cannot -- that error looks like a credential/role problem but is usually just a missing target id. Never omit postId when you already know which post you're editing.",
             "title": "Input",
             "type": "object"
           }
@@ -39439,7 +39439,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -39451,7 +39451,7 @@
           },
           "input": {
             "additionalProperties": true,
-            "description": "Input object matching this ability's own input_schema (see describe_builder_ability) \u2014 e.g. {'postId': 2285, 'zone': 'content'}. IMPORTANT for any post/page-scoped ability (bricks/add-element, update-element, get-page-elements, etc.): always pass 'postId' (or 'slug'/'path') explicitly, even when input_schema does not mark it required. WordPress's own permission check for these abilities resolves the target post first and fails closed with a 401/403 (WP_FORBIDDEN) if it cannot -- that error looks like a credential/role problem but is usually just a missing target id. Never omit postId when you already know which post you're editing.",
+            "description": "Input object matching this ability's own input_schema (see describe_builder_ability) — e.g. {'postId': 2285, 'zone': 'content'}. IMPORTANT for any post/page-scoped ability (bricks/add-element, update-element, get-page-elements, etc.): always pass 'postId' (or 'slug'/'path') explicitly, even when input_schema does not mark it required. WordPress's own permission check for these abilities resolves the target post first and fails closed with a 401/403 (WP_FORBIDDEN) if it cannot -- that error looks like a credential/role problem but is usually just a missing target id. Never omit postId when you already know which post you're editing.",
             "title": "Input",
             "type": "object"
           }
@@ -39593,7 +39593,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -39605,7 +39605,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "PHP runtime facts read via the Imperal Bridge plugin (no SSH needed) \u2014 Group F.",
+        "description": "PHP runtime facts read via the Imperal Bridge plugin (no SSH needed) — Group F.",
         "properties": {
           "id": {
             "anyOf": [
@@ -39794,7 +39794,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -39806,7 +39806,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "WP_DEBUG / WP_DEBUG_LOG / WP_DEBUG_DISPLAY constants \u2014 should normally be off in production.",
+        "description": "WP_DEBUG / WP_DEBUG_LOG / WP_DEBUG_DISPLAY constants — should normally be off in production.",
         "properties": {
           "id": {
             "anyOf": [
@@ -39921,7 +39921,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -39933,7 +39933,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "Octal permission bits for wp-config.php and wp-content \u2014 the two most commonly misconfigured paths.",
+        "description": "Octal permission bits for wp-config.php and wp-content — the two most commonly misconfigured paths.",
         "properties": {
           "id": {
             "anyOf": [
@@ -40062,7 +40062,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -40234,7 +40234,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -40246,7 +40246,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "A hard-allowlisted safe subset of wp-config.php constants \u2014 never DB credentials or auth keys/salts.",
+        "description": "A hard-allowlisted safe subset of wp-config.php constants — never DB credentials or auth keys/salts.",
         "properties": {
           "id": {
             "anyOf": [
@@ -40452,7 +40452,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -40609,7 +40609,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -40761,7 +40761,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -40877,7 +40877,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -41021,7 +41021,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -41147,7 +41147,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -41289,7 +41289,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -41476,7 +41476,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -41660,7 +41660,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -41672,12 +41672,12 @@
           },
           "post_type": {
             "default": "post",
-            "description": "'post', 'page', or a custom post type's slug \u2014 must match the item being updated, and must have this taxonomy registered for it",
+            "description": "'post', 'page', or a custom post type's slug — must match the item being updated, and must have this taxonomy registered for it",
             "title": "Post Type",
             "type": "string"
           },
           "taxonomy": {
-            "description": "Taxonomy slug as registered on the site, e.g. 'category', 'post_tag', or a custom one like 'product-type' \u2014 run list_registered_taxonomies to discover it",
+            "description": "Taxonomy slug as registered on the site, e.g. 'category', 'post_tag', or a custom one like 'product-type' — run list_registered_taxonomies to discover it",
             "minLength": 1,
             "title": "Taxonomy",
             "type": "string"
@@ -41834,7 +41834,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -41992,7 +41992,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -42178,7 +42178,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -42370,7 +42370,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -42509,7 +42509,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -42672,7 +42672,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -42876,7 +42876,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -42994,7 +42994,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -43161,7 +43161,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -43336,7 +43336,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -43381,7 +43381,7 @@
         "type": "object"
       },
       "return_schema": {
-        "description": "One Action Scheduler job \u2014 id, hook, status, group, scheduled time, args.",
+        "description": "One Action Scheduler job — id, hook, status, group, scheduled time, args.",
         "properties": {
           "id": {
             "anyOf": [
@@ -43498,7 +43498,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -43519,7 +43519,7 @@
       "return_schema": {
         "$defs": {
           "ScheduledActionLogEntry": {
-            "description": "A nested log line inside ScheduledActionDetail.logs \u2014 never returned as a\ntop-level ActionResult on its own, so it does not need sdl.Entity's id/title.",
+            "description": "A nested log line inside ScheduledActionDetail.logs — never returned as a\ntop-level ActionResult on its own, so it does not need sdl.Entity's id/title.",
             "properties": {
               "message": {
                 "default": "",
@@ -43660,7 +43660,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -43790,7 +43790,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -43910,7 +43910,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -44040,7 +44040,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -44164,7 +44164,7 @@
     },
     {
       "name": "get_permalink_structure",
-      "description": "Read the site's current permalink structure plus its category/tag base slugs \u2014 the same three values wp-admin's Settings > Permalinks screen reads. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp option get`) if SSH is configured with add_ssh. Native /wp/v2/settings is not used because permalink_structure exposure there is unreliable across WordPress versions and never included category_base/tag_base at all.",
+      "description": "Read the site's current permalink structure plus its category/tag base slugs — the same three values wp-admin's Settings > Permalinks screen reads. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp option get`) if SSH is configured with add_ssh. Native /wp/v2/settings is not used because permalink_structure exposure there is unreliable across WordPress versions and never included category_base/tag_base at all.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -44172,7 +44172,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -44286,7 +44286,7 @@
     },
     {
       "name": "update_permalink_structure",
-      "description": "Update the site's permalink structure and/or category/tag base slugs, then flush rewrite rules \u2014 the same two-step wp-admin's Settings > Permalinks 'Save Changes' button performs. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp rewrite structure`) if SSH is configured with add_ssh. Pass an empty permalink_structure for plain '?p=123' links.",
+      "description": "Update the site's permalink structure and/or category/tag base slugs, then flush rewrite rules — the same two-step wp-admin's Settings > Permalinks 'Save Changes' button performs. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp rewrite structure`) if SSH is configured with add_ssh. Pass an empty permalink_structure for plain '?p=123' links.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -44296,7 +44296,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -44442,7 +44442,7 @@
     },
     {
       "name": "flush_rewrite_rules",
-      "description": "Flush the site's rewrite rules \u2014 regenerates the compiled rules WordPress uses to match incoming URLs, without changing the permalink structure itself. Useful after a plugin/theme registers new post types or CPT rewrite rules and 404s appear on its own URLs. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp rewrite flush`) if SSH is configured with add_ssh.",
+      "description": "Flush the site's rewrite rules — regenerates the compiled rules WordPress uses to match incoming URLs, without changing the permalink structure itself. Useful after a plugin/theme registers new post types or CPT rewrite rules and 404s appear on its own URLs. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp rewrite flush`) if SSH is configured with add_ssh.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -44452,7 +44452,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -44560,7 +44560,7 @@
     },
     {
       "name": "list_rewrite_rules",
-      "description": "List the site's compiled rewrite rules \u2014 each rule's regex match pattern and the query string it maps to, matching `wp rewrite list`. Useful for diagnosing why a custom post type or plugin URL 404s. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp rewrite list`) if SSH is configured with add_ssh.",
+      "description": "List the site's compiled rewrite rules — each rule's regex match pattern and the query string it maps to, matching `wp rewrite list`. Useful for diagnosing why a custom post type or plugin URL 404s. Reads through the Imperal Bridge plugin if it's installed, or falls back to SSH + WP-CLI (`wp rewrite list`) if SSH is configured with add_ssh.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -44568,7 +44568,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -44725,7 +44725,7 @@
     },
     {
       "name": "export_wxr",
-      "description": "Export the site's content as a WXR (WordPress eXtended RSS) document \u2014 the same format Tools > Export produces, importable into any WordPress site. Optionally scoped by content/post type, author, category, date range, or status. Reads through the Imperal Bridge plugin if it's installed (core's own export_wp(), no extra plugin needed), or falls back to SSH + WP-CLI (`wp export --stdout`) if SSH is configured with add_ssh. Capped at ~2MB of XML text \u2014 narrow the filters if the export is refused as too large. WXR does not include site options/settings or the attachment FILES themselves, only their metadata.",
+      "description": "Export the site's content as a WXR (WordPress eXtended RSS) document — the same format Tools > Export produces, importable into any WordPress site. Optionally scoped by content/post type, author, category, date range, or status. Reads through the Imperal Bridge plugin if it's installed (core's own export_wp(), no extra plugin needed), or falls back to SSH + WP-CLI (`wp export --stdout`) if SSH is configured with add_ssh. Capped at ~2MB of XML text — narrow the filters if the export is refused as too large. WXR does not include site options/settings or the attachment FILES themselves, only their metadata.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -44733,7 +44733,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -44936,7 +44936,7 @@
     },
     {
       "name": "import_wxr",
-      "description": "Import a WXR (WordPress eXtended RSS) document into the site \u2014 the same format Tools > Import's WordPress importer accepts. SSH-ONLY: this needs WP-CLI's own `wp import`, backed by the wordpress-importer plugin, which has no safe headless REST equivalent (its only entry point is a web-admin upload wizard). Requires SSH configured with add_ssh, AND the wordpress-importer plugin installed and active on the target site (install_plugin with slug_or_url='wordpress-importer' if it's missing) \u2014 reports a clear error rather than a silent no-op if either is missing.",
+      "description": "Import a WXR (WordPress eXtended RSS) document into the site — the same format Tools > Import's WordPress importer accepts. SSH-ONLY: this needs WP-CLI's own `wp import`, backed by the wordpress-importer plugin, which has no safe headless REST equivalent (its only entry point is a web-admin upload wizard). Requires SSH configured with add_ssh, AND the wordpress-importer plugin installed and active on the target site (install_plugin with slug_or_url='wordpress-importer' if it's missing) — reports a clear error rather than a silent no-op if either is missing.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -44946,12 +44946,12 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
           "wxr_xml": {
-            "description": "The full WXR (.xml) file content to import \u2014 e.g. from export_wxr's own xml field, or a file the user pasted/uploaded elsewhere. Capped at ~2MB of text.",
+            "description": "The full WXR (.xml) file content to import — e.g. from export_wxr's own xml field, or a file the user pasted/uploaded elsewhere. Capped at ~2MB of text.",
             "maxLength": 2000000,
             "minLength": 1,
             "title": "Wxr Xml",
@@ -44965,7 +44965,7 @@
           },
           "skip_attachments": {
             "default": false,
-            "description": "Skip importing file attachments (images etc.) referenced in the WXR file \u2014 matches wp-cli's own `--skip=attachment`. By default attachments ARE imported.",
+            "description": "Skip importing file attachments (images etc.) referenced in the WXR file — matches wp-cli's own `--skip=attachment`. By default attachments ARE imported.",
             "title": "Skip Attachments",
             "type": "boolean"
           }
@@ -45093,7 +45093,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -45220,7 +45220,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -45347,7 +45347,7 @@
     },
     {
       "name": "send_test_email",
-      "description": "Ask WordPress to send one fixed test message to an email address through its own wp_mail() path. Requires Imperal Bridge 2.15.0+ and an administrator Application Password. A success means WordPress accepted the message for sending \u2014 check the inbox/spam folder to confirm actual delivery.",
+      "description": "Ask WordPress to send one fixed test message to an email address through its own wp_mail() path. Requires Imperal Bridge 2.15.0+ and an administrator Application Password. A success means WordPress accepted the message for sending — check the inbox/spam folder to confirm actual delivery.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -45357,7 +45357,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -45487,7 +45487,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -45619,7 +45619,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -45835,7 +45835,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -45953,7 +45953,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -46188,7 +46188,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -46316,7 +46316,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -46516,7 +46516,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Site id from a previous list_sites call \u2014 never invent it",
+            "description": "Site id from a previous list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           }
@@ -46693,7 +46693,7 @@
       "params_schema": {
         "properties": {
           "site_id": {
-            "description": "Multisite network id from a previous list_network_sites/list_sites call \u2014 never invent it",
+            "description": "Multisite network id from a previous list_network_sites/list_sites call — never invent it",
             "title": "Site Id",
             "type": "string"
           },
@@ -46862,6 +46862,401 @@
         "x-sdl": "entity"
       },
       "event": "wordpress-hub.create_network_site",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "get_post_translations",
+      "description": "Read one post/page/CPT item's current Polylang language, plus every translation already linked to it (language code -> post id). Use this before link_post_translations to see what is already linked. Requires the Imperal Bridge plugin and Polylang active.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "description": "Numeric post/page/CPT item id whose Polylang language and linked translations to read",
+            "exclusiveMinimum": 0,
+            "title": "Post Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "post_id"
+        ],
+        "title": "GetPostTranslationsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "One post's current Polylang language plus every translation already linked to it.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "post_id": {
+            "default": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "language": {
+            "default": "",
+            "title": "Language",
+            "type": "string"
+          },
+          "translations": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Translations",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "PolylangTranslations",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "set_post_language",
+      "description": "Assign a Polylang language to one post/page/CPT item. Must be a language code the site already has configured (e.g. 'ru', 'ro', 'en') -- use get_post_translations or check the site's Languages settings first if unsure. Requires the Imperal Bridge plugin and Polylang active.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.polylang_language_set"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "description": "Numeric post/page/CPT item id to assign a language to",
+            "exclusiveMinimum": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "language": {
+            "description": "Polylang language code already configured on the site, e.g. 'ru', 'ro', 'en'",
+            "minLength": 1,
+            "title": "Language",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "post_id",
+          "language"
+        ],
+        "title": "SetPostLanguageParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "post_id": {
+            "default": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "language": {
+            "default": "",
+            "title": "Language",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PostLanguageResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.set_post_language",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "link_post_translations",
+      "description": "Link posts as Polylang translations of each other -- this is the exact operation behind the editor's Languages > Translations field. Pass a map of language code to post id, e.g. {'ru': 2551, 'ro': 2556}, and every listed post becomes a translation of every other one (each post is assigned the language it's mapped under, then Polylang's own pll_save_post_translations links them as a group). Works for any post type Polylang manages on any connected site with Polylang active -- not limited to one CPT or one site. Requires the Imperal Bridge plugin (v2.25.0+).",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.polylang_translations_link"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "translations": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Map of Polylang language code to post id, e.g. {'ru': 2551, 'ro': 2556} — links every listed post as a translation of every other one. Each post keeps (or gets assigned) the language it's mapped under.",
+            "title": "Translations",
+            "type": "object"
+          }
+        },
+        "required": [
+          "site_id",
+          "translations"
+        ],
+        "title": "LinkPostTranslationsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "site_id": {
+            "default": "",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "translations": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Translations",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "LinkPostTranslationsResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.link_post_translations",
       "background": false,
       "long_running": false,
       "scopes": [],
@@ -47043,6 +47438,7 @@
       "get_post_content": 8,
       "get_post_meta": 8,
       "get_post_revisions": 8,
+      "get_post_translations": 8,
       "get_product": 8,
       "get_rest_route_schema": 8,
       "get_robots_txt": 8,
@@ -47062,6 +47458,7 @@
       "get_wp_config_constants": 8,
       "import_wxr": 60,
       "install_plugin": 20,
+      "link_post_translations": 16,
       "list_404_hits": 8,
       "list_acf_fields": 8,
       "list_active_sessions": 8,
@@ -47161,6 +47558,7 @@
       "scan_builder_content": 40,
       "send_test_email": 16,
       "set_comment_status": 16,
+      "set_post_language": 16,
       "set_post_password": 16,
       "set_product_review_status": 16,
       "set_redirect_status": 16,
@@ -47207,6 +47605,6 @@
       "list_sites",
       "remove_ssh"
     ],
-    "notes": "SYNCHRONISED WITH THE PLATFORM. Save the complete pricing_config.tool_prices map through developer.update_pricing while the app is suspended. Current policy: 0 only where charging would be unfair because no WordPress work is performed \u2014 initial access setup/removal and the already-stored local connected-site list. Every site read begins at 8; 16 is a standard single site action; 20 is a substantial single site/server operation; 40 is a heavy diagnostic, preview, or aggregation; 60 applies bulk, CSV, or import changes. Risk is governed separately by confirmations. Every function must have an explicit price."
+    "notes": "SYNCHRONISED WITH THE PLATFORM. Save the complete pricing_config.tool_prices map through developer.update_pricing while the app is suspended. Current policy: 0 only where charging would be unfair because no WordPress work is performed — initial access setup/removal and the already-stored local connected-site list. Every site read begins at 8; 16 is a standard single site action; 20 is a substantial single site/server operation; 40 is a heavy diagnostic, preview, or aggregation; 60 applies bulk, CSV, or import changes. Risk is governed separately by confirmations. Every function must have an explicit price."
   }
 }

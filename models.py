@@ -3184,3 +3184,41 @@ class DestroySessionsResult(sdl.Entity):
     site_id: str = ""
     user_id: int = 0
     destroyed: bool = False
+
+
+# ─────────── Polylang translation linking (Bridge SECTION 20) ───────────
+
+class GetPostTranslationsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(gt=0, description="Numeric post/page/CPT item id whose Polylang language and linked translations to read")
+
+
+class PolylangTranslations(sdl.Entity):
+    """One post's current Polylang language plus every translation already linked to it."""
+    post_id: int = 0
+    post_type: str = ""
+    title: str = ""
+    language: str = ""
+    translations: dict = {}
+
+
+class SetPostLanguageParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(gt=0, description="Numeric post/page/CPT item id to assign a language to")
+    language: str = Field(min_length=1, description="Polylang language code already configured on the site, e.g. 'ru', 'ro', 'en'")
+
+
+class PostLanguageResult(sdl.Entity):
+    post_id: int = 0
+    language: str = ""
+
+
+class LinkPostTranslationsParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    translations: dict[str, int] = Field(
+        description="Map of Polylang language code to post id, e.g. {'ru': 2551, 'ro': 2556} — links every listed post as a translation of every other one. Each post keeps (or gets assigned) the language it's mapped under.")
+
+
+class LinkPostTranslationsResult(sdl.Entity):
+    site_id: str = ""
+    translations: dict = {}

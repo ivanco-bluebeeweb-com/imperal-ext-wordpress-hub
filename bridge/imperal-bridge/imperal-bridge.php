@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
- * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), and Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log) to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.24.2
+ * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log), and Polylang post language + translation linking, to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
+ * Version:           2.25.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.24.2' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.25.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -63,7 +63,7 @@ function imperal_bridge_status() {
 		array(
 			'bridge'         => true,
 			'bridge_version' => IMPERAL_BRIDGE_VERSION,
-			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy', 'database', 'logs', 'cache_cron', 'maintenance', 'action_scheduler', 'mail' ),
+			'sections'       => array( 'seo', 'builder', 'media', 'server', 'redirects', 'users', 'rankmath', 'llmstxt', 'meta', 'security', 'deploy', 'database', 'logs', 'cache_cron', 'maintenance', 'action_scheduler', 'mail', 'polylang' ),
 		)
 	);
 }
@@ -6371,4 +6371,406 @@ function imperal_importexport_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_importexport_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 20 — POLYLANG (post language + translation linking)
+ *
+ * Polylang never registers REST routes for setting a post's language or for
+ * linking two posts as translations of each other — the admin editor's
+ * "Languages" > "Translations" panel talks to admin-ajax.php, not the REST
+ * API (verified against polylang 3.6.1's own include/api.php, which exposes
+ * pll_set_post_language() / pll_save_post_translations() /
+ * pll_get_post_translations() only as PHP functions, never as REST). Without
+ * a bridge this is completely invisible to Imperal — the exact same gap
+ * SECTION 1 solves for Rank Math SEO meta and SECTION 5 solves for Rank
+ * Math redirects.
+ *
+ * This section calls Polylang's own public API functions directly (never
+ * wp_options/postmeta by hand), so Polylang's own model stays authoritative
+ * and every one of its side effects (rewriting the post_translations term
+ * group, clearing its own caches) happens exactly as the admin editor's
+ * Languages panel would trigger them.
+ *
+ * Every pll_* call is guarded with function_exists() first — Polylang's own
+ * documentation requires this because the functions can be unavailable
+ * mid-request (e.g. Polylang deactivated, or not installed at all); calling
+ * one directly without the guard risks a fatal error on a site without it.
+ *
+ * Works for ANY post type Polylang manages (pll_is_translated_post_type),
+ * not just 'product' or 'post' — generic by design so this works the same
+ * way on every connected WordPress site, not only one with a specific CPT.
+ * ============================================================================= */
+
+define( 'IMPERAL_POLYLANG_BRIDGE_NAMESPACE', 'imperal/v1' );
+define( 'IMPERAL_POLYLANG_BRIDGE_VERSION', '1.0.0' );
+
+/**
+ * Whether Polylang's public API functions this bridge needs are available.
+ *
+ * @return bool
+ */
+function imperal_polylang_bridge_active() {
+	return function_exists( 'pll_languages_list' )
+		&& function_exists( 'pll_set_post_language' )
+		&& function_exists( 'pll_get_post_language' )
+		&& function_exists( 'pll_save_post_translations' )
+		&& function_exists( 'pll_get_post_translations' )
+		&& function_exists( 'pll_is_translated_post_type' );
+}
+
+/**
+ * GET /imperal/v1/polylang/status — is Polylang active, and if so which
+ * language codes are configured on this site right now. Callers must use
+ * these real configured codes (never hard-code 'en'/'ro'/etc.) since every
+ * site's Polylang installation configures its own set.
+ *
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_polylang_bridge_status() {
+	if ( ! imperal_polylang_bridge_active() ) {
+		return rest_ensure_response(
+			array(
+				'active'    => false,
+				'languages' => array(),
+			)
+		);
+	}
+
+	return rest_ensure_response(
+		array(
+			'active'    => true,
+			'languages' => array_values( pll_languages_list() ),
+		)
+	);
+}
+
+/**
+ * Resolve and permission-check a post id from a request, shared by every
+ * endpoint in this section. Mirrors imperal_seo_bridge_can_edit's own bar —
+ * the caller must be able to edit_post on that specific post.
+ *
+ * @param int $post_id Post ID from the request.
+ * @return WP_Post|WP_Error
+ */
+function imperal_polylang_bridge_resolve_post( $post_id ) {
+	$post_id = (int) $post_id;
+
+	if ( $post_id <= 0 ) {
+		return new WP_Error(
+			'imperal_polylang_bad_id',
+			__( 'A valid post_id is required.', 'imperal-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$post = get_post( $post_id );
+
+	if ( ! $post ) {
+		return new WP_Error(
+			'imperal_polylang_not_found',
+			__( 'No post exists with that id.', 'imperal-bridge' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	if ( ! current_user_can( 'edit_post', $post_id ) ) {
+		return new WP_Error(
+			'imperal_polylang_forbidden',
+			__( 'That WordPress user cannot edit this item.', 'imperal-bridge' ),
+			array( 'status' => 403 )
+		);
+	}
+
+	return $post;
+}
+
+/**
+ * GET /imperal/v1/polylang/translations?post_id=123 — read one post's
+ * current language plus every translation Polylang already knows about
+ * (language code => post ID), so a caller can see what is already linked
+ * before deciding what to link next.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_polylang_bridge_get_translations( $request ) {
+	if ( ! imperal_polylang_bridge_active() ) {
+		return new WP_Error(
+			'imperal_polylang_inactive',
+			__( 'Polylang is not active on this site.', 'imperal-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$post = imperal_polylang_bridge_resolve_post( $request->get_param( 'post_id' ) );
+
+	if ( is_wp_error( $post ) ) {
+		return $post;
+	}
+
+	if ( ! pll_is_translated_post_type( $post->post_type ) ) {
+		return new WP_Error(
+			'imperal_polylang_untranslated_type',
+			sprintf(
+				/* translators: %s: post type name. */
+				__( 'Polylang does not manage translations for post type "%s".', 'imperal-bridge' ),
+				$post->post_type
+			),
+			array( 'status' => 400 )
+		);
+	}
+
+	$language     = pll_get_post_language( $post->ID );
+	$translations = pll_get_post_translations( $post->ID );
+
+	return rest_ensure_response(
+		array(
+			'post_id'      => $post->ID,
+			'post_type'    => $post->post_type,
+			'title'        => $post->post_title,
+			'language'     => $language ? $language : '',
+			'translations' => $translations ? $translations : array(),
+		)
+	);
+}
+
+/**
+ * PUT/POST /imperal/v1/polylang/language { post_id, language } — assign a
+ * post to a Polylang language. Must be a language code Polylang already has
+ * configured on this site (from pll_languages_list()); Polylang itself
+ * rejects unknown codes.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_polylang_bridge_set_language( $request ) {
+	if ( ! imperal_polylang_bridge_active() ) {
+		return new WP_Error(
+			'imperal_polylang_inactive',
+			__( 'Polylang is not active on this site.', 'imperal-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$post = imperal_polylang_bridge_resolve_post( $request->get_param( 'post_id' ) );
+
+	if ( is_wp_error( $post ) ) {
+		return $post;
+	}
+
+	$language = sanitize_key( (string) $request->get_param( 'language' ) );
+	$known    = pll_languages_list();
+
+	if ( ! in_array( $language, $known, true ) ) {
+		return new WP_Error(
+			'imperal_polylang_unknown_language',
+			sprintf(
+				/* translators: 1: requested language code, 2: comma-separated list of configured codes. */
+				__( 'Language "%1$s" is not configured on this site. Configured languages: %2$s.', 'imperal-bridge' ),
+				$language,
+				implode( ', ', $known )
+			),
+			array( 'status' => 400 )
+		);
+	}
+
+	pll_set_post_language( $post->ID, $language );
+
+	return rest_ensure_response(
+		array(
+			'post_id'  => $post->ID,
+			'language' => pll_get_post_language( $post->ID ),
+		)
+	);
+}
+
+/**
+ * POST /imperal/v1/polylang/link-translations { translations: {lang: id} }
+ * — the actual operation behind this section: given a map of language code
+ * to post ID (e.g. {"ru": 2510, "ro": 2556}), link every one of those posts
+ * as translations of each other, exactly like the editor's Languages >
+ * Translations panel does when you pick an existing post there.
+ *
+ * Requirements enforced before any write happens:
+ *  - at least 2 entries (a translation group of 1 makes no sense);
+ *  - every post id exists, the caller can edit it, and it is a post type
+ *    Polylang manages;
+ *  - every language code is one Polylang has configured on this site;
+ *  - every post already carries the SAME language Polylang has recorded for
+ *    it as the key it's listed under -- if it doesn't yet (e.g. a fresh
+ *    post that was never given a language), this call sets it, exactly as
+ *    the editor's own Languages panel would when you first pick a language
+ *    for an untranslated post;
+ *  - all posts must share the same post type (Polylang itself refuses to
+ *    link translations across different post types).
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function imperal_polylang_bridge_link_translations( $request ) {
+	if ( ! imperal_polylang_bridge_active() ) {
+		return new WP_Error(
+			'imperal_polylang_inactive',
+			__( 'Polylang is not active on this site.', 'imperal-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$map = $request->get_param( 'translations' );
+
+	if ( ! is_array( $map ) || count( $map ) < 2 ) {
+		return new WP_Error(
+			'imperal_polylang_need_two',
+			__( 'Provide at least two {language: post_id} entries to link as translations.', 'imperal-bridge' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$known_languages = pll_languages_list();
+	$clean           = array();
+	$post_type       = null;
+
+	foreach ( $map as $lang => $post_id ) {
+		$lang = sanitize_key( (string) $lang );
+
+		if ( ! in_array( $lang, $known_languages, true ) ) {
+			return new WP_Error(
+				'imperal_polylang_unknown_language',
+				sprintf(
+					/* translators: 1: requested language code, 2: comma-separated list of configured codes. */
+					__( 'Language "%1$s" is not configured on this site. Configured languages: %2$s.', 'imperal-bridge' ),
+					$lang,
+					implode( ', ', $known_languages )
+				),
+				array( 'status' => 400 )
+			);
+		}
+
+		$post = imperal_polylang_bridge_resolve_post( $post_id );
+
+		if ( is_wp_error( $post ) ) {
+			return $post;
+		}
+
+		if ( ! pll_is_translated_post_type( $post->post_type ) ) {
+			return new WP_Error(
+				'imperal_polylang_untranslated_type',
+				sprintf(
+					/* translators: %s: post type name. */
+					__( 'Polylang does not manage translations for post type "%s".', 'imperal-bridge' ),
+					$post->post_type
+				),
+				array( 'status' => 400 )
+			);
+		}
+
+		if ( null === $post_type ) {
+			$post_type = $post->post_type;
+		} elseif ( $post_type !== $post->post_type ) {
+			return new WP_Error(
+				'imperal_polylang_mixed_post_types',
+				__( 'All posts being linked as translations must be the same post type.', 'imperal-bridge' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		$existing_lang = pll_get_post_language( $post->ID );
+
+		if ( $existing_lang && $existing_lang !== $lang ) {
+			return new WP_Error(
+				'imperal_polylang_language_mismatch',
+				sprintf(
+					/* translators: 1: post id, 2: post's current language, 3: requested language. */
+					__( 'Post %1$d is already set to language "%2$s", not "%3$s" — remove it from the map or fix the language first.', 'imperal-bridge' ),
+					$post->ID,
+					$existing_lang,
+					$lang
+				),
+				array( 'status' => 409 )
+			);
+		}
+
+		if ( ! $existing_lang ) {
+			pll_set_post_language( $post->ID, $lang );
+		}
+
+		$clean[ $lang ] = $post->ID;
+	}
+
+	$result = pll_save_post_translations( $clean );
+
+	return rest_ensure_response(
+		array(
+			'translations' => $result ? $result : $clean,
+		)
+	);
+}
+
+/**
+ * Register the REST routes for this section.
+ */
+function imperal_polylang_bridge_register_routes() {
+	$edit_posts_perm = function () {
+		return current_user_can( 'edit_posts' );
+	};
+
+	register_rest_route(
+		IMPERAL_POLYLANG_BRIDGE_NAMESPACE,
+		'/polylang/status',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_polylang_bridge_status',
+				'permission_callback' => $edit_posts_perm,
+			),
+		)
+	);
+
+	register_rest_route(
+		IMPERAL_POLYLANG_BRIDGE_NAMESPACE,
+		'/polylang/translations',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'imperal_polylang_bridge_get_translations',
+				'permission_callback' => $edit_posts_perm,
+				'args'                => array(
+					'post_id' => array( 'type' => 'integer', 'required' => true ),
+				),
+			),
+		)
+	);
+
+	register_rest_route(
+		IMPERAL_POLYLANG_BRIDGE_NAMESPACE,
+		'/polylang/language',
+		array(
+			array(
+				'methods'             => WP_REST_Server::EDITABLE,
+				'callback'            => 'imperal_polylang_bridge_set_language',
+				'permission_callback' => $edit_posts_perm,
+				'args'                => array(
+					'post_id'  => array( 'type' => 'integer', 'required' => true ),
+					'language' => array( 'type' => 'string', 'required' => true ),
+				),
+			),
+		)
+	);
+
+	register_rest_route(
+		IMPERAL_POLYLANG_BRIDGE_NAMESPACE,
+		'/polylang/link-translations',
+		array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => 'imperal_polylang_bridge_link_translations',
+				'permission_callback' => $edit_posts_perm,
+				'args'                => array(
+					'translations' => array( 'type' => 'object', 'required' => true ),
+				),
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'imperal_polylang_bridge_register_routes' );
 
