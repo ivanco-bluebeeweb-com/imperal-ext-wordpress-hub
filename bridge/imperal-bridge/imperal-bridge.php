@@ -3,7 +3,7 @@
  * Plugin Name:       Imperal Bridge
  * Plugin URI:        https://panel.imperal.io
  * Description:       The single companion plugin for Imperal / Webbee — exposes Rank Math SEO fields, Elementor/Bricks page-builder content, external-image sideloading, server diagnostics (WP/PHP versions, plugin/theme/core updates, cron count, DB size), Rank Math's site-wide data (SEO score, robots.txt editor, sitemap module status, 404 monitor log), and Polylang post language + translation linking, to the WordPress REST API, all under one plugin. Everything Imperal's WordPress Hub connector needs from a WordPress site that stock REST + an Application Password cannot already provide.
- * Version:           2.25.0
+ * Version:           2.26.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Imperal Cloud
@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'IMPERAL_BRIDGE_VERSION', '2.25.0' );
+define( 'IMPERAL_BRIDGE_VERSION', '2.26.0' );
 define( 'IMPERAL_BRIDGE_NAMESPACE', 'imperal/v1' );
 
 /**
@@ -704,6 +704,8 @@ function imperal_seo_bridge_update_term_meta_route( $request ) {
 		);
 	}
 
+	imperal_bridge_touch_term( $term->term_id, $term->taxonomy );
+
 	$payload                     = imperal_seo_bridge_term_payload( $term );
 	$payload['rank_math_active'] = imperal_seo_bridge_rank_math_active();
 	$payload['updated_fields']   = $changed;
@@ -851,6 +853,8 @@ function imperal_seo_bridge_update_meta( $request ) {
 			array( 'status' => 400 )
 		);
 	}
+
+	imperal_bridge_touch_post( $post->ID );
 
 	$payload                     = imperal_seo_bridge_payload( get_post( $post->ID ) );
 	$payload['updated']          = $changed;
@@ -1894,6 +1898,7 @@ function imperal_builder_bridge_update_field( $request ) {
 	}
 
 	imperal_builder_bridge_write_meta( $post->ID, $meta_key, $raw, $decoded );
+	imperal_bridge_touch_post( $post->ID );
 
 	return rest_ensure_response(
 		array(
@@ -3775,6 +3780,9 @@ function imperal_meta_bridge_update_post_meta( WP_REST_Request $request ) {
 		update_post_meta( $post_id, sanitize_key( $key ), $value );
 		$updated[] = sanitize_key( $key );
 	}
+	if ( ! empty( $updated ) ) {
+		imperal_bridge_touch_post( $post_id );
+	}
 	return rest_ensure_response( array( 'post_id' => $post_id, 'updated' => $updated ) );
 }
 
@@ -3785,6 +3793,7 @@ function imperal_meta_bridge_delete_post_meta( WP_REST_Request $request ) {
 		return new WP_Error( 'imperal_meta_no_post', __( 'Post not found.', 'imperal-bridge' ), array( 'status' => 404 ) );
 	}
 	delete_post_meta( $post_id, $key );
+	imperal_bridge_touch_post( $post_id );
 	return rest_ensure_response( array( 'post_id' => $post_id, 'deleted' => $key ) );
 }
 
@@ -3863,6 +3872,9 @@ function imperal_meta_bridge_update_term_meta( WP_REST_Request $request ) {
 		update_term_meta( $term_id, sanitize_key( $key ), $value );
 		$updated[] = sanitize_key( $key );
 	}
+	if ( ! empty( $updated ) ) {
+		imperal_bridge_touch_term( $term_id, $term->taxonomy );
+	}
 	return rest_ensure_response( array( 'term_id' => $term_id, 'updated' => $updated ) );
 }
 
@@ -3874,6 +3886,7 @@ function imperal_meta_bridge_delete_term_meta( WP_REST_Request $request ) {
 		return new WP_Error( 'imperal_meta_no_term', __( 'Term not found.', 'imperal-bridge' ), array( 'status' => 404 ) );
 	}
 	delete_term_meta( $term_id, $key );
+	imperal_bridge_touch_term( $term_id, $term->taxonomy );
 	return rest_ensure_response( array( 'term_id' => $term_id, 'deleted' => $key ) );
 }
 
@@ -6575,6 +6588,7 @@ function imperal_polylang_bridge_set_language( $request ) {
 	}
 
 	pll_set_post_language( $post->ID, $language );
+	imperal_bridge_touch_post( $post->ID );
 
 	return rest_ensure_response(
 		array(
@@ -6699,6 +6713,10 @@ function imperal_polylang_bridge_link_translations( $request ) {
 
 	$result = pll_save_post_translations( $clean );
 
+	foreach ( $clean as $linked_post_id ) {
+		imperal_bridge_touch_post( $linked_post_id );
+	}
+
 	return rest_ensure_response(
 		array(
 			'translations' => $result ? $result : $clean,
@@ -6773,4 +6791,116 @@ function imperal_polylang_bridge_register_routes() {
 	);
 }
 add_action( 'rest_api_init', 'imperal_polylang_bridge_register_routes' );
+
+/* =============================================================================
+ * SECTION 21 — RE-SAVE / RE-PUBLISH GUARANTEE (shared, cross-section)
+ *
+ * The rule: ANY content change made through this bridge to a post, custom
+ * post, or taxonomy term -- no matter which section made it (SEO meta,
+ * builder field, generic post/term meta, Polylang language/translation,
+ * anything added later) -- must behave as a real save/publish of that unit,
+ * not a silent side-channel write.
+ *
+ * Why this exists: several sections in this file update post/term data by
+ * calling update_post_meta()/update_term_meta()/pll_set_post_language()
+ * directly, because that is the only way to reach fields WordPress core
+ * never exposes to REST (see the file header). But calling those functions
+ * alone does NOT do what editing the field in wp-admin and clicking
+ * "Update"/"Publish" does:
+ *   - post_modified / post_modified_gmt are not bumped
+ *   - the save_post / post_updated / edited_terms / edited_term hooks never
+ *     fire
+ *   - anything hanging off those hooks -- cache plugins, search indexers
+ *     (ElasticPress, Relevanssi), sitemap generators, static-site rebuild
+ *     triggers, CDN purge hooks, other Imperal sections listening for
+ *     content change -- never learns the content changed.
+ *
+ * Fix: every bridge write path that touches a post's or term's content
+ * through direct meta/API calls must ALSO call imperal_bridge_touch_post()
+ * or imperal_bridge_touch_term() once, after the write succeeds. These
+ * helpers do exactly what a real save/publish does -- run the update
+ * through wp_update_post()/wp_update_term() (a same-value, no-op field
+ * update is enough to bump post_modified and fire every native hook) --
+ * instead of re-implementing hook-firing by hand. This makes the
+ * guarantee generic: it works for ANY post type and ANY taxonomy on ANY
+ * connected site, exactly like every other section in this file, not
+ * hardcoded to one site or one content type.
+ * ============================================================================= */
+
+/**
+ * Re-save a post exactly like clicking "Update"/"Publish" in wp-admin would,
+ * WITHOUT changing any of its content. Bumps post_modified(_gmt) and fires
+ * save_post / post_updated / clean_post_cache -- the same hooks any real
+ * editor save fires -- so every plugin listening for a content change (SEO
+ * plugins, cache purgers, search indexers, sitemap builders) sees this
+ * write the same way it would see a manual save.
+ *
+ * Call this once, after any direct meta/API write to a post's content
+ * outside of wp_update_post() -- e.g. after update_post_meta() for SEO
+ * fields, builder tree fields, or any other post-attached data.
+ *
+ * Safe to call repeatedly and safe to call even if the post type or the
+ * specific meta key isn't "public" -- it only touches the post row itself.
+ *
+ * @param int $post_id Post to re-save.
+ * @return bool True if the post was found and re-saved, false otherwise.
+ */
+function imperal_bridge_touch_post( $post_id ) {
+	$post_id = (int) $post_id;
+
+	if ( $post_id <= 0 || ! get_post( $post_id ) ) {
+		return false;
+	}
+
+	// wp_update_post() with only ID set re-saves the post's CURRENT fields
+	// unchanged -- it still runs the full core save path (post_modified
+	// bump, save_post/post_updated hooks, cache clear) without touching
+	// title/content/status/anything else. This is the same technique core
+	// itself uses internally when it needs to "touch" a post.
+	$result = wp_update_post( array( 'ID' => $post_id ), true );
+
+	if ( is_wp_error( $result ) ) {
+		return false;
+	}
+
+	clean_post_cache( $post_id );
+
+	return true;
+}
+
+/**
+ * Re-save a taxonomy term exactly like clicking "Update" on the term editor
+ * would, WITHOUT changing any of its content. Fires edited_term /
+ * edited_{taxonomy} / clean_term_cache -- the same hooks a manual term save
+ * fires -- so anything listening for a term content change (SEO plugins,
+ * cache purgers) sees this write the same way.
+ *
+ * Call this once, after any direct meta write to a term outside of
+ * wp_update_term() -- e.g. after update_term_meta() for SEO fields or
+ * Polylang term-translation links.
+ *
+ * @param int    $term_id  Term to re-save.
+ * @param string $taxonomy Term's taxonomy (required by wp_update_term()).
+ * @return bool True if the term was found and re-saved, false otherwise.
+ */
+function imperal_bridge_touch_term( $term_id, $taxonomy ) {
+	$term_id  = (int) $term_id;
+	$taxonomy = (string) $taxonomy;
+
+	if ( $term_id <= 0 || '' === $taxonomy || ! term_exists( $term_id, $taxonomy ) ) {
+		return false;
+	}
+
+	// wp_update_term() with no changed args re-saves the term's CURRENT
+	// fields unchanged -- same "touch" technique as imperal_bridge_touch_post().
+	$result = wp_update_term( $term_id, $taxonomy, array() );
+
+	if ( is_wp_error( $result ) ) {
+		return false;
+	}
+
+	clean_term_cache( $term_id, $taxonomy );
+
+	return true;
+}
 
