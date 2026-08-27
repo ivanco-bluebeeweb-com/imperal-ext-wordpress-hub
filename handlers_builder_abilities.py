@@ -104,9 +104,15 @@ def _failure(status_code, body):
             retryable=False, code="WP_ABILITY_NOT_FOUND")
     if status_code in (401, 403):
         return ActionResult.error(
-            "The connected WordPress user cannot run this ability. Reconnect with an "
-            "administrator Application Password, or check the ability's own permission "
-            "requirements.",
+            "The connected WordPress user cannot run this ability. Most common cause: "
+            "'input' is missing an explicit target identifier the ability needs to check "
+            "permissions against (e.g. 'postId' for a post/page-scoped Bricks ability) -- "
+            "many WordPress permission checks fail closed against an unresolved target "
+            "even when the schema does not mark that field required. Re-check "
+            "describe_builder_ability's input_schema and pass postId (or slug/path) "
+            "explicitly, then retry before assuming a credential/role problem. If it still "
+            "fails with an explicit target, reconnect with an administrator Application "
+            "Password.",
             retryable=False, code="WP_FORBIDDEN")
     if status_code == 400:
         # The Abilities API's own 400 responses carry a specific, useful
@@ -295,10 +301,14 @@ async def _run_ability(ctx, params: CallBuilderAbilityParams, *, allow_destructi
         "to see the expected 'input' shape. Once check_builder_support reports bricks_readiness "
         "'ready', use this for ALL real page authoring -- never hand-author raw "
         "_bricks_page_content_2 postmeta as a substitute; it can silently render empty in the "
-        "real builder even though it looks saved. Abilities the site itself marks destructive are "
-        "refused here -- use call_builder_ability_risky for those. ALWAYS read the result back "
-        "(get_builder_content or a readonly ability) after a write before reporting success -- a "
-        "200 response alone does not prove the real builder can render what was saved."
+        "real builder even though it looks saved. ALWAYS pass 'postId' (or 'slug'/'path') "
+        "explicitly in 'input' for any post/page-scoped ability, even if input_schema does not "
+        "mark it required -- omitting it can make WordPress's own permission check fail closed "
+        "with a 401/403 (WP_FORBIDDEN) that looks like a credential problem but isn't. Abilities "
+        "the site itself marks destructive are refused here -- use call_builder_ability_risky for "
+        "those. ALWAYS read the result back (get_builder_content or a readonly ability) after a "
+        "write before reporting success -- a 200 response alone does not prove the real builder "
+        "can render what was saved."
     ),
     action_type="write", data_model=BuilderAbilityResult,
 )

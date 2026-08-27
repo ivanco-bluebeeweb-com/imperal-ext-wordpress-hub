@@ -10,7 +10,7 @@ from imperal_sdk.testing import MockContext
 import app  # noqa: F401
 import handlers_cpt_taxonomy as hct
 import storage
-from models import SiteIdParams
+from models import AssignPostTaxonomyParams, SiteIdParams
 
 BASE = "https://blog.test"
 
@@ -144,3 +144,99 @@ async def test_list_registered_taxonomies_requires_credential():
     result = await hct.list_registered_taxonomies(ctx, SiteIdParams(site_id="blog-test"))
     assert result.status == "error"
     assert result.error_code == "SITE_CREDENTIAL_MISSING"
+
+
+# ─────────── assign_post_taxonomy (custom taxonomy gap -- climtec.md product-type) ───────────
+
+def _product_type_taxonomy(rest_base="product-type"):
+    return {
+        "name": "Product Type", "rest_base": rest_base, "hierarchical": False,
+        "visibility": {"public": True}, "types": ["product"],
+    }
+
+
+async def test_assign_post_taxonomy_resolves_existing_term_by_name():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/wp-json/wp/v2/taxonomies/product-type", _product_type_taxonomy(), 200)
+    ctx.http.mock_get(f"{BASE}/wp-json/wp/v2/product-type",
+                       [{"id": 61, "name": "RD", "slug": "rd"}], 200)
+    ctx.http.mock_post(f"{BASE}/wp-json/wp/v2/product/2776", {"id": 2776, "product-type": [61]}, 200)
+
+    result = await hct.assign_post_taxonomy(ctx, AssignPostTaxonomyParams(
+        site_id="blog-test", post_id=2776, post_type="product",
+        taxonomy="product-type", terms=["RD"]))
+
+    assert result.status == "success"
+    assert result.data.term_ids == [61]
+    assert result.data.rest_base == "product-type"
+    assert result.data.created_terms == []
+    assert result.data.terms_not_found == []
+
+
+async def test_assign_post_taxonomy_accepts_numeric_term_id_without_lookup():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/wp-json/wp/v2/taxonomies/product-type", _product_type_taxonomy(), 200)
+    ctx.http.mock_post(f"{BASE}/wp-json/wp/v2/product/2779", {"id": 2779, "product-type": [62]}, 200)
+
+    result = await hct.assign_post_taxonomy(ctx, AssignPostTaxonomyParams(
+        site_id="blog-test", post_id=2779, post_type="product",
+        taxonomy="product-type", terms=["62"]))
+
+    assert result.status == "success"
+    assert result.data.term_ids == [62]
+
+
+async def test_assign_post_taxonomy_creates_missing_term_by_default():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/wp-json/wp/v2/taxonomies/product-type", _product_type_taxonomy(), 200)
+    ctx.http.mock_get(f"{BASE}/wp-json/wp/v2/product-type", [], 200)  # no existing "RDC" term
+    ctx.http.mock_post(f"{BASE}/wp-json/wp/v2/product-type", {"id": 70, "name": "RDC"}, 201)
+    ctx.http.mock_post(f"{BASE}/wp-json/wp/v2/product/2900", {"id": 2900, "product-type": [70]}, 200)
+
+    result = await hct.assign_post_taxonomy(ctx, AssignPostTaxonomyParams(
+        site_id="blog-test", post_id=2900, post_type="product",
+        taxonomy="product-type", terms=["RDC"]))
+
+    assert result.status == "success"
+    assert result.data.term_ids == [70]
+    assert result.data.created_terms == ["RDC"]
+
+
+async def test_assign_post_taxonomy_create_missing_false_leaves_unresolved():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/wp-json/wp/v2/taxonomies/product-type", _product_type_taxonomy(), 200)
+    ctx.http.mock_get(f"{BASE}/wp-json/wp/v2/product-type", [], 200)
+
+    result = await hct.assign_post_taxonomy(ctx, AssignPostTaxonomyParams(
+        site_id="blog-test", post_id=2900, post_type="product",
+        taxonomy="product-type", terms=["Ghost"], create_missing=False))
+
+    assert result.status == "error"
+    assert result.error_code == "WP_TAXONOMY_TERMS_UNRESOLVED"
+
+
+async def test_assign_post_taxonomy_unknown_taxonomy_slug():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/wp-json/wp/v2/taxonomies/nope", {"code": "rest_no_route"}, 404)
+
+    result = await hct.assign_post_taxonomy(ctx, AssignPostTaxonomyParams(
+        site_id="blog-test", post_id=2776, post_type="product",
+        taxonomy="nope", terms=["RD"]))
+
+    assert result.status == "error"
+    assert result.error_code == "WP_TAXONOMY_NOT_FOUND"
+
+
+async def test_assign_post_taxonomy_post_not_found():
+    ctx = await _ctx()
+    ctx.http.mock_get(f"{BASE}/wp-json/wp/v2/taxonomies/product-type", _product_type_taxonomy(), 200)
+    ctx.http.mock_get(f"{BASE}/wp-json/wp/v2/product-type",
+                       [{"id": 61, "name": "RD", "slug": "rd"}], 200)
+    ctx.http.mock_post(f"{BASE}/wp-json/wp/v2/product/999999", {"code": "rest_post_invalid_id"}, 404)
+
+    result = await hct.assign_post_taxonomy(ctx, AssignPostTaxonomyParams(
+        site_id="blog-test", post_id=999999, post_type="product",
+        taxonomy="product-type", terms=["RD"]))
+
+    assert result.status == "error"
+    assert result.error_code == "WP_POST_NOT_FOUND"

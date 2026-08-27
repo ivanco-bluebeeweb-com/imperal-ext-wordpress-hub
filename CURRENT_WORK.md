@@ -5,6 +5,56 @@
 
 ---
 
+## 2026-08-25 — WP_FORBIDDEN root-cause fix: missing explicit postId on builder abilities
+
+**Found in production while rebuilding a real Bricks page (climtec.md, post 2282):** repeated
+`bricks/add-element` calls through `call_builder_ability` failed with `WP_FORBIDDEN`
+("The connected WordPress user cannot run this ability") specifically when `input` omitted an
+explicit `postId`/target id — even though the ability's own `input_schema` does not mark that
+field required. Confirmed by direct A/B test: the exact same call with only `parentId` (no
+`postId`) failed 403; adding `postId` explicitly to the identical call succeeded immediately, on
+both a brand-new test page and the original problem page. This was NOT a credential/role problem
+— WordPress's own permission check for post/page-scoped abilities resolves the target post first
+and fails closed if it can't, and the connector's old error message ("reconnect with an
+administrator Application Password") pointed at the wrong fix entirely, costing real time and
+one accidental full-tree rollback while working around it via raw postmeta writes instead.
+
+**Fix shipped (3 layers, so the mistake becomes structurally hard to repeat for anyone, not just
+this session):**
+1. `handlers_builder_abilities.py::_failure()` — the 401/403 branch now explains the missing-
+   target-id cause first, tells the caller to add `postId`/`slug`/`path` and retry, and only
+   suggests reconnecting as administrator as the fallback if an explicit target still fails.
+2. `models.py::CallBuilderAbilityParams.input` — field description now says explicitly: always
+   pass `postId` (or `slug`/`path`) for post/page-scoped abilities even when `input_schema`
+   doesn't require it.
+3. `call_builder_ability`'s own tool description carries the same warning, so it's visible before
+   an agent even reads the per-ability schema.
+
+**Separate, unresolved finding from the same session (destructive abilities, e.g.
+`bricks/remove-element`, on climtec.md specifically):** `wp_client.py::wp_request` already has a
+documented automatic fallback for hosts whose WAF blocks the raw DELETE verb (retry once as POST
+with `X-HTTP-Method-Override: DELETE`). On climtec.md, BOTH the direct DELETE and that override
+retry return HTTP 405 -- meaning this host's WAF blocks the override header too, which is itself a
+known WAF pattern (method-override headers are a documented verb-tunneling bypass technique, so
+some firewalls block the header outright, not just the verb). This is a hosting/WAF-level block,
+not something fixable from connector code. Left as-is (one harmless empty orphan `block` element,
+id `4zka4z`, no visible/functional impact, remains on post 2282 pending either a hosting-side WAF
+exception for that header or a future full-tree postmeta rewrite to remove it). Worth remembering
+for any future site with the same symptom: don't assume the override fallback always works.
+
+New test file `tests/test_builder_abilities.py` (4 tests) locks in both directions: a 403 without
+postId returns the new diagnosis-bearing message; the same call with postId succeeds. Full suite:
+893/893 passing after the change.
+
+Also added the same lesson to `Docs/bricks-skills/skills/bricks-start-here/SKILL.md` (shared
+skill, not app-specific) so any Bricks session — not just this connector — knows the real cause
+of a 401/403 on a point-edit ability before assuming it's a credential/role issue.
+
+**Not yet done this session:** rebuild `imperal.json` (`imperal build`) and re-validate/re-submit
+if this connector is already published — the code/description changes above don't change any
+tool signature or pricing, only description text and error copy, so a rebuild is good hygiene but
+not urgent correctness-wise.
+
 ## 2026-08-12 — Mandatory complete pricing gate
 
 **Every registered `@chat.function` must always have an explicit per-action price.** Whenever a

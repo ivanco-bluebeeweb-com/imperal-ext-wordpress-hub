@@ -1780,6 +1780,24 @@ class PostResult(sdl.Entity):
     featured_media_set: bool = False
 
 
+class AssignPostTaxonomyParams(BaseModel):
+    site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
+    post_id: int = Field(gt=0, description="Numeric id of the post/page/CPT item to assign terms to")
+    post_type: str = Field(default="post", description="'post', 'page', or a custom post type's slug — must match the item being updated, and must have this taxonomy registered for it")
+    taxonomy: str = Field(min_length=1, description="Taxonomy slug as registered on the site, e.g. 'category', 'post_tag', or a custom one like 'product-type' — run list_registered_taxonomies to discover it")
+    terms: list[str] = Field(min_length=1, description="Term names (case-insensitive, matched against existing terms) or numeric term ids as strings (e.g. '61'). Replaces the post's current terms in this taxonomy.")
+    create_missing: bool = Field(default=True, description="Create a term automatically when its name doesn't match an existing one in this taxonomy. Set False to only ever use existing terms.")
+
+
+class PostTaxonomyAssignResult(sdl.Entity):
+    """Outcome of assign_post_taxonomy: which terms ended up set on the post."""
+    taxonomy: str = ""
+    rest_base: str = ""
+    term_ids: list[int] = Field(default_factory=list)
+    created_terms: list[str] = Field(default_factory=list)
+    terms_not_found: list[str] = Field(default_factory=list)
+
+
 class DeletePostParams(BaseModel):
     site_id: str = Field(description="Site id from a previous list_sites call — never invent it")
     post_id: int = Field(gt=0, description="Numeric post/page id from list_posts/list_pages")
@@ -2646,7 +2664,15 @@ class CallBuilderAbilityParams(BaseModel):
         description="Exact ability name from list_wp_abilities, e.g. 'bricks/get-design-context', 'bricks/set-page-elements', 'bricks/add-element'")
     input: dict = Field(
         default_factory=dict,
-        description="Input object matching this ability's own input_schema (see describe_builder_ability) — e.g. {'postId': 2285, 'zone': 'content'}")
+        description=(
+            "Input object matching this ability's own input_schema (see describe_builder_ability) "
+            "— e.g. {'postId': 2285, 'zone': 'content'}. IMPORTANT for any post/page-scoped "
+            "ability (bricks/add-element, update-element, get-page-elements, etc.): always pass "
+            "'postId' (or 'slug'/'path') explicitly, even when input_schema does not mark it "
+            "required. WordPress's own permission check for these abilities resolves the target "
+            "post first and fails closed with a 401/403 (WP_FORBIDDEN) if it cannot -- that error "
+            "looks like a credential/role problem but is usually just a missing target id. Never "
+            "omit postId when you already know which post you're editing."))
 
 
 class BuilderAbilityResult(sdl.Entity):

@@ -1,8 +1,8 @@
 {
   "manifest_schema_version": 3,
-  "sdk_version": "5.9.22",
+  "sdk_version": "5.11.0",
   "app_id": "wordpress-hub",
-  "version": "1.45.0",
+  "version": "1.46.0",
   "name": "WordPress Hub",
   "description": "Connect WordPress sites; create and update posts/pages with Gutenberg content, hierarchical categories and tags (create/list/update/delete, full parent/child tree), featured/inline images, and SEO fields; manage WooCommerce catalogues, guarded order operations, customers, coupons, and manual refunds; and work with content, health, SEO fields, and guarded point edits to Elementor/Bricks page-builder content.",
   "icon": "icon.svg",
@@ -39140,7 +39140,7 @@
     },
     {
       "name": "describe_builder_ability",
-      "description": "Read ONE WordPress builder ability's own declared schema (input_schema, output_schema, and its readonly/destructive/idempotent annotations) before calling it -- e.g. 'bricks/set-page-elements' or 'bricks/add-element'. Works for any builder that registers abilities via WordPress's own Abilities API, not just Bricks. Always call this before call_builder_ability for an ability you haven't used yet, so the input object you send actually matches what the ability expects.",
+      "description": "Read ONE WordPress builder ability's own declared schema (input_schema, output_schema, and its readonly/destructive/idempotent annotations) before calling it -- e.g. 'bricks/set-page-elements' or 'bricks/add-element'. Works for any builder that registers abilities via WordPress's own Abilities API, not just Bricks. Always call this before call_builder_ability for an ability you haven't used yet, so the input object you send actually matches what the ability expects. Before any design-system write (global classes/variables/components), also call 'bricks/get-design-context' first and reuse what already exists rather than creating duplicates.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -39277,7 +39277,7 @@
     },
     {
       "name": "call_builder_ability",
-      "description": "Run ONE non-destructive WordPress builder ability by exact name (e.g. 'bricks/get-design-context', 'bricks/set-page-elements', 'bricks/add-element') -- the universal dispatcher that covers any builder registering abilities via WordPress's own Abilities API, without needing one tool per ability. Call describe_builder_ability first to see the expected 'input' shape. Once check_builder_support reports bricks_readiness 'ready', use this for ALL real page authoring -- never hand-author raw _bricks_page_content_2 postmeta as a substitute; it can silently render empty in the real builder. Abilities the site itself marks destructive are refused here -- use call_builder_ability_risky for those.",
+      "description": "Run ONE non-destructive WordPress builder ability by exact name (e.g. 'bricks/get-design-context', 'bricks/set-page-elements', 'bricks/add-element') -- the universal dispatcher that covers any builder registering abilities via WordPress's own Abilities API, without needing one tool per ability. Call describe_builder_ability first to see the expected 'input' shape. Once check_builder_support reports bricks_readiness 'ready', use this for ALL real page authoring -- never hand-author raw _bricks_page_content_2 postmeta as a substitute; it can silently render empty in the real builder even though it looks saved. ALWAYS pass 'postId' (or 'slug'/'path') explicitly in 'input' for any post/page-scoped ability, even if input_schema does not mark it required -- omitting it can make WordPress's own permission check fail closed with a 401/403 (WP_FORBIDDEN) that looks like a credential problem but isn't. Abilities the site itself marks destructive are refused here -- use call_builder_ability_risky for those. ALWAYS read the result back (get_builder_content or a readonly ability) after a write before reporting success -- a 200 response alone does not prove the real builder can render what was saved.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [],
@@ -39297,7 +39297,7 @@
           },
           "input": {
             "additionalProperties": true,
-            "description": "Input object matching this ability's own input_schema (see describe_builder_ability) — e.g. {'postId': 2285, 'zone': 'content'}",
+            "description": "Input object matching this ability's own input_schema (see describe_builder_ability) — e.g. {'postId': 2285, 'zone': 'content'}. IMPORTANT for any post/page-scoped ability (bricks/add-element, update-element, get-page-elements, etc.): always pass 'postId' (or 'slug'/'path') explicitly, even when input_schema does not mark it required. WordPress's own permission check for these abilities resolves the target post first and fails closed with a 401/403 (WP_FORBIDDEN) if it cannot -- that error looks like a credential/role problem but is usually just a missing target id. Never omit postId when you already know which post you're editing.",
             "title": "Input",
             "type": "object"
           }
@@ -39451,7 +39451,7 @@
           },
           "input": {
             "additionalProperties": true,
-            "description": "Input object matching this ability's own input_schema (see describe_builder_ability) — e.g. {'postId': 2285, 'zone': 'content'}",
+            "description": "Input object matching this ability's own input_schema (see describe_builder_ability) — e.g. {'postId': 2285, 'zone': 'content'}. IMPORTANT for any post/page-scoped ability (bricks/add-element, update-element, get-page-elements, etc.): always pass 'postId' (or 'slug'/'path') explicitly, even when input_schema does not mark it required. WordPress's own permission check for these abilities resolves the target post first and fails closed with a 401/403 (WP_FORBIDDEN) if it cannot -- that error looks like a credential/role problem but is usually just a missing target id. Never omit postId when you already know which post you're editing.",
             "title": "Input",
             "type": "object"
           }
@@ -41643,6 +41643,182 @@
         "x-sdl": "entity-list"
       },
       "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "wordpress-hub"
+    },
+    {
+      "name": "assign_post_taxonomy",
+      "description": "Assign terms of ANY registered taxonomy to a post/page/CPT item -- not just the native category/post_tag that create_post/update_post already handle, but a custom taxonomy a plugin or theme registered (e.g. a 'product' custom post type's own 'product-type' taxonomy with terms like 'RD'/'Quattro'). Run list_registered_taxonomies first if you don't already know the exact taxonomy slug and its rest_base. Each entry in terms can be an existing term's exact name (case-insensitive) or its numeric id as a string; by default a name that doesn't match any existing term is created automatically (set create_missing=False to require an existing term instead). This REPLACES the post's current terms in that one taxonomy -- it does not touch any other taxonomy the post has terms in.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "wp.post_update"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Site id from a previous list_sites call — never invent it",
+            "title": "Site Id",
+            "type": "string"
+          },
+          "post_id": {
+            "description": "Numeric id of the post/page/CPT item to assign terms to",
+            "exclusiveMinimum": 0,
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "post",
+            "description": "'post', 'page', or a custom post type's slug — must match the item being updated, and must have this taxonomy registered for it",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "taxonomy": {
+            "description": "Taxonomy slug as registered on the site, e.g. 'category', 'post_tag', or a custom one like 'product-type' — run list_registered_taxonomies to discover it",
+            "minLength": 1,
+            "title": "Taxonomy",
+            "type": "string"
+          },
+          "terms": {
+            "description": "Term names (case-insensitive, matched against existing terms) or numeric term ids as strings (e.g. '61'). Replaces the post's current terms in this taxonomy.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Terms",
+            "type": "array"
+          },
+          "create_missing": {
+            "default": true,
+            "description": "Create a term automatically when its name doesn't match an existing one in this taxonomy. Set False to only ever use existing terms.",
+            "title": "Create Missing",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "site_id",
+          "post_id",
+          "taxonomy",
+          "terms"
+        ],
+        "title": "AssignPostTaxonomyParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "description": "Outcome of assign_post_taxonomy: which terms ended up set on the post.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "taxonomy": {
+            "default": "",
+            "title": "Taxonomy",
+            "type": "string"
+          },
+          "rest_base": {
+            "default": "",
+            "title": "Rest Base",
+            "type": "string"
+          },
+          "term_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Term Ids",
+            "type": "array"
+          },
+          "created_terms": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Created Terms",
+            "type": "array"
+          },
+          "terms_not_found": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Terms Not Found",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PostTaxonomyAssignResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "wordpress-hub.assign_post_taxonomy",
       "background": false,
       "long_running": false,
       "scopes": [],
