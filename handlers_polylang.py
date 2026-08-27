@@ -107,10 +107,13 @@ async def get_post_translations(ctx, params: GetPostTranslationsParams) -> Actio
         return _failure(r.status_code, r.body)
     body = r.body if isinstance(r.body, dict) else {}
     translations = body.get("translations") or {}
+    resolved_post_id = int(body.get("post_id", params.post_id) or 0)
+    resolved_title = body.get("title", "") or f"Post #{resolved_post_id}"
     result = PolylangTranslations(
-        post_id=int(body.get("post_id", params.post_id) or 0),
+        id=str(resolved_post_id),
+        title=resolved_title,
+        post_id=resolved_post_id,
         post_type=body.get("post_type", ""),
-        title=body.get("title", ""),
         language=body.get("language", ""),
         translations=translations,
     )
@@ -148,7 +151,9 @@ async def set_post_language(ctx, params: SetPostLanguageParams) -> ActionResult:
     if not 200 <= r.status_code < 300:
         return _failure(r.status_code, r.body)
     body = r.body if isinstance(r.body, dict) else {}
-    result = PostLanguageResult(post_id=int(body.get("post_id", params.post_id) or 0),
+    resolved_post_id = int(body.get("post_id", params.post_id) or 0)
+    result = PostLanguageResult(id=str(resolved_post_id), title=f"Post #{resolved_post_id}",
+                                 post_id=resolved_post_id,
                                  language=body.get("language", params.language))
     return ActionResult.success(result, summary=f"Post #{result.post_id} language set to '{result.language}'",
                                  refresh_panels=["center"])
@@ -188,7 +193,8 @@ async def link_post_translations(ctx, params: LinkPostTranslationsParams) -> Act
         return _failure(r.status_code, r.body)
     body = r.body if isinstance(r.body, dict) else {}
     translations = body.get("translations") or params.translations
-    result = LinkPostTranslationsResult(site_id=params.site_id, translations=translations)
     pairs = ", ".join(f"{lang}=#{pid}" for lang, pid in translations.items())
+    result = LinkPostTranslationsResult(id=params.site_id, title=f"Translations linked: {pairs}",
+                                         site_id=params.site_id, translations=translations)
     return ActionResult.success(result, summary=f"Linked as translations: {pairs}",
                                  refresh_panels=["center"])
