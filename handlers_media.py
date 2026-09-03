@@ -33,6 +33,31 @@ _INSTALL_HINT = (
     "in the connector repo) to add hosted images to the media library."
 )
 
+# FEATURED_IMAGE_GENERATION_GUARANTEE_STANDARD.md (Imperal OS, 2026-08-28):
+# a fake/placeholder image URL must never silently become a real attachment.
+# This is the single code path every external image URL flows through --
+# upload_media directly, and create_post/update_post's external_images via
+# resolve_external_images -- so ONE guard here protects every caller, for
+# every site, in every session, without relying on anyone remembering to
+# check it by hand. Host list covers the placeholder/stock-mock generators
+# actually seen causing this bug (via.placeholder.com, placeholder.com,
+# placehold.it/placehold.co, dummyimage.com, picsum.photos/lorempixel,
+# fakeimg.pl) plus the generic example.com/example.org domains reserved by
+# RFC 2606 for documentation -- never a real, live image host.
+_FAKE_IMAGE_HOST_MARKERS = (
+    "placeholder.com", "via.placeholder", "placehold.it", "placehold.co",
+    "dummyimage.com", "picsum.photos", "lorempixel.com", "fakeimg.pl",
+    "example.com", "example.org", "example.net",
+)
+
+
+def _looks_like_placeholder_url(source_url: str) -> bool:
+    """True if source_url is a known fake/placeholder-image generator or an
+    RFC 2606 reserved documentation domain -- never a real generated or
+    uploaded image, no matter how plausible the rest of the URL looks."""
+    lowered = (source_url or "").lower()
+    return any(marker in lowered for marker in _FAKE_IMAGE_HOST_MARKERS)
+
 
 async def _authed(ctx, site_id):
     record = await storage.get_site_record(ctx, site_id)
@@ -95,7 +120,21 @@ async def sideload_image(ctx, base_url, username, pw, *, source_url: str,
     image-generation provider's own URL happened to contain. Bridge v1.1.0+
     honours this via download_url()+media_handle_sideload(); omitting it
     falls back to deriving the name from source_url, same as before.
+
+    Refuses up front (never even calls the bridge) if source_url is a known
+    fake/placeholder-image generator or an RFC 2606 reserved documentation
+    domain -- see FEATURED_IMAGE_GENERATION_GUARANTEE_STANDARD.md. This is a
+    hard stop, not a warning: a placeholder silently becoming a real
+    attachment is exactly the failure mode that standard exists to close,
+    for every caller and every site, automatically.
     """
+    if _looks_like_placeholder_url(source_url):
+        return None, ActionResult.error(
+            "source_url looks like a fake/placeholder image (e.g. via.placeholder.com, "
+            "example.com, picsum.photos) rather than a real generated or uploaded image. "
+            "Generate a real image first (Media Studio's create_media_brief + "
+            "generate_media_package) and pass its actual asset URL instead.",
+            retryable=False, code="MEDIA_PLACEHOLDER_URL_REJECTED")
     body = {"source_url": source_url}
     if post_id:
         body["post_id"] = post_id

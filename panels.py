@@ -95,8 +95,7 @@ def _site_status_badge(r: dict) -> ui.Badge:
 async def sidebar(ctx, active_site_id="", **kwargs):
     rows = await storage.list_site_records(ctx)
 
-    top_bar = ui.Button("Connect Site", icon="Plus", variant="primary", full_width=True,
-                        on_click=ui.Call("__panel__center", view="connect", site_id=""))
+    top_bar = ui.Button("Connect Site", icon="Plus", variant="primary", on_click=ui.Call("__panel__center", view="connect", site_id=""))
 
     if not rows:
         site_list = ui.Empty(message="No sites connected yet.")
@@ -133,7 +132,6 @@ async def sidebar(ctx, active_site_id="", **kwargs):
                     "Sync sites to Sites Registry",
                     icon="RefreshCw",
                     variant="secondary",
-                    full_width=True,
                     disabled=not rows,
                     on_click=ui.Call("sync_sites_to_registry"),
                 ),
@@ -148,7 +146,6 @@ async def sidebar(ctx, active_site_id="", **kwargs):
                 "Download Imperal Bridge plugin",
                 icon="Download",
                 variant="secondary",
-                full_width=True,
                 on_click=ui.Open(BRIDGE_DOWNLOAD_URL),
             ),
         )

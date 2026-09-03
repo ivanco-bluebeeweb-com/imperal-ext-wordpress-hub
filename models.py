@@ -1716,7 +1716,7 @@ class CreatePostParams(BaseModel):
     excerpt: str | None = Field(default=None, description="Excerpt -- REQUIRED when post_type='post': a short standalone summary Rank Math and social shares fall back to")
     category: str | None = Field(default=None, description="Category name -- REQUIRED when post_type='post'. Resolved to an existing term by name; if none matches, a new category with this name is created automatically so the post is never left uncategorised")
     tags: list[str] = Field(default_factory=list, description="Optional tag names (posts only); resolved to existing terms, never created — names not found are reported back, not silently dropped")
-    featured_media_id: int | None = Field(default=None, description="Attachment id from a prior upload_media call -- REQUIRED when post_type='post' UNLESS external_images includes a 'featured' role entry: every article needs a featured image, set in the same call")
+    featured_media_id: int | None = Field(default=None, description="Attachment id from a prior upload_media call -- REQUIRED when post_type='post' UNLESS external_images includes a 'featured' role entry: every article needs a featured image, set in the same call. MUST be a freshly generated image (e.g. Media Studio create_media_brief + generate_media_package) for THIS article's own topic -- never reuse an existing media-library attachment id from another post as a substitute for generating one, and never pass a placeholder/mock image URL through upload_media to get an id here. See FEATURED_IMAGE_GENERATION_GUARANTEE_STANDARD.md.")
     external_images: list[ExternalImageInput] = Field(
         default_factory=list,
         description="Images not yet in this site's media library, e.g. straight from a Media Hub "
@@ -1754,7 +1754,7 @@ class UpdatePostParams(BaseModel):
     excerpt: str | None = Field(default=None, description="New excerpt; omit to keep it")
     category: str | None = Field(default=None, description="New category name (posts only); resolved to an existing term, never created")
     tags: list[str] | None = Field(default=None, description="Replace tag names (posts only); resolved to existing terms, never created; omit to keep existing tags")
-    featured_media_id: int | None = Field(default=None, description="Attachment id from a prior upload_media call, set as the post's featured image")
+    featured_media_id: int | None = Field(default=None, description="Attachment id from a prior upload_media call, set as the post's featured image. MUST be a freshly generated image for THIS article's own topic (Media Studio create_media_brief + generate_media_package) -- never reuse an existing media-library attachment id from another post, and never pass a placeholder/mock image URL through upload_media to get an id here. See FEATURED_IMAGE_GENERATION_GUARANTEE_STANDARD.md.")
     external_images: list[ExternalImageInput] = Field(
         default_factory=list,
         description="Images not yet in this site's media library, e.g. straight from a Media Hub "

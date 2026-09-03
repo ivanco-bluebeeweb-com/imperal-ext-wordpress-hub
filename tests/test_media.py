@@ -34,7 +34,7 @@ async def test_upload_media_happy_path():
         "width": 1200, "height": 800, "attached_to": None, "featured_set": False,
     }, 201)
     result = await hm.upload_media(ctx, UploadMediaParams(
-        site_id="x-com", source_url="https://cdn.example.com/pic.jpg", alt_text="A picture",
+        site_id="x-com", source_url="https://cdn.mockassets.test/pic.jpg", alt_text="A picture",
     ))
     assert result.status == "success"
     assert result.data.id == "77"
@@ -59,7 +59,7 @@ async def test_upload_media_forwards_seo_aeo_filename_to_the_bridge():
 
     ctx.http.post = handler
     result = await hm.upload_media(ctx, UploadMediaParams(
-        site_id="x-com", source_url="https://cdn.example.com/result_abc123.jpg",
+        site_id="x-com", source_url="https://cdn.mockassets.test/result_abc123.jpg",
         filename="heat-recovery-ventilator-featured",
     ))
     assert result.status == "success"
@@ -79,7 +79,7 @@ async def test_upload_media_without_filename_omits_it_from_the_request():
 
     ctx.http.post = handler
     result = await hm.upload_media(ctx, UploadMediaParams(
-        site_id="x-com", source_url="https://cdn.example.com/pic.jpg",
+        site_id="x-com", source_url="https://cdn.mockassets.test/pic.jpg",
     ))
     assert result.status == "success"
     assert "filename" not in captured
@@ -92,7 +92,7 @@ async def test_upload_media_with_featured_reports_attach_and_featured():
         "width": 800, "height": 600, "attached_to": 5, "featured_set": True,
     }, 201)
     result = await hm.upload_media(ctx, UploadMediaParams(
-        site_id="x-com", source_url="https://cdn.example.com/pic.jpg",
+        site_id="x-com", source_url="https://cdn.mockassets.test/pic.jpg",
         post_id=5, set_featured=True,
     ))
     assert result.status == "success"
@@ -105,7 +105,7 @@ async def test_upload_media_with_featured_reports_attach_and_featured():
 async def test_upload_media_set_featured_without_post_id_rejected_locally():
     ctx = await _ctx()
     result = await hm.upload_media(ctx, UploadMediaParams(
-        site_id="x-com", source_url="https://cdn.example.com/pic.jpg", set_featured=True,
+        site_id="x-com", source_url="https://cdn.mockassets.test/pic.jpg", set_featured=True,
     ))
     assert result.status == "error"
     assert result.error_code == "MEDIA_TARGET_MISSING"
@@ -117,7 +117,7 @@ async def test_upload_media_insecure_url_mapped_from_bridge_error():
         "code": "imperal_media_insecure_url", "message": "source_url must use https://.",
     }, 400)
     result = await hm.upload_media(ctx, UploadMediaParams(
-        site_id="x-com", source_url="http://cdn.example.com/pic.jpg",
+        site_id="x-com", source_url="http://cdn.mockassets.test/pic.jpg",
     ))
     assert result.status == "error"
     assert result.error_code == "MEDIA_INSECURE_URL"
@@ -141,7 +141,7 @@ async def test_upload_media_sideload_failure_mapped_502():
         "code": "imperal_media_sideload_failed", "message": "fetch failed",
     }, 502)
     result = await hm.upload_media(ctx, UploadMediaParams(
-        site_id="x-com", source_url="https://cdn.example.com/dead.jpg",
+        site_id="x-com", source_url="https://cdn.mockassets.test/dead.jpg",
     ))
     assert result.status == "error"
     assert result.error_code == "MEDIA_SIDELOAD_FAILED"
@@ -151,7 +151,7 @@ async def test_upload_media_missing_bridge_404():
     ctx = await _ctx()
     ctx.http.mock_post(SIDELOAD, {}, 404)
     result = await hm.upload_media(ctx, UploadMediaParams(
-        site_id="x-com", source_url="https://cdn.example.com/pic.jpg",
+        site_id="x-com", source_url="https://cdn.mockassets.test/pic.jpg",
     ))
     assert result.status == "error"
 
@@ -159,7 +159,7 @@ async def test_upload_media_missing_bridge_404():
 async def test_upload_media_unknown_site():
     ctx = MockContext()
     result = await hm.upload_media(ctx, UploadMediaParams(
-        site_id="ghost", source_url="https://cdn.example.com/pic.jpg",
+        site_id="ghost", source_url="https://cdn.mockassets.test/pic.jpg",
     ))
     assert result.status == "error"
     assert result.error_code == "SITE_NOT_CONNECTED"
@@ -183,3 +183,47 @@ async def test_check_media_support_missing_bridge():
     result = await hm.check_media_support(ctx, SiteIdParams(site_id="x-com"))
     assert result.status == "error"
     assert result.error_code == "MEDIA_BRIDGE_MISSING"
+
+
+# ─────────── FEATURED_IMAGE_GENERATION_GUARANTEE_STANDARD.md: reject fakes ───────────
+# A fake/placeholder image URL must never silently become a real attachment --
+# these guard the ONE shared code path (sideload_image) every caller flows
+# through, so upload_media AND create_post/update_post's external_images are
+# both covered by fixing it here once.
+
+async def test_upload_media_rejects_via_placeholder_url():
+    ctx = await _ctx()
+    result = await hm.upload_media(ctx, UploadMediaParams(
+        site_id="x-com", source_url="https://via.placeholder.com/600x400",
+    ))
+    assert result.status == "error"
+    assert result.error_code == "MEDIA_PLACEHOLDER_URL_REJECTED"
+
+
+async def test_upload_media_rejects_picsum_url():
+    ctx = await _ctx()
+    result = await hm.upload_media(ctx, UploadMediaParams(
+        site_id="x-com", source_url="https://picsum.photos/800/600",
+    ))
+    assert result.status == "error"
+    assert result.error_code == "MEDIA_PLACEHOLDER_URL_REJECTED"
+
+
+async def test_upload_media_rejects_reserved_documentation_domain():
+    ctx = await _ctx()
+    result = await hm.upload_media(ctx, UploadMediaParams(
+        site_id="x-com", source_url="https://images.example.com/photo.jpg",
+    ))
+    assert result.status == "error"
+    assert result.error_code == "MEDIA_PLACEHOLDER_URL_REJECTED"
+
+
+async def test_upload_media_placeholder_check_runs_before_any_http_call():
+    ctx = await _ctx()
+    called = []
+    ctx.http.post = lambda *a, **k: called.append(1)
+    result = await hm.upload_media(ctx, UploadMediaParams(
+        site_id="x-com", source_url="https://dummyimage.com/600x400",
+    ))
+    assert result.status == "error"
+    assert called == []  # bridge was never even called
